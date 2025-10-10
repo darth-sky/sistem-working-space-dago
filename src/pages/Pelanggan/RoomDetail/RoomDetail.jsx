@@ -1,387 +1,476 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
-import {
-  FaArrowLeft,
-  FaCalendarAlt,
-  FaUser,
-  FaClipboard,
-  FaWifi,
-  FaTv,
-  FaSnowflake,
-  FaPlug,
-  FaCheckCircle,
-} from "react-icons/fa";
-import moment from "moment";
+import { useLocation, useNavigate } from "react-router-dom";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
-import { formatRupiahPerJam } from "../../../utils/formatRupiah";
-const baseUrl = import.meta.env.VITE_BASE_URL
+import moment from "moment";
+import { formatRupiah } from "../../../utils/formatRupiah";
+import { Alert, Divider, Button as AntButton, Input, Modal, Typography, Radio, Tag, Spin } from "antd";
+import { ArrowLeft, Users, Calendar, Clock, Info, Banknote, Type, CreditCard, CheckCircle } from "lucide-react";
 
-// --------------------- Data ---------------------
-const meetingRooms = [
-  {
-    id: 1,
-    name: "Ruangan Meeting 01",
-    price: 50000,
-    description:
-      "Privasi terjaga, fokus maksimal. Ruang meeting untuk tim maksimal 9 orang.",
-    facilities: ["AC", "TV", "WIFI", "Stop Kontak"],
-    mainImage:
-      "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80",
-    capacity: 9,
-  },
-  {
-    id: 2,
-    name: "Ruangan Meeting 02",
-    price: 75000,
-    description:
-      "Cocok untuk rapat kecil atau brainstorming dengan tim hingga 4 orang.",
-    facilities: ["AC", "TV"],
-    mainImage:
-      "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=800&q=80",
-    capacity: 4,
-  },
-  {
-    id: 3,
-    name: "Ruangan Meeting 03",
-    price: 100000,
-    description: "Ruang meeting luas dengan kapasitas hingga 8 orang.",
-    facilities: ["AC", "Stop Kontak"],
-    mainImage:
-      "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80",
-    capacity: 8,
-  },
-];
+// Impor semua fungsi service yang dibutuhkan dari satu file
+import { getPromo, getMembershipForCategory, getDataPrivate, getVOClientByUserId } from "../../../services/service";
 
-const spaceMonitors = [
-  {
-    id: 4,
-    name: "Space Monitor 1",
-    price: 10000,
-    description: "Monitor standar 24 inch untuk kebutuhan kerja ringan.",
-    features: ["Resolusi Full HD", "HDMI Port", "Layar Anti Glare"],
-    mainImage:
-      "https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80",
-  },
-  {
-    id: 5,
-    name: "Space Monitor 2",
-    price: 15000,
-    description:
-      "Monitor 27 inch dengan kualitas gambar jernih, cocok untuk desain.",
-    features: ["Resolusi 2K", "Wide Color Gamut", "Adjustable Stand"],
-    mainImage:
-      "https://images.unsplash.com/photo-1593642634367-d91a135587b5?auto=format&fit=crop&w=800&q=80",
-  },
-];
+const { Text } = Typography;
+const baseUrl = import.meta.env.VITE_BASE_URL;
 
-// --------------------- Component ---------------------
-const RoomDetail = () => {
-  const navigate = useNavigate();
-  const { id } = useParams();
-  const location = useLocation();
-
-  // Ambil data room/monitor
-  const room =
-    location.state ||
-    meetingRooms.find((r) => r.id === Number(id)) ||
-    spaceMonitors.find((m) => m.id === Number(id));
-
-  if (!room) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center">
-        <p className="text-gray-600">Ruangan/Monitor tidak ditemukan</p>
-      </div>
-    );
-  }
-
-  console.log({roomnya: room});
-  console.log(meetingRooms);
-  console.log(spaceMonitors);
-  console.log(location.state);
-  
-  
-  
-
-  // --------------------- State Booking ---------------------
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedStartTime, setSelectedStartTime] = useState(null);
-  const [selectedEndTime, setSelectedEndTime] = useState(null);
-  const [name, setName] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [duration, setDuration] = useState(0);
-  const [openBilling, setOpenBilling] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
-
-  const today = new Date();
-  const todayHour = today.getHours();
-
-  // Update durasi saat jam mulai/selesai berubah
-  useEffect(() => {
-    if (selectedStartTime !== null && selectedEndTime !== null) {
-      setDuration(selectedEndTime - selectedStartTime);
-    } else {
-      setDuration(0);
-    }
-  }, [selectedStartTime, selectedEndTime]);
-
-  // --------------------- Hitung Harga ---------------------
-  const calculateTotalPrice = () => {
-    const hourlyRate = Number(room.harga_per_jam) || 0;
-    const dur = Number(duration) || 0;
-
-    console.log(hourlyRate);
-    console.log(dur);
-    
-    return hourlyRate * dur;
-  };
-
-  // --------------------- Time Slots ---------------------
-  const timeSlots = Array.from({ length: 15 }, (_, i) => 8 + i); // 08:00 - 22:00
-
-  // --------------------- Render ---------------------
-  return (
-    <div className="min-h-screen bg-gray-100 flex justify-center py-8 px-4">
-      <div className="w-full max-w-5xl space-y-8">
-        {/* Main Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-center space-x-3 mb-6">
-            <button
-              onClick={() => navigate(-1)}
-              className="text-gray-700 hover:text-blue-600"
-            >
-              <FaArrowLeft size={20} />
-            </button>
-            <h2 className="text-lg md:text-xl font-semibold text-gray-800">
-              {room.name}
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Section: Image & Info */}
-            <div>
-              <div className="w-full h-[300px] sm:h-[400px] rounded-xl overflow-hidden mb-4">
-                <img
-                  src={`${baseUrl}/static/${room.gambar_ruangan}`}
-                  alt={room.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="space-y-4">
-                <p className="text-gray-600">{room.description_ruangan}</p>
-                <p className="text-blue-600 font-semibold">
-                  {formatRupiahPerJam(room.harga_per_jam)}
-                </p>
-
-                {/* Facilities or Features */}
-                <div className="grid grid-cols-2 gap-4 text-gray-700">
-                  {(room.facilities || room.features || []).map((f, i) => {
-                    let icon = <FaCheckCircle />;
-                    if (f === "WIFI") icon = <FaWifi />;
-                    else if (f === "TV") icon = <FaTv />;
-                    else if (f === "AC") icon = <FaSnowflake />;
-                    else if (f === "Stop Kontak") icon = <FaPlug />;
-                    return (
-                      <span key={i} className="flex items-center space-x-2">
-                        {icon}
-                        <span>{f}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Section: Booking */}
-            <div className="space-y-6">
-              <h4 className="font-semibold mb-3">Pilih Tanggal Booking</h4>
-              {/* Date Picker */}
-              <div className="bg-white p-4 rounded-xl shadow-lg">
-                <DayPicker
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  disabled={{ before: today }}
-                  className="mx-auto"
-                />
-              </div>
-
-              {showCalendar && (
-                <div className="bg-white p-4 rounded-xl shadow-lg">
-                  <DayPicker
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={(date) => date && setSelectedDate(date)}
-                    disabled={{ before: today }}
-                    className="mx-auto"
-                  />
-                </div>
-              )}
-
-              {/* Start Time */}
-              <div>
-                <h4 className="font-semibold mb-2">Pilih Jam Mulai</h4>
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                  {timeSlots.map((hour) => {
-                    const isPastTime =
-                      moment(selectedDate).isSame(moment(), "day") &&
-                      hour <= todayHour;
-                    return (
-                      <button
-                        key={hour}
-                        onClick={() => {
-                          setSelectedStartTime(hour);
-                          setSelectedEndTime(null);
-                        }}
-                        disabled={isPastTime}
-                        className={`p-2 text-xs rounded-lg font-medium transition-all duration-200 ${
-                          isPastTime
-                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                            : selectedStartTime === hour
-                            ? "bg-blue-600 text-white shadow-lg"
-                            : "bg-gray-100 text-gray-800 hover:bg-gray-200"
-                        }`}
-                      >
-                        {`${String(hour).padStart(2, "0")}:00`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* End Time */}
-              {selectedStartTime !== null && (
-                <div>
-                  <h4 className="font-semibold mb-2">Pilih Jam Selesai</h4>
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                    {timeSlots.map((hour) => {
-                      const isInvalidTime = hour <= selectedStartTime;
-                      return (
-                        <button
-                          key={hour}
-                          onClick={() => setSelectedEndTime(hour)}
-                          disabled={isInvalidTime}
-                          className={`p-2 text-xs rounded-lg font-medium transition-all duration-200 ${
-                            isInvalidTime
-                              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                              : selectedEndTime === hour
-                              ? "bg-blue-600 text-white shadow-lg"
-                              : "bg-gray-100 text-gray-800 hover:bg-gray-200"
-                          }`}
-                        >
-                          {`${String(hour).padStart(2, "0")}:00`}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Duration */}
-              <div className="flex items-center justify-between bg-gray-100 p-4 rounded-xl shadow-sm">
-                <span className="font-semibold">Durasi</span>
-                <span className="w-8 text-center font-bold">{duration}h</span>
-              </div>
-
-              {/* User Info */}
-              <div className="space-y-4">
-                <div>
-                  <label className="flex items-center space-x-2 text-gray-600 font-medium mb-1">
-                    <FaClipboard />
-                    <span>Keperluan</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Masukkan keperluan (opsional)"
-                    value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
-                    className="p-3 rounded-xl border w-full focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Booking Button */}
-              <button
-                onClick={() => setOpenBilling(true)}
-                disabled={
-                  !selectedDate || !selectedStartTime || !selectedEndTime 
-                }
-                className={`w-full font-semibold py-3 rounded-xl shadow transition ${
-                  !selectedDate || !selectedStartTime || !selectedEndTime 
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
-              >
-                Place Booking
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Billing Popup */}
-        {openBilling && (
-          <div
-            className="fixed inset-0 z-50 flex justify-center items-center backdrop-blur-sm"
-            onClick={() => setOpenBilling(false)}
-          >
-            <div
-              className="bg-white rounded-2xl p-6 w-full max-w-sm mx-auto shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="text-center text-lg font-bold mb-4">
-                Ringkasan Pemesanan
-              </h2>
-              <div className="space-y-3 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Nama:</span>
-                  <span>{name}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Keperluan:</span>
-                  <span>{purpose || "-"}</span>
-                </div>
-                <hr className="my-2 border-gray-200" />
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Durasi:</span>
-                  <span>{duration} jam</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Harga / jam:</span>
-                  <span>{formatRupiahPerJam(room.harga_per_jam)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Total:</span>
-                  <span className="font-bold text-blue-600">
-                    Rp{calculateTotalPrice().toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() =>
-                  navigate(`/payment/${room.id}`, {
-                    state: {
-                      room,
-                      selectedDate,
-                      selectedStartTime,
-                      selectedEndTime,
-                      duration,
-                      name,
-                      purpose,
-                      total: calculateTotalPrice(),
-                    },
-                  })
-                }
-                className="w-full mt-4 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-              >
-                Lanjutkan ke Pembayaran
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+// Komponen kecil untuk menampilkan info dengan rapi
+const InfoPill = ({ icon, label, value }) => (
+    <div className="flex flex-col items-center justify-center text-center p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="text-blue-600 mb-1">{icon}</div>
+        <span className="text-xs text-gray-500 font-medium">{label}</span>
+        <span className="text-sm text-gray-800 font-semibold">{value}</span>
     </div>
-  );
+);
+
+const RoomDetail = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const room = location.state;
+
+    // --- STATE MANAGEMENT ---
+    const [currentUser, setCurrentUser] = useState(null);
+    const [isLoadingUser, setIsLoadingUser] = useState(true);
+    const [selectedRange, setSelectedRange] = useState();
+    const [selectedStartTime, setSelectedStartTime] = useState(null);
+    const [selectedEndTime, setSelectedEndTime] = useState(null);
+    const [duration, setDuration] = useState(0);
+    const [purpose, setPurpose] = useState('');
+    const [isCalendarVisible, setCalendarVisible] = useState(false);
+    const [totalPrice, setTotalPrice] = useState(0);
+    const [bookedHours, setBookedHours] = useState([]);
+    const [isLoadingTimes, setIsLoadingTimes] = useState(false);
+    const [showDateRequiredAlert, setShowDateRequiredAlert] = useState(false);
+    const [promo, setPromo] = useState([]);
+    const [appliedPromo, setAppliedPromo] = useState(null);
+    const [userMembership, setUserMembership] = useState(null);
+    const [isLoadingMembership, setIsLoadingMembership] = useState(true);
+    const [virtualOfficeClient, setVirtualOfficeClient] = useState(null);
+    const [isLoadingVO, setIsLoadingVO] = useState(true);
+    const [paymentMethod, setPaymentMethod] = useState('normal');
+    const [creditCost, setCreditCost] = useState(0);
+    const [includeSaturday, setIncludeSaturday] = useState(true);
+    const [includeSunday, setIncludeSunday] = useState(false);
+
+    // --- KONSTANTA & FUNGSI HELPER ---
+    const timeSlots = Array.from({ length: 15 }, (_, i) => 8 + i);
+    const today = new Date();
+    const features = room?.fitur_ruangan ? room.fitur_ruangan.split(/\r?\n|,/).map(f => f.trim()).filter(Boolean) : [];
+    const getFeatureIcon = () => <CheckCircle size={18} className="text-green-500" />;
+
+    const countIncludedDays = (start, end, includeSat, includeSun) => {
+        if (!start) return 0;
+        let count = 0;
+        let current = moment(start).clone().startOf('day');
+        const last = end ? moment(end).clone().startOf('day') : current.clone();
+        while (current.isSameOrBefore(last, 'day')) {
+            const day = current.day();
+            if ((day >= 1 && day <= 5) || (day === 6 && includeSat) || (day === 0 && includeSun)) {
+                count++;
+            }
+            current.add(1, 'day');
+        }
+        return count;
+    };
+
+    const buildDisabledDays = () => {
+        const arr = [{ before: today }];
+        if (!includeSunday) arr.push({ dayOfWeek: [0] });
+        return arr;
+    };
+
+    // --- STATE TURUNAN (DERIVED STATES) ---
+    const countedDays = countIncludedDays(selectedRange?.from, selectedRange?.to, includeSaturday, includeSunday);
+    const hasEnoughCredit = userMembership ? userMembership.sisa_credit >= creditCost * (countedDays > 0 ? countedDays : 1) : false;
+    const isMeetingRoom = room?.nama_kategori === 'Room Meeting';
+    const relevantVOBenefitHours = virtualOfficeClient?.benefit_tersisa
+        ? (isMeetingRoom ? virtualOfficeClient.benefit_tersisa.meeting_room : virtualOfficeClient.benefit_tersisa.working_space)
+        : 0;
+
+    // --- EFFECTS (LOGIKA PENGAMBILAN DATA) ---
+
+    // 1. Ambil data user
+    useEffect(() => {
+        const fetchUserData = async () => {
+            try {
+                const response = await getDataPrivate();
+                setCurrentUser(response?.detail || null);
+            } catch (error) {
+                console.error("Gagal mengambil data user:", error);
+                setCurrentUser(null);
+            } finally {
+                setIsLoadingUser(false);
+            }
+        };
+        fetchUserData();
+    }, []);
+
+    // 2. Ambil data membership
+    useEffect(() => {
+        const fetchUserMembership = async () => {
+            if (!currentUser?.id_user || !room?.id_kategori_ruangan) {
+                setIsLoadingMembership(false);
+                setUserMembership(null);
+                return;
+            }
+            setIsLoadingMembership(true);
+            try {
+                const response = await getMembershipForCategory(currentUser.id_user, room.id_kategori_ruangan);
+                setUserMembership(response[0] || null);
+            } catch (error) {
+                if (error.response?.status !== 404) console.error("Error fetching membership:", error);
+                setUserMembership(null);
+            } finally {
+                setIsLoadingMembership(false);
+            }
+        };
+        if (!isLoadingUser) fetchUserMembership();
+    }, [currentUser, room?.id_kategori_ruangan, isLoadingUser]);
+
+    // 3. Ambil data Virtual Office
+    useEffect(() => {
+        const fetchVOClientData = async () => {
+            if (!currentUser?.id_user) {
+                setIsLoadingVO(false);
+                setVirtualOfficeClient(null);
+                return;
+            }
+            setIsLoadingVO(true);
+            const targetDate = selectedRange?.from ? moment(selectedRange.from).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD');
+            try {
+                const response = await getVOClientByUserId(currentUser.id_user, targetDate);
+                setVirtualOfficeClient(response.data || null);
+            } catch (error) {
+                if (error?.response?.status !== 404) console.error("Error fetching VO client data:", error);
+                setVirtualOfficeClient(null);
+            } finally {
+                setIsLoadingVO(false);
+            }
+        };
+        if (!isLoadingUser) fetchVOClientData();
+    }, [currentUser, isLoadingUser, selectedRange?.from]);
+
+    // 4. Ambil data promo
+    useEffect(() => {
+        const fetchPromo = async () => {
+            try {
+                const response = await getPromo();
+                setPromo(response.datas || []);
+            } catch (error) {
+                console.error("Error fetching promo:", error);
+            }
+        };
+        fetchPromo();
+    }, []);
+
+    // 5. Cek promo aktif
+    useEffect(() => {
+        if (paymentMethod !== 'normal' || !promo.length || !selectedRange?.from || !selectedStartTime) {
+            setAppliedPromo(null);
+            return;
+        }
+        const selectedDate = moment(selectedRange.from);
+        const startHour = selectedStartTime;
+        const activePromo = promo.find(p => {
+            const withinDate = selectedDate.isBetween(moment(p.tanggal_mulai), moment(p.tanggal_selesai), "day", "[]");
+            let withinTime = true;
+            if (p.waktu_mulai && p.waktu_selesai) {
+                const [startH] = p.waktu_mulai.split(":").map(Number);
+                const [endH] = p.waktu_selesai.split(":").map(Number);
+                withinTime = startHour >= startH && startHour < endH;
+            }
+            return withinDate && withinTime && p.status_aktif === "aktif";
+        });
+        setAppliedPromo(activePromo || null);
+    }, [promo, selectedRange?.from, selectedStartTime, paymentMethod]);
+
+    // 6. Ambil jam yang sudah dibooking
+    useEffect(() => {
+        const fetchBookedHours = async (date) => {
+            setIsLoadingTimes(true);
+            setBookedHours([]);
+            setSelectedStartTime(null);
+            setDuration(0);
+            const formattedDate = moment(date).format('YYYY-MM-DD');
+            try {
+                const response = await fetch(`${baseUrl}/api/v1/ruangan/ruangan/${room.id_ruangan}/booked_hours/${formattedDate}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const result = await response.json();
+                setBookedHours(result.datas?.booked_hours || []);
+            } catch (error) {
+                console.error("Gagal mengambil jadwal booking:", error);
+            } finally {
+                setIsLoadingTimes(false);
+            }
+        };
+        if (room?.id_ruangan && selectedRange?.from) {
+            fetchBookedHours(selectedRange.from);
+        } else {
+            setBookedHours([]);
+        }
+    }, [selectedRange?.from, room?.id_ruangan]);
+
+    // 7. Hitung total harga/biaya
+    useEffect(() => {
+        if (duration > 0) {
+            const days = countedDays > 0 ? countedDays : 1;
+            if (paymentMethod === 'credit' && userMembership) {
+                setCreditCost(duration); // Biaya kredit adalah per hari
+                setTotalPrice(0);
+                setAppliedPromo(null);
+            } else if (paymentMethod === 'virtual_office') {
+                setTotalPrice(0);
+                setCreditCost(0);
+                setAppliedPromo(null);
+            } else {
+                const pricePerDay = room.paket_harga.find(p => p.durasi_jam === duration)?.harga_paket || 0;
+                let total = pricePerDay * days;
+                if (appliedPromo) {
+                    total = Math.max(total - (Number(appliedPromo.nilai_diskon) || 0), 0);
+                }
+                setTotalPrice(total);
+                setCreditCost(0);
+            }
+        } else {
+            setTotalPrice(0);
+            setCreditCost(0);
+        }
+    }, [selectedRange, duration, room.paket_harga, appliedPromo, paymentMethod, userMembership, includeSaturday, includeSunday, countedDays]);
+
+    // --- HANDLER & GUARDS ---
+
+    if (!room) {
+        useEffect(() => { navigate('/informasiruangan'); }, [navigate]);
+        return null;
+    }
+
+    if (!room.paket_harga || room.paket_harga.length === 0) {
+        return (
+            <div className="w-full min-h-screen flex items-center justify-center p-4">
+                <Alert message="Data Harga Ruangan Tidak Ditemukan" type="error" showIcon action={<AntButton onClick={() => navigate(-1)} type="primary">Kembali</AntButton>} />
+            </div>
+        );
+    }
+
+    const handleDurationSelect = (paket) => {
+        setDuration(paket.durasi_jam);
+        if (selectedStartTime !== null) {
+            setSelectedEndTime(selectedStartTime + paket.durasi_jam);
+        }
+    };
+
+    const handleStartTimeSelect = (hour) => {
+        if (!selectedRange?.from) {
+            setShowDateRequiredAlert(true);
+            return;
+        }
+        setShowDateRequiredAlert(false);
+        setSelectedStartTime(hour);
+        setDuration(0);
+        setSelectedEndTime(null);
+    };
+
+    const dateDisplayValue = () => {
+        if (!selectedRange || !selectedRange.from) return "Pilih tanggal...";
+        if (!selectedRange.to || moment(selectedRange.from).isSame(selectedRange.to, 'day')) {
+            return moment(selectedRange.from).format("dddd, DD MMMM YYYY");
+        }
+        return `${moment(selectedRange.from).format("DD MMM YYYY")} - ${moment(selectedRange.to).format("DD MMM YYYY")}`;
+    };
+
+    const imageUrl = `${baseUrl}/static/${room.gambar_ruangan}`;
+
+    // --- PERBAIKAN UTAMA: LOGIKA VALIDASI TOMBOL ---
+    const isBookingDataValid = duration > 0 && selectedRange?.from && !isLoadingTimes;
+    let isPaymentValid = false;
+    if (isBookingDataValid) {
+        if (paymentMethod === 'normal') {
+            isPaymentValid = true;
+        } else if (paymentMethod === 'credit') {
+            isPaymentValid = hasEnoughCredit;
+        } else if (paymentMethod === 'virtual_office') {
+            isPaymentValid = (duration * (countedDays > 0 ? countedDays : 1) <= relevantVOBenefitHours);
+        }
+    }
+    const isButtonDisabled = !isPaymentValid;
+
+    // --- RENDER ---
+    return (
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
+            <div className="max-w-6xl mx-auto">
+                <div className="flex items-center gap-4 mb-6">
+                    <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-200" aria-label="Kembali">
+                        <ArrowLeft size={20} className="text-gray-700" />
+                    </button>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{room.nama_ruangan}</h1>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                    {/* Kolom Kiri: Detail Ruangan */}
+                    <div className="lg:col-span-3">
+                        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                            <img src={imageUrl} alt={room.nama_ruangan} className="w-full h-64 sm:h-96 object-cover" onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/800x600?text=Gambar+Tidak+Tersedia"; }} />
+                            <div className="p-6">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-center">
+                                    <InfoPill icon={<Banknote size={24} />} label="Mulai Dari" value={formatRupiah(Math.min(...room.paket_harga.map(p => p.harga_paket)))} />
+                                    <InfoPill icon={<Users size={24} />} label="Kapasitas" value={`${room.kapasitas} orang`} />
+                                    <InfoPill icon={<Type size={24} />} label="Tipe" value={room.nama_kategori} />
+                                    <InfoPill icon={<Clock size={24} />} label="Jam Buka" value="08:00 - 22:00" />
+                                </div>
+                                <p className="text-gray-600 mb-6 text-base leading-relaxed">{room.deskripsi_ruangan}</p>
+                                <h3 className="font-semibold text-lg text-gray-800 mb-4">Fasilitas yang Termasuk</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                                    {features.map((feature, index) => (
+                                        <div key={index} className="flex items-center gap-3">{getFeatureIcon()}<span>{feature}</span></div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Kolom Kanan: Form Booking */}
+                    <div className="lg:col-span-2">
+                        <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">Jadwalkan Sesi Anda</h2>
+                            <div className="space-y-4">
+
+                                {/* Metode Pembayaran Dinamis */}
+                                {isLoadingUser || isLoadingMembership || isLoadingVO ? (
+                                    <div className="text-center p-3 bg-gray-50 rounded-lg"><Spin /><p className="text-xs text-gray-500 mt-2">Memeriksa data Anda...</p></div>
+                                ) : (
+                                    <div>
+                                        <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2"><CreditCard size={16} /> Metode Pembayaran</h3>
+                                        <Radio.Group onChange={(e) => setPaymentMethod(e.target.value)} value={paymentMethod} className="w-full">
+                                            <div className="space-y-3">
+                                                <div className="bg-gray-50 p-3 rounded-lg border"><Radio value="normal">Bayar Normal (Rupiah)</Radio></div>
+                                                {currentUser && userMembership && userMembership.sisa_credit > 0 && (
+                                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                                        <Radio value="credit">Gunakan Kredit Membership</Radio>
+                                                        <p className="text-xs text-gray-600 mt-1 ml-6">Sisa kredit Anda: <strong>{userMembership.sisa_credit} kredit</strong></p>
+                                                    </div>
+                                                )}
+                                                {currentUser && virtualOfficeClient && relevantVOBenefitHours > 0 && (
+                                                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                                        <Radio value="virtual_office" disabled={duration > 0 && (duration * (countedDays > 0 ? countedDays : 1)) > relevantVOBenefitHours}>Gunakan Benefit Virtual Office</Radio>
+                                                        <p className="text-xs text-gray-600 mt-1 ml-6">Sisa benefit untuk bulan ini: <strong>{relevantVOBenefitHours} jam</strong></p>
+                                                        {duration > 0 && (duration * (countedDays > 0 ? countedDays : 1)) > relevantVOBenefitHours && (
+                                                            <p className="text-xs text-red-600 mt-1 ml-6">Durasi booking melebihi sisa benefit Anda.</p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </Radio.Group>
+                                    </div>
+                                )}
+
+                                {/* Pemilih Tanggal */}
+                                <div>
+                                    <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2"><Calendar size={16} /> Tanggal Booking</h3>
+                                    <Input readOnly value={dateDisplayValue()} onClick={() => setCalendarVisible(true)} size="large" className="cursor-pointer" />
+                                    <Modal title="Pilih Tanggal Booking" open={isCalendarVisible} onCancel={() => setCalendarVisible(false)} width={window.innerWidth > 768 ? 800 : '90%'} footer={<div className="flex justify-between w-full"><AntButton onClick={() => setSelectedRange(undefined)}>Reset</AntButton><AntButton type="primary" onClick={() => setCalendarVisible(false)} disabled={!selectedRange?.from}>Selesai</AntButton></div>} centered>
+                                        <div className="py-4 border-b mb-4"><Text type="secondary"><b>Tips:</b> Klik satu tanggal untuk booking harian, atau klik tanggal kedua untuk memilih rentang.</Text></div>
+                                        <div className="mb-4 p-3 rounded-lg border bg-gray-50">
+                                            <h4 className="font-medium text-gray-700 mb-2">Opsi Hari yang Dihitung</h4>
+                                            <div className="flex items-center gap-4">
+                                                <label className="flex items-center gap-2"><input type="checkbox" checked={includeSaturday} onChange={e => setIncludeSaturday(e.target.checked)} /><span className="text-sm">Hitung Sabtu</span></label>
+                                                <label className="flex items-center gap-2"><input type="checkbox" checked={includeSunday} onChange={e => setIncludeSunday(e.target.checked)} /><span className="text-sm">Hitung Minggu</span></label>
+                                            </div>
+                                        </div>
+                                        <DayPicker mode="range" selected={selectedRange} onSelect={setSelectedRange} disabled={buildDisabledDays()} numberOfMonths={window.innerWidth > 768 ? 2 : 1} />
+                                    </Modal>
+                                </div>
+
+                                {/* Pemilih Jam Mulai */}
+                                <div>
+                                    <h3 className="font-semibold text-gray-700 mb-2"><Clock size={16} /> Pilih Jam Mulai</h3>
+                                    {showDateRequiredAlert && <Alert message="Pilih tanggal terlebih dahulu." type="info" className="mb-4" />}
+                                    {isLoadingTimes ? <div className="text-center p-4"><Spin /></div> : (
+                                        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                                            {timeSlots.map(hour => {
+                                                const isToday = selectedRange?.from && moment(selectedRange.from).isSame(moment(), 'day');
+                                                const isPast = isToday && hour < new Date().getHours();
+                                                const isBooked = bookedHours.includes(hour);
+                                                const isDisabled = isPast || isBooked || !selectedRange?.from;
+                                                return (
+                                                    <button key={`start-${hour}`} onClick={() => handleStartTimeSelect(hour)} disabled={isDisabled} className={`py-2 px-1 text-xs rounded-lg font-medium transition ${isDisabled ? "bg-gray-200 text-gray-400 cursor-not-allowed" : selectedStartTime === hour ? "bg-blue-600 text-white" : "bg-gray-100 hover:bg-blue-100"}`}>
+                                                        {`${String(hour).padStart(2, '0')}:00`}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Pemilih Durasi */}
+                                {selectedStartTime && (
+                                    <div>
+                                        <h3 className="font-semibold text-gray-700 mb-2"><Clock size={16} /> Pilih Paket Durasi</h3>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[...room.paket_harga].sort((a, b) => a.durasi_jam - b.durasi_jam).map((paket, index) => {
+                                                const endTime = selectedStartTime + paket.durasi_jam;
+                                                const isInvalid = endTime > 22;
+                                                return (
+                                                    <button key={index} onClick={() => handleDurationSelect(paket)} disabled={isInvalid} className={`p-2 text-xs rounded-lg font-medium transition flex flex-col items-center justify-center h-16 ${isInvalid ? "bg-gray-200 text-gray-400 cursor-not-allowed" : duration === paket.durasi_jam ? "bg-blue-600 text-white" : "bg-gray-100 hover:bg-blue-100"}`}>
+                                                        <span className="font-bold text-base">{paket.durasi_jam} Jam</span>
+                                                        <span className="text-xs font-semibold opacity-90">{formatRupiah(paket.harga_paket)}</span>
+                                                        <span className="text-xs opacity-70">s.d {String(endTime).padStart(2, '0')}:00</span>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <Divider />
+
+                                {/* Ringkasan Harga */}
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center"><span className="text-gray-600">Durasi Harian</span><strong>{duration || 0} Jam</strong></div>
+                                    {selectedRange?.from && <div className="flex justify-between items-center"><span className="text-gray-600">Total Hari Dikenakan Biaya</span><strong>{countedDays} Hari</strong></div>}
+                                    {paymentMethod === 'normal' && appliedPromo && (<div className="flex justify-between items-center text-green-700"><span><Tag color="green">Promo ({appliedPromo.kode_promo})</Tag></span><strong>-{formatRupiah(Number(appliedPromo.nilai_diskon))}</strong></div>)}
+
+                                    {paymentMethod === 'virtual_office' ? (
+                                        <div className="flex justify-between items-center"><span className="text-gray-600">Total Biaya</span><strong className="text-green-600 text-xl">Benefit VO (Gratis)</strong></div>
+                                    ) : paymentMethod === 'credit' ? (
+                                        <><div className="flex justify-between items-center"><span className="text-gray-600">Biaya Kredit</span><strong className="text-blue-600 text-xl">{creditCost * (countedDays > 0 ? countedDays : 1)} Kredit</strong></div>{!hasEnoughCredit && duration > 0 && (<Alert message="Kredit tidak mencukupi!" type="warning" showIcon />)}</>
+                                    ) : (
+                                        <div className="flex justify-between items-center"><span className="text-gray-600">Total Harga</span><strong className="text-blue-600 text-xl">{formatRupiah(totalPrice)}</strong></div>
+                                    )}
+                                </div>
+
+                                {/* Tombol Lanjutkan */}
+                                <button
+                                    onClick={() =>
+                                        navigate(`/payment/${room.id_ruangan}`, {
+                                            state: {
+                                                room,
+                                                selectedRange,
+                                                selectedStartTime,
+                                                selectedEndTime,
+                                                duration,
+                                                purpose,
+                                                total: totalPrice,
+                                                paymentMethod: paymentMethod,
+                                                creditCost: creditCost,
+                                                membershipId: userMembership?.id_memberships,
+                                                virtualOfficeId: virtualOfficeClient?.id_client_vo,
+                                                includeSaturday,
+                                                includeSunday,
+                                                countedDays: (countedDays > 0 ? countedDays : 1)
+                                            },
+                                        })
+                                    }
+                                    disabled={isButtonDisabled}
+                                    className="w-full mt-4 py-3 bg-blue-600 text-white rounded-xl font-semibold transition hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                    {paymentMethod === 'credit' ? 'Konfirmasi dengan Kredit' : paymentMethod === 'virtual_office' ? 'Konfirmasi dengan Benefit VO' : 'Lanjutkan ke Pembayaran'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default RoomDetail;

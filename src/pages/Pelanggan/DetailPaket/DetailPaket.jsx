@@ -11,14 +11,13 @@ const DetailPaket = () => {
   const data = {
     benefits: [
       { name: "Harga", paket6: "Rp1.750.000", paket12: "Rp2.950.000" },
-      { name: "Alamat bisnis untuk legalitas usaha", paket6: true, paket12: true },
       { name: "Penerimaan surat & paket", paket6: true, paket12: true },
       { name: "Free meeting room*", paket6: "4 jam/bulan", paket12: "8 jam/bulan" },
       { name: "Free working space", paket6: "8 jam/bulan", paket12: "12 jam/bulan" },
-      { name: "Nama/logo tampil di website dago creative hub", paket6: true, paket12: false },
       { name: "Free wifi member", paket6: true, paket12: true },
     ],
   };
+
 
   // Tentukan kolom mana yang ditampilkan
   const paketKey = id === "6" ? "paket6" : "paket12";
@@ -27,13 +26,12 @@ const DetailPaket = () => {
     <div className="w-full min-h-screen bg-[#F5F2ED] flex justify-center px-4 lg:px-8 py-10">
       <div className="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-6">
         <button
-          onClick={() =>
-            navigate("/dashboard-pengguna", { state: { activeMenu: "virtual-office" } })
-          }
+          onClick={() => navigate(-1)}
           className="mb-6 text-blue-600 font-medium hover:underline"
         >
           ← Kembali
         </button>
+
 
         <h1 className="text-2xl font-bold text-center mb-6">
           Detail {paketName}

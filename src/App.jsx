@@ -52,11 +52,21 @@ import FNBDashboard from "./pages/Owner/FnbDashboard/FnbDashboard";
 import WorkingSpace from "./pages/Owner/WorkingSpace/WorkingSpace";
 import EventSpacesPelanggan from "./pages/Pelanggan/EventSpacesPelanggan/EventSpacesPelanggan";
 import DetailEventSpaces from "./pages/Pelanggan/DetailEventSpaces/DetailEventSpaces";
+import PromoPelanggan from "./pages/Pelanggan/PromoPelanggan/PromoPelanggan";
+import { useNavigate } from "react-router-dom";
+import Forbidden from "./pages/Forbidden/Forbidden";
+import OrderKasir from "./pages/Kasir/OrderKasir/OrderKasir";
+import BuatOrderKasir from "./pages/Kasir/BuatOrderKasir/BuatOrderKasir";
 
 const App = () => {
+  const Navigate = useNavigate();
   return (
     <AuthProvider>
       <Routes>
+        <Route path="/forbidden" element={<Forbidden />} />
+
+
+
         <Route path="/" element={<DashboardWS />} />
 
         {/* <Route path='/dashboardws' element={<DashboardWS/>}/> */}
@@ -226,6 +236,22 @@ const App = () => {
           }
         />
 
+        {/* 1. Route dengan :tabKey (lebih spesifik) */}
+        <Route
+          path="/masterdataadmin/:tabKey"
+          element={
+            <SidebarAdmin>
+              <MasterData />
+            </SidebarAdmin>
+          }
+        />
+
+        {/* 2. Default redirect kalau user buka /masterdataadmin langsung */}
+        <Route
+          path="/masterdataadmin"
+          element={<Navigate to="/masterdataadmin/user" replace />}
+        />
+
         {/* Admin Tenant */}
         <Route
           path="/ordertenant"
@@ -259,6 +285,27 @@ const App = () => {
         />
 
         {/* Kasir */}
+
+        <Route
+          path="/orderkasir"
+          element={
+            <PrivateRoute>
+              <SidebarKasir>
+                <OrderKasir />
+              </SidebarKasir>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/buatorderkasir"
+          element={
+            <PrivateRoute>
+              <SidebarKasir>
+                <BuatOrderKasir />
+              </SidebarKasir>
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/transaksikasir"
           element={
@@ -337,17 +384,21 @@ const App = () => {
         <Route
           path="/informasi-ruangan"
           element={
-            <DashboardPengguna>
-              <InformasiRuangan />
-            </DashboardPengguna>
+            <PrivateRoute allowedRoles={["pelanggan"]}>
+              <DashboardPengguna>
+                <InformasiRuangan />
+              </DashboardPengguna>
+            </PrivateRoute>
           }
         />
         <Route
           path="/membership"
           element={
-            <DashboardPengguna>
-              <Membership />
-            </DashboardPengguna>
+            <PrivateRoute>
+              <DashboardPengguna>
+                <Membership />
+              </DashboardPengguna>
+            </PrivateRoute>
           }
         />
         <Route
@@ -387,6 +438,14 @@ const App = () => {
           element={
             <DashboardPengguna>
               <EventSpacesPelanggan />
+            </DashboardPengguna>
+          }
+        />
+        <Route
+          path="/promo-pelanggan"
+          element={
+            <DashboardPengguna>
+              <PromoPelanggan />
             </DashboardPengguna>
           }
         />

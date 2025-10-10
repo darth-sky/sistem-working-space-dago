@@ -1,10 +1,22 @@
 // DashboardPengguna.jsx
 import React, { useState, useContext, useEffect } from "react";
-import { LogOut, Menu, X, Calendar, CreditCard, Building, Users, Diamond, History } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
+import {
+  Home,
+  LogIn,
+  Menu,
+  X,
+  Calendar,
+  CreditCard,
+  Building,
+  Users,
+  Diamond,
+  History,
+  LogOut
+} from "lucide-react";
+import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import logo from "../../../assets/images/logo.png";
 import { AuthContext } from "../../../providers/AuthProvider";
-import { MdOutlineMeetingRoom } from "react-icons/md";
+import { MdOutlineDiscount, MdOutlineMeetingRoom } from "react-icons/md";
 
 const DashboardPengguna = ({ children }) => {
   const navigate = useNavigate();
@@ -12,136 +24,124 @@ const DashboardPengguna = ({ children }) => {
   const { userProfile, logout } = useContext(AuthContext);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const basePath = "";
 
   useEffect(() => {
-    // Jika user buka /dashboard (tanpa child), redirect ke halaman default
-    if (location.pathname === "/dashboard" || location.pathname === "/dashboard/") {
-      navigate("/dashboard/informasi-ruangan", { replace: true });
+    if (location.pathname === basePath || location.pathname === `${basePath}/`) {
+      navigate(`${basePath}/informasi-ruangan`, { replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, basePath]);
 
   const handleLogout = () => {
     logout?.();
     navigate("/");
   };
 
-  // menu items: pastikan path sesuai route yang dibuat di App.jsx
   const menuItems = [
     { key: "informasi-ruangan", label: "Pesan Ruangan", icon: <Diamond size={18} />, path: "/informasi-ruangan" },
     { key: "membership", label: "Membership", icon: <Users size={18} />, path: "/membership" },
     { key: "virtual-office", label: "Virtual Office", icon: <Building size={18} />, path: "/virtual-office" },
     { key: "cek-kredit-membership", label: "Cek Kredit Membership", icon: <CreditCard size={18} />, path: "/cek-kredit-membership" },
     { key: "cek-masa-vo", label: "Cek Masa VO", icon: <Calendar size={18} />, path: "/cek-masa-vo" },
-    { key: "riwayat-transaksi", label: "Riwayat Transaksi", icon: <History size={18} />, path: "/riwayat-transaksi" },
     { key: "event-spaces", label: "Event Spaces", icon: <MdOutlineMeetingRoom size={18} />, path: "/event-spaces" },
+    { key: "promo-pelanggan", label: "Promo", icon: <MdOutlineDiscount size={18} />, path: "/promo-pelanggan" },
+    { key: "riwayat-transaksi", label: "Riwayat Transaksi", icon: <History size={18} />, path: "/riwayat-transaksi" },
   ];
 
-  // helper: apakah menu aktif (jika path child, tetap true karena startsWith)
-  const isActive = (path) => location.pathname?.startsWith(path);
+  const isActive = (path) => location.pathname?.startsWith(`${basePath}${path}`);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      {/* Mobile overlay saat sidebar terbuka */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 md:hidden"
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
           onClick={() => setSidebarOpen(false)}
-          aria-hidden
+          aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transform transition-transform duration-300
-          ${sidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0 md:w-64"}`}
+        className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 w-64 transform transition-transform duration-300 flex flex-col
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} 
+          md:translate-x-0`}
       >
-        {/* Header / Logo */}
-        <div className="flex items-center gap-3 p-4 lg:p-6 border-b border-gray-100">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold">DS</span>
+        {/* === PERUBAHAN 1: Diberi tinggi tetap h-20 agar sama dengan header utama === */}
+        <div className="flex items-center justify-between h-20 px-4 lg:px-6 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="Logo" className="h-8 object-contain" />
+            <span className="font-semibold text-gray-700">Dago Space</span>
           </div>
-          <div className="hidden md:block">
-            <img src={logo} alt="Dago Space" className="h-6 object-contain" />
-            <div className="text-sm text-gray-500">Dago Space</div>
-          </div>
-          {/* close button (mobile) */}
           <button
-            className="ml-auto md:hidden p-2 rounded-md hover:bg-gray-100"
+            className="p-1 rounded-md md:hidden hover:bg-gray-100"
             onClick={() => setSidebarOpen(false)}
             aria-label="Tutup menu"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Menu */}
-        <nav className="p-3 md:p-4 space-y-2">
+        <nav className="flex-grow p-4 space-y-2 overflow-y-auto">
           {menuItems.map((item) => (
             <button
               key={item.key}
               onClick={() => {
+                navigate(`${basePath}${item.path}`);
                 setSidebarOpen(false);
-                navigate(item.path);
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left
-                ${isActive(item.path) ? "bg-blue-600 text-white shadow" : "text-gray-700 hover:bg-gray-100"}`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left
+                ${isActive(item.path)
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
+                }`}
             >
-              <span className={`${isActive(item.path) ? "text-white" : "text-gray-600"}`}>{item.icon}</span>
+              <span className={isActive(item.path) ? "text-white" : "text-gray-500"}>{item.icon}</span>
               <span className="font-medium text-sm">{item.label}</span>
             </button>
           ))}
         </nav>
 
         {/* Logout */}
-        <div className="p-3 md:p-4 border-t border-gray-100 mt-auto">
+        <div className="p-2 lg:p-4 border-t border-gray-100">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-red-600 hover:bg-red-50"
+            className="w-full flex items-center space-x-3 lg:space-x-4 px-3 lg:px-4 py-2 lg:py-3 rounded-xl transition-all duration-300 text-left text-red-600 hover:bg-red-50"
           >
-            <LogOut size={18} />
-            <span className="font-medium text-sm">Logout</span>
+            <LogOut size={20} />
+            <span className="font-medium text-sm lg:text-base">Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* Main area */}
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-h-0 md:ml-64">
-        {/* Header */}
-        <header className="flex items-center justify-between gap-4 p-4 lg:p-6 bg-white border-b border-gray-100 sticky top-0 z-20">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 flex flex-col md:ml-64">
+        {/* === PERUBAHAN 2: Diberi tinggi tetap h-20 agar sama dengan header sidebar === */}
+        <header className="flex items-center justify-between h-20 px-4 lg:px-6 bg-white border-b border-gray-200 sticky top-0 z-20">
+          <div className="flex items-center gap-2">
             <button
-              className="p-2 rounded-md md:hidden hover:bg-gray-100"
-              onClick={() => setSidebarOpen((v) => !v)}
+              className="p-2 rounded-full md:hidden hover:bg-gray-100"
+              onClick={() => setSidebarOpen(true)}
               aria-label="Buka menu"
             >
-              <Menu size={18} />
+              <Menu size={20} />
             </button>
-
-            <div className="flex items-center gap-3">
-              <img src={logo} alt="Logo" className="h-10 object-contain" />
-              <div>
-                <div className="text-sm text-gray-500">Halo,</div>
-                <div className="text-lg font-semibold text-gray-800">
-                  {userProfile?.name || "Pengguna"}
-                </div>
-              </div>
+            <div>
+              <p className="text-sm text-gray-500">Halo, Selamat Datang!</p>
+              <h1 className="text-lg font-bold text-gray-800">
+                {userProfile?.detail?.nama || "Pengguna"}
+              </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/")}
-              className="text-sm text-gray-600 hover:underline"
-            >
-              Kembali ke Beranda
-            </button>
-          </div>
+          <button
+            onClick={() => navigate("/")}
+            className="p-2 rounded-full text-gray-600 hover:bg-gray-100 transition-colors"
+            aria-label="Kembali ke Beranda"
+          >
+            <Home size={20} />
+          </button>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          {children}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {children || <Outlet />}
         </main>
       </div>
     </div>

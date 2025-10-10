@@ -1,165 +1,190 @@
-import React, { useState } from "react";
-import { Table, Input, Tag, Typography, Select, Space } from "antd";
+import React, { useState, useEffect } from "react";
+import { Table, Input, Tag, Typography, Button, Spin, message } from "antd";
+import { DownOutlined } from "@ant-design/icons";
+import { motion, AnimatePresence } from "framer-motion";
+import { getProdukKasir } from "../../../services/service";
 
 const { Title } = Typography;
-const { Option } = Select;
 
 const ProductKasir = () => {
-    const [search, setSearch] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Semua Kategori");
+  const [categoryDrawer, setCategoryDrawer] = useState(false);
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-    const data = [
-        {
-            key: 1,
-            no: 1,
-            product: "Nasi Ayam Ngejengit",
-            merchant: "Dapoer M.S",
-            category: "Best Deal",
-            hpp: 15000,
-            price: 15000,
-            status: "Active",
-            updated: "01 Juni 2025 22:53:49"
-        },
-        {
-            key: 2,
-            no: 2,
-            product: "Paket Ruang Leseh (8 Jam)",
-            merchant: "Dago Creative Space",
-            category: "Space Lesehan",
-            hpp: 45000,
-            price: 45000,
-            status: "Active",
-            updated: "31 Mei 2025 22:53:49"
-        },
-        {
-            key: 3,
-            no: 3,
-            product: "Danish ",
-            merchant: "HomeBro",
-            category: "Bakery & Sweets",
-            hpp: 16000,
-            price: 16000,
-            status: "Inactive",
-            updated: "01 Juni 2025 22:53:49"
-        },
-        {
-            key: 4,
-            no: 4,
-            product: "Meeting Room Besar (8 Jam)",
-            merchant: "Dago Creative Space",
-            category: "Meeting Room Besar",
-            hpp: 300000,
-            price: 300000,
-            status: "Active",
-            updated: "01 Juni 2025 22:53:49"
-        },
-        {
-            key: 5,
-            no: 5,
-            product: "Space Monitor (6 Jam)",
-            merchant: "Dago Creative Space",
-            category: "Space Monitor",
-            hpp: 60000,
-            price: 60000,
-            status: "Active",
-            updated: "01 Juni 2025 22:53:49"
-        },
-        {
-            key: 6,
-            no: 6,
-            product: "Air Mineral",
-            merchant: "Dapoer M.S",
-            category: "Minuman",
-            hpp: 5000,
-            price: 5000,
-            status: "Inactive",
-            updated: "01 Juni 2025 22:53:49"
-        },
-        {
-            key: 7,
-            no: 7,
-            product: "Sandwich CLT",
-            merchant: "Homebro",
-            category: "Hearty Bites",
-            hpp: 22000,
-            price: 22000,
-            status: "Active",
-            updated: "01 Juni 2025 22:53:49"
-        },
-        {
-            key: 8,
-            no: 8,
-            product: "Meeting Room Besar (4 Jam)",
-            merchant: "Dago Creative Space",
-            category: "Meeting Room Besar",
-            hpp: 200000,
-            price: 200000,
-            status: "Active",
-            updated: "01 Juni 2025 22:53:49"
-        },
-    ];
+  // Ambil data dari database
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const res = await getProdukKasir();
+        setData(res);
+      } catch (error) {
+        message.error("Gagal memuat data produk");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
-    // ambil semua kategori unik untuk isi dropdown
-    const categories = ["All", ...new Set(data.map((item) => item.category))];
+  // Ambil kategori unik
+  const categories = ["Semua Kategori", ...new Set(data.map((item) => item.category))];
 
-    // filter data
-    const filteredData = data.filter((item) => {
-        const matchSearch = item.product.toLowerCase().includes(search.toLowerCase());
-        const matchCategory = categoryFilter === "All" || item.category === categoryFilter;
-        return matchSearch && matchCategory;
-    });
+  // Filter data berdasarkan search & kategori
+  const filteredData = data.filter((item) => {
+    const matchSearch = item.product.toLowerCase().includes(search.toLowerCase());
+    const matchCategory = selectedCategory === "Semua Kategori" || item.category === selectedCategory;
+    return matchSearch && matchCategory;
+  });
 
-    const columns = [
-        { title: "No", dataIndex: "no", key: "no" },
-        { title: "Product", dataIndex: "product", key: "product" },
-        { title: "Merchant", dataIndex: "merchant", key: "merchant" },
-        { title: "Category", dataIndex: "category", key: "category" },
-        { title: "HPP", dataIndex: "hpp", key: "hpp", render: (val) => `Rp ${val.toLocaleString()}` },
-        { title: "Price", dataIndex: "price", key: "price", render: (val) => `Rp ${val.toLocaleString()}` },
-        {
-            title: "Ketersediaan",
-            dataIndex: "status",
-            key: "status",
-            render: (status) =>
-                status === "Active" ? (
-                    <Tag color="blue">Active</Tag>
-                ) : (
-                    <Tag color="red">Inactive</Tag>
-                )
-        },
-        { title: "Updated At", dataIndex: "updated", key: "updated" }
-    ];
-
-    return (
-        <div style={{ padding: 20 }}>
-            <Title level={3}>My Menu Management</Title>
-            <Space style={{ marginBottom: 20 }}>
-                <Input.Search
-                    placeholder="Search"
-                    style={{ width: 300 }}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-                <Select
-                    value={categoryFilter}
-                    style={{ width: 200 }}
-                    onChange={(value) => setCategoryFilter(value)}
-                >
-                    {categories.map((cat) => (
-                        <Option key={cat} value={cat}>
-                            {cat}
-                        </Option>
-                    ))}
-                </Select>
-            </Space>
-            <Table
-                columns={columns}
-                dataSource={filteredData}
-                pagination={false}
-                bordered
-                className="[&_.ant-table-thead>tr>th]:bg-gray-300" // header abu-abu
-            />
+  // Custom dropdown filter
+  const customFilterDropdown = (setSelectedKeys, selectedKeys, confirm, clearFilters, options) => (
+    <div className="p-2 min-w-[160px]">
+      {options.map((opt) => (
+        <div
+          key={opt.value}
+          className={`px-3 py-2 cursor-pointer rounded-md transition ${
+            selectedKeys.includes(opt.value) ? "bg-blue-100 text-blue-600" : "hover:bg-gray-100"
+          }`}
+          onClick={() => {
+            setSelectedKeys(selectedKeys.includes(opt.value) ? [] : [opt.value]);
+            confirm();
+          }}
+        >
+          {opt.text}
         </div>
-    );
+      ))}
+      <div className="flex justify-end gap-2 mt-2">
+        <Button size="small" onClick={() => { clearFilters && clearFilters(); confirm(); }}>
+          Reset
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Kolom tabel
+  const columns = [
+    { title: "No", render: (_, __, index) => index + 1, width: 60 },
+    { title: "Product", dataIndex: "product", key: "product" },
+    {
+      title: "Merchant",
+      dataIndex: "merchant",
+      key: "merchant",
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) =>
+        customFilterDropdown(setSelectedKeys, selectedKeys, confirm, clearFilters, [
+          ...new Set(data.map((item) => item.merchant))
+        ].map((m) => ({ text: m, value: m }))),
+      onFilter: (value, record) => record.merchant === value,
+      filterIcon: () => <DownOutlined />,
+    },
+    { title: "Category", dataIndex: "category", key: "category" },
+    {
+      title: "Price",
+      dataIndex: "price",
+      key: "price",
+      render: (val) => `Rp ${Number(val).toLocaleString()}`,
+    },
+    {
+      title: "Ketersediaan",
+      dataIndex: "status",
+      key: "status",
+      render: (status) =>
+        status === "Active" ? <Tag color="blue">Active</Tag> : <Tag color="red">Inactive</Tag>,
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) =>
+        customFilterDropdown(setSelectedKeys, selectedKeys, confirm, clearFilters, [
+          { text: "Active", value: "Active" },
+          { text: "Inactive", value: "Inactive" },
+        ]),
+      onFilter: (value, record) => record.status === value,
+      filterIcon: () => <DownOutlined />,
+    },
+    { title: "Updated At", dataIndex: "updated", key: "updated" },
+  ];
+
+  return (
+    <div className="p-4 sm:p-6">
+      <Title level={3} className="text-center sm:text-left text-base sm:text-xl">
+        My Menu Management
+      </Title>
+
+      {/* Search & kategori */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:items-center">
+        <Input.Search
+          placeholder="Cari produk..."
+          className="w-full sm:w-[400px]"
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Button
+          onClick={() => setCategoryDrawer(true)}
+          className="w-full sm:w-auto"
+        >
+          {selectedCategory}
+        </Button>
+      </div>
+
+      {/* TABLE WRAPPER RESPONSIVE */}
+      {loading ? (
+        <div className="flex justify-center items-center py-10">
+          <Spin tip="Loading data..." />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table
+            columns={columns}
+            dataSource={filteredData}
+            pagination={false}
+            rowKey="id_produk"
+            bordered
+            className="min-w-[600px] [&_.ant-table-thead>tr>th]:bg-gray-200"
+          />
+        </div>
+      )}
+
+      {/* Drawer (Bottom Sheet Category) */}
+      <AnimatePresence>
+        {categoryDrawer && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setCategoryDrawer(false)}
+          >
+            <motion.div
+              className="bg-white w-full rounded-t-2xl p-4 max-h-[70vh] flex flex-col"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex-1 overflow-y-scroll hide-scrollbar">
+                {categories.map((cat, idx) => (
+                  <motion.div
+                    key={idx}
+                    className={`text-center py-3 font-medium transition-all ${
+                      selectedCategory === cat ? "text-black text-xl" : "text-gray-400 text-lg"
+                    }`}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setSelectedCategory(cat)}
+                  >
+                    {cat}
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="flex justify-between mt-4">
+                <Button danger onClick={() => setCategoryDrawer(false)}>Cancel</Button>
+                <Button type="primary" onClick={() => setCategoryDrawer(false)}>Apply</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 };
 
 export default ProductKasir;

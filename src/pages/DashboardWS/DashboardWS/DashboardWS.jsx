@@ -1,16 +1,29 @@
 import React, { useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import logo from "../../../assets/images/logo.png";
 import { AuthContext } from "../../../providers/AuthProvider";
-import { Link } from "react-router-dom";
 import { FaWhatsapp, FaUser } from "react-icons/fa";
-
-// Import Swiper
+import {
+  Wifi,
+  Coffee,
+  Users,
+  Clock,
+  Calendar,
+  CheckCircle,
+  Tv,
+  Ban,
+} from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination, Autoplay } from "swiper/modules";
 import "swiper/css";
-import "swiper/css/navigation";
 import "swiper/css/pagination";
+import { Pagination, Autoplay } from "swiper/modules";
+import { Spin, message } from "antd"; // Ditambahkan untuk loading & notifikasi
+
+// Impor service untuk mengambil data
+import { getWorkspaces } from "../../../services/service";
+
+// Definisikan base URL untuk backend Anda
+const API_URL = "http://localhost:5000";
 
 const DashboardWS = () => {
   const navigate = useNavigate();
@@ -18,10 +31,13 @@ const DashboardWS = () => {
 
   const [activeTab, setActiveTab] = useState("Working Space");
 
-  // Redirect sesuai role user setelah login
+  // State baru untuk data dinamis dan loading
+  const [workspaces, setWorkspaces] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // useEffect untuk redirect berdasarkan role (tidak berubah)
   useEffect(() => {
     if (!userProfile) return;
-
     if (userProfile.roles === "admin") {
       navigate("/dashboardadmin", { replace: true });
     } else if (userProfile.roles === "kasir") {
@@ -31,333 +47,333 @@ const DashboardWS = () => {
     }
   }, [userProfile, navigate]);
 
-  // Data Cards per kategori
-  const cardsData = [
-    {
-      category: "Working Space",
-      title: "Space Monitor",
-      desc: "Space dengan monitor yang dapat digunakan",
-      img: "https://images.unsplash.com/photo-1590650046871-92c887180603?auto=format&fit=crop&w=600&q=80",
-      actions: [{ text: "Reserve now", type: "primary" }],
-    },
-    {
-      category: "Working Space",
-      title: "Space Lesehan",
-      desc: "Space lesehan dengan dudukan bantal dan meja.",
-      img: "https://images.unsplash.com/photo-1587614382346-4ec70e388b28?auto=format&fit=crop&w=600&q=80",
-      actions: [{ text: "Reserve now", type: "primary" }],
-    },
-    {
-      category: "Working Space",
-      title: "Open Space",
-      desc: "Ruang kerja fleksibel untuk produktivitas maksimal.",
-      img: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&q=80",
-      actions: [{ text: "Reserve now", type: "primary" }],
-    },
-    {
-      category: "Working Space",
-      title: "Room Meeting",
-      desc: "Ruang meeting luas dengan kapasitas hingga 8 orang.",
-      img: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&q=80",
-      actions: [{ text: "Reserve now", type: "primary" }],
-    },
-  ];
+  // useEffect untuk mengambil data working space dari API
+  useEffect(() => {
+    const fetchWorkspaces = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getWorkspaces();
+        setWorkspaces(data || []); // Pastikan workspaces adalah array
+      } catch (error) {
+        message.error("Gagal memuat data working space dari server.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  // Filter card sesuai tab
-  const filteredCards = cardsData.filter((card) => card.category === activeTab);
+    // Hanya panggil API jika tab yang aktif adalah 'Working Space'
+    if (activeTab === "Working Space") {
+      fetchWorkspaces();
+    }
+  }, [activeTab]); // Dijalankan kembali jika 'activeTab' berubah
 
   const tabs = ["Working Space", "Virtual Offices", "Memberships", "Event Spaces"];
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 w-full bg-white/90 backdrop-blur-md shadow-sm z-50 transition">
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Navbar (Tidak ada perubahan) */}
+      <nav className="fixed top-0 left-0 w-full bg-white/90 backdrop-blur-md shadow-sm z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="Logo" className="h-9" />
-            <span className="font-bold text-xl text-gray-800 tracking-tight">Workspace</span>
-          </div>
-
+          <Link to="/" className="flex items-center gap-2">
+            <img src={logo} alt="Logo" className="h-8 sm:h-9 w-auto" />
+            <span className="font-bold text-lg sm:text-xl text-gray-800 tracking-tight">
+              Workspace
+            </span>
+          </Link>
           <div className="flex gap-2 sm:gap-4 items-center">
             <button
               onClick={() => window.open("https://wa.me/62123123123", "_blank")}
-              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium shadow-md transition"
+              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium shadow-md transition whitespace-nowrap"
             >
-              <FaWhatsapp className="text-lg" /> WhatsApp
+              <FaWhatsapp className="text-base sm:text-lg" />
+              <span className="hidden sm:inline">WhatsApp</span>
             </button>
-
             {!userProfile ? (
               <button
                 onClick={login}
-                className="bg-red-500 hover:bg-red-600 text-white px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium shadow-md transition"
+                className="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium shadow-md transition whitespace-nowrap"
               >
                 Logout
               </button>
             ) : (
               <button
                 onClick={() => navigate("/login")}
-                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium shadow-md transition"
+                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium shadow-md transition whitespace-nowrap"
               >
-                <FaUser className="text-lg" />
-                Login
+                <FaUser className="text-base sm:text-lg" />
+                <span className="hidden sm:inline">Login</span>
               </button>
-
             )}
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <div className="relative w-full h-[80vh] mb-12 pt-16">
-        <img
-          src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1600&q=80"
-          alt="Coworking Hero"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/50"></div>
-        <div className="relative z-10 flex flex-col items-center justify-center h-full text-center text-white px-6">
-          <h1 className="text-4xl md:text-6xl font-bold mb-4">
-            Solusi Coworking & Sewa Kantor Modern
-          </h1>
-          <p className="text-lg md:text-xl max-w-2xl mb-6">
-            Fleksibel, nyaman, dan mendukung produktivitas. Pilih ruang kerja
-            yang sesuai kebutuhan Anda.
-          </p>
-        </div>
-      </div>
-
-      {/* Tabs Navigation */}
-      <section className="max-w-7xl mx-auto px-6 pb-16 flex-1">
-        {/* Tabs */}
-        <h1 className="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-8">
-          Pilih Layanan Yang Sesuai Dengan Pilihan Anda
-        </h1>
-
-        <div className="flex justify-center mb-10">
-          <div className="flex gap-6 bg-gray-100 rounded-full px-6 py-3 shadow-inner">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`relative px-20 py-4 rounded-full text-lg font-semibold transition-all duration-300
-          ${activeTab === tab
-                    ? "bg-blue-600 text-white shadow-xl"
-                    : "text-gray-600 hover:text-blue-600 hover:bg-blue-100"
-                  }`}
-              >
-                {tab}
-                {/* Indikator bawah untuk tab aktif */}
-                {activeTab === tab && (
-                  <span className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-20 h-1 bg-white rounded-full shadow"></span>
-                )}
-              </button>
-            ))}
+      <main className="pt-16">
+        {/* Hero (Tidak ada perubahan) */}
+        <div className="relative w-full h-[50vh] sm:h-[60vh] md:h-[70vh] flex items-center justify-center">
+          <img
+            src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1600&q=80"
+            alt="Coworking Hero"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/50"></div>
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center text-white px-4 sm:px-6">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold mb-4">
+              Solusi Coworking & Sewa Kantor Modern
+            </h1>
+            <p className="text-sm sm:text-base md:text-lg max-w-3xl">
+              Fleksibel, nyaman, dan mendukung produktivitas. Pilih ruang kerja
+              yang sesuai kebutuhan Anda.
+            </p>
           </div>
         </div>
 
+        {/* Tabs Section */}
+        <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-8 sm:mb-12">
+            Pilih Layanan Sesuai Kebutuhan Anda
+          </h2>
 
-
-        {/* Konten sesuai Tab */}
-        {activeTab === "Working Space" && (
-          <div>
-            {/* Judul di atas kartu */}
-            <h2 className="text-2xl md:text-2xl font-bold text-gray-800  mb-3">
-              Tempat Kerja Yang Sesuai Dengan Keinginan Anda
-            </h2>
-
-            {/* Grid kartu */}
-            <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {filteredCards.map((card, i) => (
-                <div
-                  key={i}
-                  className="max-w-sm mx-auto bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden"
+          {/* Tabs Navigation (Tidak ada perubahan) */}
+          <div className="flex justify-center mb-10">
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 p-1.5 bg-gray-100 rounded-full shadow-inner">
+              {tabs.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`relative whitespace-nowrap px-4 sm:px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 focus:outline-none
+                  ${
+                    activeTab === tab
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "text-gray-600 hover:text-blue-600 hover:bg-gray-200"
+                  }`}
                 >
-                  {/* Image */}
-                  <div className="aspect-[4/3] overflow-hidden">
-                    <img
-                      src={card.img}
-                      alt={card.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-6">
-                    {/* Title */}
-                    <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                      {card.title}
-                    </h3>
-
-                    {/* Description */}
-                    <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                      {card.desc}
-                    </p>
-
-                    {/* Features */}
-                    <div className="space-y-2 mb-6">
-                      {card.features?.map((feature, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <feature.icon className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-600">{feature.text}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3">
-                      {card.actions.map((btn, index) =>
-                        btn.type === "primary" ? (
-                          <button
-                            key={index}
-                            onClick={() => navigate("/informasi-ruangan")}
-                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-full text-sm font-medium transition-colors"
-                          >
-                            {btn.text}
-                          </button>
-                        ) : (
-                          <button
-                            key={index}
-                            onClick={() => navigate("/informasi-ruangan")}
-                            className="flex-1 text-blue-500 hover:text-blue-600 px-4 py-2.5 rounded-full text-sm font-medium border border-blue-200 hover:border-blue-300 transition-colors"
-                          >
-                            {btn.text}
-                          </button>
-                        )
-                      )}
-
-                    </div>
-                  </div>
-                </div>
+                  {tab}
+                </button>
               ))}
             </div>
           </div>
-        )}
 
+          {/* Konten sesuai Tab */}
+          <div>
+            {activeTab === "Working Space" && (
+              <div className="space-y-6 max-w-5xl mx-auto px-4">
+                {isLoading ? (
+                  <div className="text-center py-10">
+                    <Spin size="large" />
+                    <p className="mt-4 text-gray-600">Memuat Ruang Kerja...</p>
+                  </div>
+                ) : workspaces.length > 0 ? (
+                  workspaces.map((card, i) => (
+                    <div
+                      key={i}
+                      className="bg-white rounded-xl border shadow-md flex flex-col md:flex-row overflow-hidden"
+                    >
+                      {/* Image */}
+                      <div className="md:w-2/5 h-48 md:h-auto">
+                        <img
+                          src={`${import.meta.env.VITE_BASE_URL}/static/${card.img}`}
+                          alt={card.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/600x400/EEE/31343C?text=Image+Not+Found' }}
+                        />
+                      </div>
 
-        {activeTab === "Virtual Offices" && (
-          <div className="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-2 gap-12 items-center">
-            {/* Left: Images */}
-            <div className="relative flex justify-center">
-              <div className="absolute top-0 left-12 w-64 h-40 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=869&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                  alt="office"
-                  className="w-full h-full object-cover"
-                />
+                      {/* Info */}
+                      <div className="flex-1 p-5 flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-2">
+                            {card.title}
+                          </h3>
+                          <div className="flex items-center text-sm text-gray-600 gap-4 mb-3 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Calendar size={14} /> Tersedia Senin - Sabtu
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock size={14} /> {card.time}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users size={14} /> {card.capacity} Total Tempat
+                            </span>
+                          </div>
+                          <p className="text-gray-600 text-sm mb-4">{card.desc}</p>
+                        </div>
+
+                        {/* Features */}
+                        <div className="flex justify-around border-t border-b py-3 text-sm text-gray-700">
+                          {card.features.includes("Wifi") && (
+                            <div className="flex flex-col items-center"><Wifi size={20} className="text-blue-600" /><span className="text-xs mt-1">Internet</span></div>
+                          )}
+                          {card.features.includes("Refill Water") && (
+                             <div className="flex flex-col items-center"><Coffee size={20} className="text-amber-600" /><span className="text-xs mt-1">Refill Water</span></div>
+                          )}
+                          {card.features.includes("AC") && (
+                             <div className="flex flex-col items-center"><span className="text-lg">❄️</span><span className="text-xs mt-1">AC</span></div>
+                          )}
+                          {card.features.includes("TV") && (
+                             <div className="flex flex-col items-center"><Tv size={20} className="text-purple-600" /><span className="text-xs mt-1">TV</span></div>
+                          )}
+                          <div className="flex flex-col items-center"><Ban size={20} className="text-red-600" /><span className="text-xs mt-1">No Smoking</span></div>
+                        </div>
+
+                        {/* Fasilitas */}
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-700">
+                          {card.fasilitas?.map((fasilitas, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <CheckCircle size={16} className="text-green-600" />
+                              <span>{fasilitas}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Price & Action */}
+                        <div className="flex items-center justify-between pt-4">
+                          <div className="flex flex-col">
+                            {card.price === "FREE" ? (
+                              <span className="inline-block bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-semibold">FREE</span>
+                            ) : (
+                              <>
+                                <span className="text-xs uppercase text-gray-500 tracking-wide">Start from</span>
+                                <span className="text-2xl font-extrabold text-gray-900">{card.price}</span>
+                              </>
+                            )}
+                          </div>
+                          {card.title !== "Space Lesehan" ? (
+                            <button
+                              onClick={() => navigate("/informasi-ruangan")}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-md text-sm font-semibold transition"
+                            >
+                              Reserve Now
+                            </button>
+                          ) : (
+                            <p className="text-xs text-red-500 font-medium">{card.note}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                   <div className="text-center py-10 text-gray-500">
+                     <p>Saat ini tidak ada ruang kerja yang tersedia.</p>
+                   </div>
+                )}
               </div>
-              <div className="relative top-20 w-72 h-56 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                  alt="person working"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
+            )}
 
-            {/* Right: Text Content */}
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Virtual Office <br />
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Sewa tempat dengan alamat bisnis premium di Dago Hub and Coffee Lab. Kelola bisnis Anda dari mana saja tanpa biaya sewa kantor fisik.
-              </p>
-              <p className="text-gray-600 mb-6">
-                Layanan kami mencakup alamat resmi dan manajemen surat yang andal, ideal untuk bisnis kecil hingga menengah yang menghargai fleksibilitas dan efisiensi.
-              </p>
-              <Link
-                to="/informasivo"
-                className="text-blue-500 font-medium hover:underline"
-              >
-                Lihat Detail &gt;
-              </Link>
-            </div>
+            {/* Virtual Offices, Memberships, Event Spaces (Tidak ada perubahan) */}
+            {["Virtual Offices", "Memberships", "Event Spaces"].includes(activeTab) && (
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+             {/* Swiper Image Slider */}
+             <div className="relative h-64 sm:h-80 md:h-full flex items-center justify-center order-first md:order-none">
+               <Swiper
+                 spaceBetween={20}
+                 slidesPerView={1}
+                 loop={true}
+                 autoplay={{ delay: 3000 }}
+                 pagination={{ clickable: true }}
+                 modules={[Pagination, Autoplay]}
+                 className="w-full h-full rounded-xl shadow-lg"
+               >
+                 {activeTab === "Virtual Offices" && (
+                   <>
+                     <SwiperSlide>
+                       <img
+                         src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=869&auto=format&fit=crop"
+                         alt="Virtual Office 1"
+                         className="w-full h-full object-cover rounded-lg"
+                       />
+                     </SwiperSlide>
+                     <SwiperSlide>
+                       <img
+                         src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop"
+                         alt="Virtual Office 2"
+                         className="w-full h-full object-cover rounded-lg"
+                       />
+                     </SwiperSlide>
+                   </>
+                 )}
+
+                 {activeTab === "Memberships" && (
+                   <>
+                     <SwiperSlide>
+                       <img
+                         src="https://images.unsplash.com/photo-1565688842882-e0b2693d349a?q=80&w=870&auto=format&fit=crop"
+                         alt="Membership 1"
+                         className="w-full h-full object-cover rounded-lg"
+                       />
+                     </SwiperSlide>
+                     <SwiperSlide>
+                       <img
+                         src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop"
+                         alt="Membership 2"
+                         className="w-full h-full object-cover rounded-lg"
+                       />
+                     </SwiperSlide>
+                   </>
+                 )}
+
+                 {activeTab === "Event Spaces" && (
+                   <>
+                     <SwiperSlide>
+                       <img
+                         src="https://images.unsplash.com/photo-1503428593586-e225b39bddfe?q=80&w=870&auto=format&fit=crop"
+                         alt="Event Space 1"
+                         className="w-full h-full object-cover rounded-lg"
+                       />
+                     </SwiperSlide>
+                     <SwiperSlide>
+                       <img
+                         src="https://images.unsplash.com/photo-1503424886305-4c2b04aa3ebd?q=80&w=870&auto=format&fit=crop"
+                         alt="Event Space 2"
+                         className="w-full h-full object-cover rounded-lg"
+                       />
+                     </SwiperSlide>
+                   </>
+                 )}
+               </Swiper>
+             </div>
+
+             {/* Text Section */}
+             <div className="text-center md:text-left">
+               <h3 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">
+                 {activeTab === "Virtual Offices" && "Virtual Office"}
+                 {activeTab === "Memberships" && "Membership Ruangan"}
+                 {activeTab === "Event Spaces" && "Event Spaces"}
+               </h3>
+               <p className="text-gray-600 mb-4 text-base">
+                 {activeTab === "Virtual Offices" &&
+                   "Sewa tempat dengan alamat bisnis premium. Kelola bisnis Anda dari mana saja tanpa biaya sewa kantor fisik."}
+                 {activeTab === "Memberships" &&
+                   "Pilih paket membership sesuai kebutuhan ruang Anda. Akses ruangan fleksibel menggunakan kredit membership."}
+                 {activeTab === "Event Spaces" &&
+                   "Sewa ruang acara yang nyaman dan fleksibel untuk seminar, workshop, atau perayaan khusus."}
+               </p>
+               <p className="text-gray-600 mb-6 text-base">
+                 {activeTab === "Virtual Offices" &&
+                   "Layanan mencakup alamat resmi dan manajemen surat yang andal, ideal untuk bisnis fleksibel."}
+                 {activeTab === "Memberships" &&
+                   "Nikmati fasilitas modern dan lokasi strategis yang mendukung produktivitas Anda setiap saat."}
+                 {activeTab === "Event Spaces" &&
+                   "Dengan fasilitas modern dan lokasi strategis, acara Anda akan lebih berkesan."}
+               </p>
+               <Link
+                 to={
+                   activeTab === "Virtual Offices"
+                     ? "/informasivo"
+                     : activeTab === "Memberships"
+                     ? "/informasiws"
+                     : "/eventspaces"
+                 }
+                 className="text-blue-600 font-semibold hover:underline"
+               >
+                 Lihat Detail →
+               </Link>
+             </div>
+           </div>
+            )}
           </div>
-        )}
-        {activeTab === "Memberships" && (
-          <div className="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-2 gap-12 items-center">
-            {/* Left: Images */}
-            <div className="relative flex justify-center">
-              <div className="absolute top-0 left-12 w-64 h-40 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src="https://images.unsplash.com/photo-1565688842882-e0b2693d349a?q=80&w=870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                  alt="office"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="relative top-20 w-72 h-56 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=869&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                  alt="person working"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            {/* Right: Text Content */}
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Membership Ruangan <br />
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Pilih paket membership sesuai kebutuhan ruang Anda di Dago Hub and Coffee Lab. Akses ruangan tanpa perlu membayar, melalui penggunaan kredit membership.
-              </p>
-              <Link
-                to="/informasiws"
-                className="text-blue-500 font-medium hover:underline"
-              >
-                Lihat Detail &gt;
-              </Link>
-            </div>
-
-          </div>
-        )}
-        {activeTab === "Event Spaces" && (
-          <div className="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-2 gap-12 items-center">
-            {/* Left: Images */}
-            <div className="relative flex justify-center">
-              <div className="absolute top-0 left-12 w-64 h-40 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=869&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                  alt="event space"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="relative top-20 w-72 h-56 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-                  alt="people in event"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            {/* Right: Text Content */}
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Event Spaces <br />
-              </h2>
-              <p className="text-gray-600 mb-6">
-                Sewa ruang acara yang nyaman dan fleksibel untuk berbagai kebutuhan —
-                mulai dari seminar, workshop, rapat tim, hingga perayaan khusus.
-              </p>
-              <p className="text-gray-600 mb-6">
-                Dengan fasilitas modern, lokasi strategis, dan suasana yang mendukung,
-                event space kami siap menjadikan acara Anda lebih berkesan dan lancar.
-              </p>
-              <Link
-                to="/eventspaces"
-                className="text-blue-500 font-medium hover:underline"
-              >
-                Lihat Detail &gt;
-              </Link>
-            </div>
-          </div>
-        )}
-
-      </section>
-
-
+        </section>
+      </main>
     </div>
   );
 };

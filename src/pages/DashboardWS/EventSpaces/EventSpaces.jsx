@@ -1,206 +1,236 @@
-import React, { useState } from "react";
-import { FaArrowRight, FaArrowLeft } from "react-icons/fa";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect } from "react";
+import { Row, Col, Typography, Button, Spin, Alert } from "antd";
+import {
+  InfoCircleOutlined,
+  TeamOutlined,
+  AppstoreOutlined,
+  CheckOutlined,
+} from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
+import { getEventSpaces } from "../../../services/service"; // <-- Import service Anda
+import { formatRupiah } from "../../../utils/formatRupiah";
 
-
-const slides = [
-  {
-    title: "Aula",
-    desc: "Aula luas yang cocok untuk seminar, rapat besar, dan acara resmi.",
-    img: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1170&q=80",
-    features: [
-      "Audio visual modern",
-      "Kursi dan meja lengkap",
-      "AC dan ventilasi baik",
-      "Panggung untuk presentasi",
-    ],
-  },
-  {
-    title: "Open Space",
-    desc: "Ruang terbuka fleksibel untuk workshop kreatif, pameran, atau acara santai.",
-    img: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1170&q=80",
-    features: [
-      "Desain fleksibel",
-      "Ruang luas tanpa sekat",
-      "Cocok untuk pameran & workshop",
-      "Dekorasi bisa disesuaikan",
-    ],
-  },
-  {
-    title: "Seluruh Tempat",
-    desc: "Sewa seluruh area event space untuk pengalaman eksklusif dengan privasi penuh.",
-    img: "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=1170&q=80",
-    features: [
-      "Privasi penuh",
-      "Akses ke semua fasilitas",
-      "Cocok untuk acara besar",
-      "Catering & layanan lengkap",
-    ],
-  },
-];
-
-
+const { Title, Text, Paragraph } = Typography;
+const baseUrl = import.meta.env.VITE_BASE_URL;
 
 const EventSpaces = () => {
-  const [index, setIndex] = useState(0);
+  const navigate = useNavigate();
+  // State untuk menyimpan data, status loading, dan error
+  const [eventSpaces, setEventSpaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const nextSlide = () => setIndex((prev) => (prev + 1) % slides.length);
-  const prevSlide = () => setIndex((prev) => (prev - 1 + slides.length) % slides.length);
+  // useEffect untuk mengambil data saat komponen pertama kali dimuat
+  useEffect(() => {
+    const fetchEventSpaces = async () => {
+      try {
+        // Panggil service untuk mengambil data dari endpoint
+        const data = await getEventSpaces();
+        setEventSpaces(data);
+      } catch (err) {
+        setError("Gagal memuat data ruangan. Silakan coba lagi nanti.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchEventSpaces();
+  }, []); // Array dependensi kosong agar hanya berjalan sekali
+
+  // Fungsi untuk handle klik tombol "Pesan Sekarang"
+  const handlePesanClick = (space) => {
+    // Arahkan ke halaman booking dengan membawa data ruangan
+    navigate(`/detail-event-spaces/${space.id_event_space}`, { state: space });
+    console.log("Navigasi ke halaman booking untuk:", space.nama_event_space);
+  };
+  
   return (
-    <div className="bg-gradient-to-b from-gray-50 to-white">
-      {/* Event Spaces Section */}
-      <section className="py-16 px-6 md:px-12">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+    <div>
+      {/* Hero Section (Tidak ada perubahan) */}
+      <div
+        style={{
+          backgroundImage:
+            "url('https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1600&q=80')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          minHeight: "70vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          color: "white",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+          }}
+        ></div>
+        <div style={{ position: "relative", maxWidth: "800px", padding: "0 20px" }}>
+          <Title
+            level={1}
+            style={{
+              fontWeight: 800,
+              fontSize: "3.5rem",
+              marginBottom: 20,
+              color: "white",
+            }}
+          >
+            Premium Event Space untuk Setiap Acara
+          </Title>
+          <Paragraph
+            style={{
+              fontSize: "18px",
+              color: "#f0f0f0",
+              marginBottom: 30,
+            }}
+          >
+            Temukan ruang ideal untuk seminar, workshop, hingga perayaan perusahaan.
+            Fleksibel, modern, dan siap mendukung acara Anda berjalan sukses.
+          </Paragraph>
+          <Button
+            type="primary"
+            size="large"
+            style={{ borderRadius: 8, padding: "0 32px", fontWeight: 600 }}
+            onClick={() => {
+              const el = document.getElementById("event-spaces-section");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            Lihat Ruangan
+          </Button>
+        </div>
+      </div>
 
-          {/* Left Content */}
-          <div className="order-2 md:order-1">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Premium Event Space<span className="text-blue-600">.</span>
-            </h2>
-            <p className="text-gray-600 mb-6 text-lg leading-relaxed">
-              Apa pun acaranya, besar maupun kecil, kami siap menyediakannya. Jadi, baik Anda mengadakan peluncuran produk, acara malam, atau perayaan perusahaan seharian penuh, kami akan hadir untuk membantu acara berjalan lancar.
-            </p>
+      {/* Isi Konten */}
+      <div
+        id="event-spaces-section"
+        style={{
+          background: "#fafafa",
+          padding: "100px 20px",
+        }}
+      >
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          {/* Tampilkan spinner saat loading */}
+          {loading && (
+            <div style={{ textAlign: "center", padding: "50px" }}>
+              <Spin size="large" />
+              <p style={{ marginTop: '16px', color: '#555' }}>Memuat data ruangan...</p>
+            </div>
+          )}
 
-
-            <button
-              type="submit"
-              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-4 font-medium hover:bg-blue-700 transition whitespace-nowrap rounded-2xl"
-            >
-              <span>Pesan Sekarang</span>
-              <FaArrowRight className="text-lg" />
-            </button>
-          </div>
-
-          {/* Right Image */}
-          <div className="order-1 md:order-2 flex justify-center md:justify-end relative">
-            <img
-              src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80"
-              alt="Event space"
-              className="rounded-2xl shadow-xl w-full max-w-md object-cover h-96"
+          {/* Tampilkan pesan error jika terjadi */}
+          {error && (
+            <Alert
+              message="Terjadi Kesalahan"
+              description={error}
+              type="error"
+              showIcon
             />
+          )}
 
-          </div>
-        </div>
-      </section>
-      <section className="py-16 px-6 md:px-12 bg-white">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          {/* Left Content */}
-          <div>
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-              Whatever the event, we've got the space<span className="text-blue-600">.</span>
-            </h2>
-            <p className="text-gray-600 mb-8 text-lg leading-relaxed">
-              Apa pun yang Anda butuhkan, dan di mana pun Anda membutuhkannya, kami memiliki ruang yang sempurna untuk memenuhi kebutuhan Anda. Dengan ribuan lokasi di seluruh dunia, serta berbagai ukuran dan konfigurasi yang bisa dipilih.
-              .
-            </p>
+          {/* Tampilkan data jika tidak loading dan tidak ada error */}
+          {!loading && !error && eventSpaces.map((room, idx) => {
+             // Ubah string fitur menjadi array
+             const fiturList = room.fitur_ruangan 
+                ? room.fitur_ruangan.split(/\r?\n/).map(f => f.trim()).filter(Boolean)
+                : [];
+                
+             return (
+                <Row
+                    key={room.id_event_space}
+                    gutter={[48, 48]}
+                    align="middle"
+                    style={{
+                    marginBottom: 100,
+                    flexDirection: idx % 2 === 1 ? "row-reverse" : "row",
+                    }}
+                >
+                    {/* Gambar */}
+                    <Col xs={24} md={12}>
+                    <img
+                        src={`${baseUrl}/static/${room.gambar_ruangan}`} // <-- Gunakan path dari server
+                        alt={room.nama_event_space}
+                        style={{
+                        width: "100%",
+                        borderRadius: "16px",
+                        objectFit: "cover",
+                        height: 400,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+                        }}
+                    />
+                    </Col>
 
-            {/* Features List with Checkboxes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-              <div className="flex items-center">
-                <div className="flex items-center justify-center w-6 h-6 rounded border border-gray-300 mr-3">
-                  <div className="w-3 h-3 rounded-sm bg-blue-600"></div>
-                </div>
-                <span className="text-gray-700">Aula</span>
-              </div>
-              <div className="flex items-center">
-                <div className="flex items-center justify-center w-6 h-6 rounded border border-gray-300 mr-3">
-                  <div className="w-3 h-3 rounded-sm bg-blue-600"></div>
-                </div>
-                <span className="text-gray-700">Open Space</span>
-              </div>
-              <div className="flex items-center">
-                <div className="flex items-center justify-center w-6 h-6 rounded border border-gray-300 mr-3">
-                  <div className="w-3 h-3 rounded-sm bg-blue-600"></div>
-                </div>
-                <span className="text-gray-700">Seluruh Tempat</span>
-              </div>
-            </div>
-          </div>
-          {/* Right Image */}
-          <div className="flex justify-center md:justify-end">
-            <div className="relative">
-              <img
-                src="https://images.unsplash.com/photo-1497366811353-6870744d04b2?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80"
-                alt="Modern event space"
-                className="rounded-2xl shadow-xl w-full max-w-md object-cover h-96"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-      <section className="py-16 px-6 md:px-12 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <div className="relative">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: 100 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -100 }}
-                transition={{ duration: 0.5 }}
-                className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center bg-white rounded-2xl shadow-xl overflow-hidden"
-              >
-                {/* Left Content */}
-                <div className="p-8 text-left">
-                  <h3 className="text-3xl font-semibold text-gray-800 mb-4">
-                    {slides[index].title}
-                  </h3>
-                  <p className="text-gray-600 mb-6 text-lg leading-relaxed">
-                    {slides[index].desc}
-                  </p>
+                    {/* Konten */}
+                    <Col xs={24} md={12}>
+                    <div>
+                        <Title level={3} style={{ fontWeight: 700 }}>
+                        {room.nama_event_space}
+                        </Title>
 
-                  {/* Features List with Blue Bullet */}
-                  <div className="space-y-3">
-                    {slides[index].features.map((feature, i) => (
-                      <div key={i} className="flex items-center">
-                        <div className="flex items-center justify-center w-6 h-6 rounded border border-gray-300 mr-3">
-                          <div className="w-3 h-3 rounded-sm bg-blue-600"></div>
+                        <Paragraph style={{ fontSize: 16, color: "#555" }}>
+                        <InfoCircleOutlined style={{ marginRight: 6 }} />
+                        {room.deskripsi_event_space}
+                        </Paragraph>
+                        
+                        <div style={{ display: 'flex', gap: '24px', margin: '16px 0' }}>
+                            <Text strong style={{ fontSize: 15 }}>
+                                <TeamOutlined style={{ marginRight: 6 }} />
+                                Kapasitas: {room.kapasitas} orang
+                            </Text>
+                            <Text strong style={{ fontSize: 15, color: '#1677ff' }}>
+                                Harga Mulai: {formatRupiah(room.harga_paket)}
+                            </Text>
                         </div>
-                        <span className="text-gray-700">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Right Image */}
-                <div className="flex justify-end">
-                  <img
-                    src={slides[index].img}
-                    alt={slides[index].title}
-                    className="w-full h-80 md:h-96 object-cover rounded-l-none rounded-r-2xl"
-                  />
-                </div>
-              </motion.div>
-            </AnimatePresence>
+                        <div style={{ marginTop: 20 }}>
+                        <Text strong style={{ display: "block", marginBottom: 8 }}>
+                            <AppstoreOutlined style={{ marginRight: 6 }} />
+                            Fitur Utama
+                        </Text>
+                        <ul style={{ paddingLeft: 20, margin: 0 }}>
+                            {fiturList.map((f, i) => (
+                            <li
+                                key={i}
+                                style={{
+                                marginBottom: 6,
+                                fontSize: 14,
+                                color: "#555",
+                                }}
+                            >
+                                <CheckOutlined
+                                style={{ color: "#1677ff", marginRight: 6 }}
+                                />
+                                {f}
+                            </li>
+                            ))}
+                        </ul>
+                        </div>
 
-            {/* Navigation Buttons */}
-            <button
-              onClick={prevSlide}
-              className="absolute top-1/2 -left-4 transform -translate-y-1/2 bg-white p-3 rounded-full shadow-md hover:bg-blue-50"
-            >
-              <FaArrowLeft className="text-gray-700" />
-            </button>
-            <button
-              onClick={nextSlide}
-              className="absolute top-1/2 -right-4 transform -translate-y-1/2 bg-white p-3 rounded-full shadow-md hover:bg-blue-50"
-            >
-              <FaArrowRight className="text-gray-700" />
-            </button>
-
-            {/* Slide Indicator */}
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-              {slides.map((_, i) => (
-                <span
-                  key={i}
-                  className={`w-3 h-3 rounded-full transition-colors ${i === index ? "bg-blue-600" : "bg-gray-300"
-                    }`}
-                ></span>
-              ))}
-            </div>
-          </div>
+                        <Button
+                        type="primary"
+                        size="large"
+                        style={{
+                            borderRadius: "10px",
+                            padding: "0 36px",
+                            fontWeight: 600,
+                            marginTop: 24,
+                        }}
+                        onClick={() => handlePesanClick(room)}
+                        >
+                        Pesan Sekarang
+                        </Button>
+                    </div>
+                    </Col>
+                </Row>
+             );
+          })}
         </div>
-      </section>
+      </div>
     </div>
   );
 };

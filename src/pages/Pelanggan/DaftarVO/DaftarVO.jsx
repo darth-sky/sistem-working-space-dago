@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useMemo } from "react";
 import {
   Form,
   Input,
@@ -10,6 +10,9 @@ import {
   Select,
   DatePicker,
   Table,
+  Upload,
+  message,
+  Divider,
 } from "antd";
 import {
   BankOutlined,
@@ -21,6 +24,7 @@ import {
   EnvironmentOutlined,
   PhoneOutlined,
   QrcodeOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { useParams, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -29,14 +33,11 @@ import QRCode from "react-qr-code";
 import { registerVirtualOffice } from "../../../services/service";
 
 import { AuthContext } from "../../../providers/AuthProvider";
-import { Upload, message } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
 
-
-
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Option } = Select;
 
+// --- DUMMY DATA PAKET ---
 const paketInfo = {
   "2": {
     nama: "Paket 6 Bulan",
@@ -70,76 +71,121 @@ const DaftarVO = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({});
   const [endDate, setEndDate] = useState(null);
-  const [showQR, setShowQR] = useState(false);
-  const [paymentDone, setPaymentDone] = useState(false);
+
+  const [paymentProof, setPaymentProof] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { id } = useParams();
-  const paket = paketInfo[id];
+  const paket = useMemo(() => paketInfo[id], [id]);
   const durasi = paket?.durasi;
 
   const navigate = useNavigate();
+  const { userProfile } = useContext(AuthContext);
+
+  // --- STEP 1 ---
   const onFinishFirstStep = (values) => {
+    const fileList = values.dokumenPendukung;
     setFormData({
       ...values,
+      dokumenPendukung: fileList,
       paketId: id,
       paketName: paket?.nama,
-      harga: paket?.harga,
-      benefit: paket?.benefit,
     });
     setStep(2);
   };
 
-  const { userProfile } = useContext(AuthContext);  // ambil id_user kalau ada
-
-  const onFinishSecondStep = async (values) => {
+  // --- STEP 2 ---
+  const onFinishSecondStep = (values) => {
     const finalStart = values.startDate
       ? values.startDate.format("DD-MM-YYYY")
       : null;
 
-    const finalEnd = values.startDate
-      ? dayjs(values.startDate).add(durasi, "month").format("DD-MM-YYYY")
+    const end = finalStart
+      ? dayjs(finalStart, "DD-MM-YYYY")
+          .add(durasi, "month")
+          .subtract(1, "day")
+          .format("DD-MM-YYYY")
       : null;
 
-    const payload = {
-      id_user: userProfile?.id_user, // kalau ada user login
-      id_paket_vo: parseInt(id), // dari params
-      nama: formData.namaPelanggan,
-      jabatan: formData.jabatan,
-      nama_perusahaan_klien: formData.namaPerusahaan,
-      bidang_perusahaan: formData.bidangUsaha,
-      alamat_perusahaan: formData.alamatPerusahaan,
-      email_perusahaan: formData.emailPerusahaan,
-      alamat_domisili: formData.alamatDomisili,
-      nomor_telepon: formData.nomorTelepon,
-    };
+    setFormData((prev) => ({
+      ...prev,
+      ...values,
+      startDate: finalStart,
+      endDate: end,
+    }));
+    setStep(3);
+  };
+
+  // --- UPLOAD BUKTI PEMBAYARAN ---
+  const handlePaymentProofChange = (info) => {
+    let fileList = [...info.fileList];
+    fileList = fileList.slice(-1);
+    if (fileList.length > 0) {
+      setPaymentProof(fileList[0].originFileObj);
+    } else {
+      setPaymentProof(null);
+    }
+    return fileList;
+  };
+
+  // --- FINAL SUBMISSION ---
+  const submitFinalBooking = async () => {
+    if (!paymentProof) {
+      message.error("Silakan upload bukti pembayaran terlebih dahulu.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const dataPayload = new FormData();
+    dataPayload.append("bukti_pembayaran", paymentProof);
+
+    const docFile = formData.dokumenPendukung[0]?.originFileObj;
+    if (docFile) {
+      dataPayload.append("dokumenPendukung", docFile);
+    } else {
+      message.error("Dokumen pendukung hilang. Silakan kembali ke step 1.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    dataPayload.append("id_user", userProfile?.id_user || "");
+    dataPayload.append("id_paket_vo", id);
+    dataPayload.append("nama", formData.namaPelanggan);
+    dataPayload.append("jabatan", formData.jabatan);
+    dataPayload.append("nama_perusahaan_klien", formData.namaPerusahaan);
+    dataPayload.append("bidang_perusahaan", formData.bidangUsaha);
+    dataPayload.append("alamat_perusahaan", formData.alamatPerusahaan);
+    dataPayload.append("email_perusahaan", formData.emailPerusahaan);
+    dataPayload.append("alamat_domisili", formData.alamatDomisili);
+    dataPayload.append("nomor_telepon", formData.nomorTelepon);
+
+    const finalStart = dayjs(formData.startDate, "DD-MM-YYYY").format(
+      "YYYY-MM-DD"
+    );
+    dataPayload.append("tanggal_mulai", finalStart);
 
     try {
-      const res = await registerVirtualOffice(payload);
+      const res = await registerVirtualOffice(dataPayload);
 
       if (res.message === "OK") {
-        message.success("Pendaftaran Virtual Office berhasil!");
-        setFormData((prev) => ({
-          ...prev,
-          ...values,
-          startDate: finalStart,
-          endDate: finalEnd,
-          harga: paket?.harga,
-          metodePembayaran: values.metodePembayaran,
-          id_transaksi: res.id_transaksi,
-        }));
-
-        // Redirect ke dashboard
-        navigate("/dashboard-pengguna");
+        message.success(
+          "Pendaftaran VO dan Bukti Pembayaran berhasil dikirim! Menunggu konfirmasi admin."
+        );
+        navigate("/riwayat-transaksi");
       } else {
         message.error(res.message || "Gagal daftar Virtual Office");
       }
     } catch (error) {
       console.error("Error daftar VO:", error);
-      message.error("Terjadi kesalahan server");
+      message.error("Terjadi kesalahan server saat submit final.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const renderReceipt = () => {
+  // --- STEP 3 (PEMBAYARAN) ---
+  const renderPaymentStep = () => {
     const columns = [
       { title: "Keterangan", dataIndex: "label", key: "label", width: "40%" },
       { title: "Detail", dataIndex: "value", key: "value" },
@@ -147,133 +193,114 @@ const DaftarVO = () => {
 
     const dataSource = [
       { key: 1, label: "Nama Perusahaan", value: formData.namaPerusahaan },
-      { key: 2, label: "Bidang Usaha", value: formData.bidangUsaha },
-      { key: 3, label: "Alamat Perusahaan", value: formData.alamatPerusahaan },
-      { key: 4, label: "Email Perusahaan", value: formData.emailPerusahaan },
-      { key: 5, label: "Nama Pemesan", value: formData.namaPelanggan },
-      { key: 6, label: "Jabatan", value: formData.jabatan },
-      { key: 7, label: "Alamat Domisili", value: formData.alamatDomisili },
-      { key: 8, label: "Nomor Telepon", value: formData.nomorTelepon },
-      { key: 9, label: "Paket", value: formData.paketName },
-      { key: 10, label: "Harga", value: `Rp ${formData.harga}` },
+      { key: 9, label: "Paket", value: paket?.nama },
+      { key: 10, label: "Harga Paket", value: `Rp ${paket?.harga}` },
       { key: 11, label: "Tanggal Mulai", value: formData.startDate },
       { key: 12, label: "Tanggal Selesai", value: formData.endDate },
       { key: 13, label: "Metode Pembayaran", value: formData.metodePembayaran },
     ];
 
     return (
-      <>
-        {!showQR && !paymentDone && (
-          <>
-            <Title
-              level={4}
-              style={{
-                textAlign: "center",
-                marginBottom: "24px",
-                color: "#1e3a8a",
-              }}
-            >
-              Detail Pesanan
-            </Title>
-            <Table
-              dataSource={dataSource}
-              columns={columns}
-              pagination={false}
-              bordered
-              style={{ marginBottom: "24px" }}
-              responsive
-            />
-            <Button
-              type="primary"
-              block
-              style={{
-                marginTop: "20px",
-                borderRadius: "10px",
-                backgroundColor: "#2563eb",
-                fontWeight: "bold",
-                height: "45px",
-              }}
-              onClick={() => setShowQR(true)}
-            >
-              Konfirmasi Pesanan
-            </Button>
-          </>
-        )}
+      <div style={{ textAlign: "center" }}>
+        <Title
+          level={3}
+          style={{
+            color: "#1e3a8a",
+            marginBottom: "24px",
+            fontWeight: "bold",
+          }}
+        >
+          Ringkasan Order & Pembayaran
+        </Title>
 
-        {showQR && !paymentDone && (
-          <div style={{ textAlign: "center" }}>
-            <Title level={4} style={{ color: "#1e3a8a" }}>
-              Silakan Scan QRIS untuk Melanjutkan Pembayaran
-            </Title>
-            <div
-              style={{
-                display: "inline-block",
-                padding: "16px",
-                background: "#fff",
-                borderRadius: "12px",
-                marginBottom: "16px",
-              }}
-            >
-              <QRCode value={`Pembayaran VO - Rp ${formData.harga}`} size={200} />
-            </div>
-            <p style={{ marginBottom: "16px" }}>
-              Gunakan aplikasi mobile banking / e-wallet untuk scan kode QR ini.
-            </p>
-            <Button
-              type="primary"
-              block
-              style={{
-                borderRadius: "10px",
-                backgroundColor: "#16a34a",
-                fontWeight: "bold",
-                height: "45px",
-              }}
-              onClick={() => setPaymentDone(true)}
-            >
-              Scan Berhasil
-            </Button>
+        {/* QRIS */}
+        <Card style={{ marginBottom: "24px", border: "2px solid #2563eb" }}>
+          <Title level={4} style={{ color: "#1e3a8a" }}>
+            Scan QRIS untuk Pembayaran
+          </Title>
+          <div
+            style={{
+              display: "inline-block",
+              padding: "16px",
+              background: "#fff",
+              borderRadius: "12px",
+              boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+            }}
+          >
+            <QRCode value={`Pembayaran VO - Rp ${paket?.harga}`} size={200} />
           </div>
-        )}
+          <p style={{ marginTop: "16px", fontWeight: "bold" }}>
+            Total Pembayaran:{" "}
+            <Text type="success" style={{ fontSize: "1.2em" }}>
+              Rp {paket?.harga}
+            </Text>
+          </p>
+        </Card>
 
-        {paymentDone && (
-          <div style={{ textAlign: "center" }}>
-            <Title level={4} style={{ color: "#1e3a8a" }}>
-              Struk Pembayaran
-            </Title>
-            <div
+        {/* DETAIL ORDER */}
+        <Divider orientation="left" style={{ borderColor: "#2563eb" }}>
+          Detail Order
+        </Divider>
+        <Table
+          dataSource={dataSource}
+          columns={columns}
+          pagination={false}
+          bordered
+          size="small"
+          style={{ marginBottom: "24px" }}
+          responsive
+        />
+
+        {/* UPLOAD BUKTI */}
+        <Divider orientation="left" style={{ borderColor: "#16a34a" }}>
+          Upload Bukti Pembayaran
+        </Divider>
+        <Form.Item
+          name="buktiPembayaran"
+          rules={[{ required: true, message: "Bukti pembayaran wajib diupload" }]}
+          valuePropName="fileList"
+          getValueFromEvent={handlePaymentProofChange}
+        >
+          <Upload
+            name="file"
+            beforeUpload={() => false}
+            maxCount={1}
+            accept="image/png,image/jpeg"
+            listType="picture"
+            style={{ width: "100%" }}
+          >
+            <Button
+              icon={<UploadOutlined />}
               style={{
-                background: "#f9fafb",
-                padding: "24px",
-                borderRadius: "12px",
-                textAlign: "left",
-                marginTop: "16px",
+                width: "100%",
+                height: 40,
+                color: "#16a34a",
+                borderColor: "#16a34a",
               }}
             >
-              <p>
-                <b>Nama Pemesan:</b> {formData.namaPelanggan}
-              </p>
-              <p>
-                <b>Perusahaan:</b> {formData.namaPerusahaan}
-              </p>
-              <p>
-                <b>Paket:</b> {formData.paketName}
-              </p>
-              <p>
-                <b>Harga:</b> Rp {formData.harga}
-              </p>
-              <p>
-                <b>Metode Pembayaran:</b> {formData.metodePembayaran}
-              </p>
-              <p>
-                <b>Tanggal Pembayaran:</b> {dayjs().format("DD-MM-YYYY HH:mm")}
-              </p>
-              <p style={{ marginTop: "12px", color: "#16a34a", fontWeight: "bold" }}>
-                ✅ Pembayaran Berhasil
-              </p>
-            </div>
-          </div>
-        )}
-      </>
+              Pilih Bukti Transfer/Bayar (JPG/PNG)
+            </Button>
+          </Upload>
+        </Form.Item>
+
+        {/* FINAL SUBMIT */}
+        <Button
+          type="primary"
+          block
+          style={{
+            marginTop: "10px",
+            borderRadius: "10px",
+            backgroundColor: "#2563eb",
+            fontWeight: "bold",
+            height: "45px",
+          }}
+          onClick={submitFinalBooking}
+          loading={isSubmitting}
+          disabled={!paymentProof || isSubmitting}
+        >
+          Cek Status Pembayaran
+        </Button>
+      </div>
     );
   };
 
@@ -393,21 +420,22 @@ const DaftarVO = () => {
 
       <Form.Item
         name="dokumenPendukung"
-        label="Upload Dokumen Pendukung"
+        label="Upload Dokumen Pendukung (KTP/Akta Perusahaan)"
         valuePropName="fileList"
         getValueFromEvent={(e) => (Array.isArray(e) ? e : e && e.fileList)}
-        rules={[{ required: true, message: "Silakan upload dokumen pendukung" }]}
+        rules={[
+          { required: true, message: "Silakan upload dokumen pendukung" },
+        ]}
       >
         <Upload
           name="file"
-          beforeUpload={() => false} // biar tidak auto upload, file ditahan di state form
+          beforeUpload={() => false}
           maxCount={1}
           accept=".pdf,.jpg,.png"
         >
           <Button icon={<UploadOutlined />}>Pilih File (PDF/JPG/PNG)</Button>
         </Upload>
       </Form.Item>
-
 
       <Form.Item>
         <Button
@@ -441,10 +469,14 @@ const DaftarVO = () => {
         <DatePicker
           style={{ width: "100%" }}
           format="DD-MM-YYYY"
-          disabledDate={(current) => current && current.valueOf() < Date.now()}
+          disabledDate={(current) =>
+            current &&
+            current.valueOf() <
+              dayjs().subtract(1, "day").endOf("day").valueOf()
+          }
           onChange={(date) => {
             if (date && durasi) {
-              const end = dayjs(date).add(durasi, "month");
+              const end = dayjs(date).add(durasi, "month").subtract(1, "day");
               setEndDate(end);
             } else {
               setEndDate(null);
@@ -459,6 +491,7 @@ const DaftarVO = () => {
         </p>
       )}
 
+      {/* Harga langsung dari paket */}
       <p style={{ marginTop: "8px", color: "#1e3a8a", fontWeight: "bold" }}>
         Harga Paket: Rp {paket?.harga}
       </p>
@@ -541,7 +574,7 @@ const DaftarVO = () => {
               {renderSecondStep()}
             </Form>
           )}
-          {step === 3 && renderReceipt()}
+          {step === 3 && renderPaymentStep()}
         </Card>
       </Col>
     </Row>

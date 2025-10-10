@@ -1,7 +1,23 @@
 /* eslint-disable react/prop-types */
 import React, { useEffect, useState, useContext } from "react";
-import { Card, Progress, Button, Typography, Row, Col, Space, List, Spin } from "antd";
-import { CalendarOutlined, ClockCircleOutlined, CreditCardOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
+import {
+  Card,
+  Progress,
+  Button,
+  Typography,
+  Row,
+  Col,
+  Space,
+  List,
+  Spin,
+  Divider,
+} from "antd";
+import {
+  CalendarOutlined,
+  ClockCircleOutlined,
+  CreditCardOutlined,
+} from "@ant-design/icons";
 import { AuthContext } from "../../../providers/AuthProvider";
 import { getMemberData } from "../../../services/service";
 
@@ -11,6 +27,7 @@ const CekKreditMembership = () => {
   const { userProfile } = useContext(AuthContext);
   const [member, setMember] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchMember = async () => {
@@ -27,13 +44,22 @@ const CekKreditMembership = () => {
         const membership = data.datas[0];
 
         setMember({
-          name: userProfile.email, // bisa diganti dengan nama user jika ada
+          paketId: membership.id_paket_membership,
+          name: userProfile.email,
           membershipType: `${membership.nama_paket} (${membership.nama_kategori})`,
-          startDate: new Date(membership.tanggal_mulai).toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' }),
-          endDate: new Date(membership.tanggal_berakhir).toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' }),
+          startDate: new Date(membership.tanggal_mulai).toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          }),
+          endDate: new Date(membership.tanggal_berakhir).toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          }),
           creditsUsed: membership.total_credit - membership.sisa_credit,
           totalCredits: membership.kuota,
-          riwayat: [], // bisa ambil dari API riwayat jika tersedia
+          riwayat: [],
         });
       } catch (error) {
         console.error("Gagal ambil data member:", error);
@@ -45,8 +71,23 @@ const CekKreditMembership = () => {
     fetchMember();
   }, [userProfile]);
 
-  if (loading) return <Spin tip="Loading..." style={{ display: 'block', margin: '50px auto' }} />;
-  if (!member) return <div style={{ textAlign: 'center', marginTop: 50 }}>Tidak ada data membership</div>;
+  const handlePerpanjang = () => {
+    if (member && member.paketId) {
+      navigate(`/daftar-member/${member.paketId}`);
+    } else {
+      console.error("ID Paket Membership tidak ditemukan!");
+    }
+  };
+
+  if (loading)
+    return <Spin tip="Loading..." style={{ display: "block", margin: "50px auto" }} />;
+
+  if (!member)
+    return (
+      <div style={{ textAlign: "center", marginTop: 50 }}>
+        Tidak ada data membership
+      </div>
+    );
 
   const sisaKredit = member.totalCredits - member.creditsUsed;
   const persentase = Math.round((member.creditsUsed / member.totalCredits) * 100);
@@ -54,22 +95,48 @@ const CekKreditMembership = () => {
   return (
     <div style={{ padding: "24px", maxWidth: "1000px", margin: "0 auto" }}>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
-        {/* Header Member Info */}
+        {/* Hero Membership Info */}
         <Card
           bordered={false}
-          style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)' }}
-          bodyStyle={{ padding: '24px' }}
+          style={{
+            borderRadius: "16px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
+            background: "linear-gradient(135deg, #1890ff, #40a9ff)",
+            color: "#fff",
+          }}
+          bodyStyle={{ padding: "24px" }}
         >
           <Row justify="space-between" align="middle" gutter={[16, 16]}>
-            <Col>
-              <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
+            <Col xs={24} sm={16}>
+              <Text strong style={{ color: "#e6f7ff", fontSize: 14 }}>
+                Status Membership
+              </Text>
+              <Title level={3} style={{ margin: "4px 0", color: "#fff" }}>
                 {member.membershipType}
               </Title>
-              <Text type="secondary">Member sejak {member.startDate}</Text>
+              <Text style={{ color: "#f0f5ff" }}>
+                Berlaku {member.startDate} → {member.endDate}
+              </Text>
+              <Divider style={{ borderColor: "rgba(255,255,255,0.3)" }} />
+              <Text style={{ fontSize: 16, color: "#fff" }}>
+                Sisa Kredit: <strong>{sisaKredit}</strong> dari {member.totalCredits}
+              </Text>
             </Col>
-            <Col>
-              <Button type="primary" shape="round">
-                Perpanjang Membership
+            <Col xs={24} sm={8} style={{ textAlign: "right" }}>
+              <Button
+                type="primary"
+                size="large"
+                shape="round"
+                onClick={handlePerpanjang}
+                style={{
+                  backgroundColor: "#fff",
+                  color: "#1890ff",
+                  fontWeight: "bold",
+                  width: "100%",
+                  maxWidth: 200,
+                }}
+              >
+                Perpanjang
               </Button>
             </Col>
           </Row>
@@ -80,10 +147,14 @@ const CekKreditMembership = () => {
           <Col xs={24} sm={8}>
             <Card
               bordered={false}
-              style={{ textAlign: 'center', borderRadius: '16px', backgroundColor: '#e6f7ff', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.05)' }}
+              style={{
+                textAlign: "center",
+                borderRadius: "16px",
+                backgroundColor: "#e6f7ff",
+              }}
             >
-              <CreditCardOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
-              <Title level={3} style={{ margin: '8px 0 4px 0', color: '#1890ff' }}>
+              <CreditCardOutlined style={{ fontSize: "24px", color: "#1890ff" }} />
+              <Title level={3} style={{ margin: "8px 0 4px 0", color: "#1890ff" }}>
                 {sisaKredit} / {member.totalCredits}
               </Title>
               <Text type="secondary">Sisa Kredit</Text>
@@ -92,25 +163,33 @@ const CekKreditMembership = () => {
           <Col xs={24} sm={8}>
             <Card
               bordered={false}
-              style={{ textAlign: 'center', borderRadius: '16px', backgroundColor: '#faf0ff', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.05)' }}
+              style={{
+                textAlign: "center",
+                borderRadius: "16px",
+                backgroundColor: "#e6f7ff",
+              }}
             >
-              <CalendarOutlined style={{ fontSize: '24px', color: '#9254de' }} />
-              <Title level={3} style={{ margin: '8px 0 4px 0', color: '#9254de' }}>
+              <CalendarOutlined style={{ fontSize: "24px", color: "#1890ff" }} />
+              <Title level={4} style={{ margin: "8px 0 4px 0", color: "#1890ff" }}>
                 {member.endDate}
               </Title>
-              <Text type="secondary">Masa Berlaku</Text>
+              <Text type="secondary">Tanggal Berakhir</Text>
             </Card>
           </Col>
           <Col xs={24} sm={8}>
             <Card
               bordered={false}
-              style={{ textAlign: 'center', borderRadius: '16px', backgroundColor: '#f6ffed', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.05)' }}
+              style={{
+                textAlign: "center",
+                borderRadius: "16px",
+                backgroundColor: "#e6f7ff",
+              }}
             >
-              <ClockCircleOutlined style={{ fontSize: '24px', color: '#52c41a' }} />
-              <Title level={3} style={{ margin: '8px 0 4px 0', color: '#52c41a' }}>
+              <ClockCircleOutlined style={{ fontSize: "24px", color: "#1890ff" }} />
+              <Title level={3} style={{ margin: "8px 0 4px 0", color: "#1890ff" }}>
                 {persentase}%
               </Title>
-              <Text type="secondary">Sudah Digunakan</Text>
+              <Text type="secondary">Kredit Digunakan</Text>
             </Card>
           </Col>
         </Row>
@@ -118,16 +197,16 @@ const CekKreditMembership = () => {
         {/* Progress Bar */}
         <Card
           bordered={false}
-          style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)' }}
-          bodyStyle={{ padding: '24px 24px 8px 24px' }}
+          style={{ borderRadius: "16px", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)" }}
+          bodyStyle={{ padding: "24px 24px 8px 24px" }}
         >
           <Progress
             percent={persentase}
-            strokeColor={{ from: '#1890ff', to: '#722ed1' }}
+            strokeColor="#1890ff"
             status="active"
-            style={{ marginBottom: '8px' }}
+            style={{ marginBottom: "8px" }}
           />
-          <Text type="secondary" style={{ display: 'block', textAlign: 'center' }}>
+          <Text type="secondary" style={{ display: "block", textAlign: "center" }}>
             {persentase}% dari kredit Anda sudah digunakan
           </Text>
         </Card>
@@ -136,7 +215,7 @@ const CekKreditMembership = () => {
         <Card
           bordered={false}
           title={<Title level={4} style={{ margin: 0 }}>Riwayat Penggunaan</Title>}
-          style={{ borderRadius: '16px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)' }}
+          style={{ borderRadius: "16px", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)" }}
         >
           {member.riwayat.length > 0 ? (
             <List
@@ -146,8 +225,16 @@ const CekKreditMembership = () => {
                 <List.Item>
                   <List.Item.Meta
                     avatar={
-                      <div style={{ padding: '12px', borderRadius: '50%', backgroundColor: '#e6f7ff' }}>
-                        <ClockCircleOutlined style={{ color: '#1890ff', fontSize: '20px' }} />
+                      <div
+                        style={{
+                          padding: "12px",
+                          borderRadius: "50%",
+                          backgroundColor: "#e6f7ff",
+                        }}
+                      >
+                        <ClockCircleOutlined
+                          style={{ color: "#1890ff", fontSize: "20px" }}
+                        />
                       </div>
                     }
                     title={<Text strong>{item.deskripsi}</Text>}
@@ -157,7 +244,7 @@ const CekKreditMembership = () => {
               )}
             />
           ) : (
-            <Text type="secondary" style={{ display: 'block', textAlign: 'center' }}>
+            <Text type="secondary" style={{ display: "block", textAlign: "center" }}>
               Belum ada riwayat penggunaan
             </Text>
           )}

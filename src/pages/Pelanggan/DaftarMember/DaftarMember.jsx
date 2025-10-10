@@ -1,42 +1,20 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Card,
-  Typography,
-  Form,
-  Input,
-  Button,
-  Spin,
-  Alert,
-  Space,
-  Tag,
-  Divider,
-  Row,
-  Col,
-  Steps,
-  notification,
-  Image,
-  Checkbox
+  Card, Typography, Form, Input, Button, Spin, Alert, Space, Tag,
+  Divider, Row, Col, notification, Image, Checkbox
 } from "antd";
 import {
-  CheckCircleOutlined,
-  UserOutlined,
-  MailOutlined,
-  PhoneOutlined,
-  ArrowLeftOutlined,
-  StarOutlined,
-  ClockCircleOutlined,
-  DollarOutlined,
-  GiftOutlined
+  UserOutlined, MailOutlined, PhoneOutlined, ArrowLeftOutlined, StarOutlined,
+  ClockCircleOutlined, DollarOutlined, GiftOutlined
 } from "@ant-design/icons";
-import { getMembershipDetail, getMembershipPackageDetail } from "../../../services/service";
-import { registerMembership } from "../../../services/service";
-import { AuthContext } from "../../../providers/AuthProvider"
+import { getMembershipPackageDetail, registerMembership } from "../../../services/service";
+import { AuthContext } from "../../../providers/AuthProvider";
+import { ArrowLeft } from "lucide-react";
+// BARU: Import komponen modal
+import PaymentConfirmationModal from "../../../components/PaymentConfirmationModal";
 
 const { Title, Text } = Typography;
-const { Step } = Steps;
-
-
 
 const DaftarMember = () => {
   const { id } = useParams();
@@ -46,7 +24,11 @@ const DaftarMember = () => {
   const [error, setError] = useState(null);
   const [membership, setMembership] = useState(null);
   const [form] = Form.useForm();
-  const { userProfile } = useContext(AuthContext)
+  const { userProfile } = useContext(AuthContext);
+
+  // BARU: State untuk modal pembayaran
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [transactionDetails, setTransactionDetails] = useState(null);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -54,7 +36,7 @@ const DaftarMember = () => {
         setLoading(true);
         const result = await getMembershipPackageDetail(id);
         if (result.message === "OK" && result.datas && result.datas.length > 0) {
-          setMembership(result.datas[0]); // <-- ambil element pertama
+          setMembership(result.datas[0]);
         } else {
           setError("Paket tidak ditemukan");
         }
@@ -67,14 +49,13 @@ const DaftarMember = () => {
     fetchDetail();
   }, [id]);
 
-
-
+  // PERUBAHAN: handleSubmit sekarang menampilkan modal
   const handleSubmit = async (values) => {
     setSubmitting(true);
     try {
       const payload = {
-        id_user: userProfile?.id_user,  // ⬅️ ambil dari AuthContext
-        nama_guest: values.nama,
+        id_user: userProfile?.id_user,
+        nama_guest: userProfile?.nama, // Menggunakan nama dari user profile
         no_hp: values.phone,
         id_paket_membership: membership.id_paket_membership
       };
@@ -82,12 +63,14 @@ const DaftarMember = () => {
       const result = await registerMembership(payload);
 
       if (result.message === "OK") {
-        notification.success({
-          message: "Pendaftaran Berhasil!",
-          description: `Transaksi berhasil dibuat dengan ID ${result.id_transaksi}`,
-          placement: "topRight",
+        // Siapkan data untuk modal
+        setTransactionDetails({
+          id_transaksi: result.id_transaksi,
+          nama_paket: membership.nama_paket,
+          harga: membership.harga,
         });
-        navigate("/riwayat-transaksi");
+        // Tampilkan modal
+        setPaymentModalVisible(true);
       } else {
         throw new Error(result.error || "Pendaftaran gagal");
       }
@@ -102,17 +85,33 @@ const DaftarMember = () => {
     }
   };
 
+  // BARU: Handler untuk tombol konfirmasi di modal
+  const handlePaymentConfirm = () => {
+    setPaymentModalVisible(false);
+    notification.success({
+      message: "Menunggu Verifikasi",
+      description: "Pembayaran Anda akan segera diverifikasi oleh admin.",
+      placement: "topRight",
+    });
+    navigate("/riwayat-transaksi");
+  };
+
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
       <Spin size="large" tip="Memuat detail paket..." />
     </div>
   );
 
-
-
+  // Bagian JSX (Form, Card, dll.) tetap sama, hanya menambahkan render Modal
   return (
     <div style={{ padding: "24px", maxWidth: "1000px", margin: "0 auto" }}>
-
+      {/* ... (Semua JSX Anda dari Card, Form, dll. tetap di sini) ... */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-200 transition-colors" aria-label="Kembali">
+          <ArrowLeft size={20} className="text-gray-700" />
+        </button>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Kembali</h1>
+      </div>
 
 
       <Row gutter={[24, 24]}>
@@ -169,10 +168,13 @@ const DaftarMember = () => {
                     </Tag>
                     <div>
                       <Text strong>Benefit:</Text>
-                      <Text style={{ display: "block" }}>{membership.deskripsi_benefit}</Text>
+                      <Text style={{ display: "block", whiteSpace: "pre-line" }}>
+                        {membership.fitur_membership}
+                      </Text>
                     </div>
                   </div>
                 )}
+
               </Space>
             </Card>
           )}
@@ -240,6 +242,14 @@ const DaftarMember = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* BARU: Render komponen modal di sini */}
+      <PaymentConfirmationModal
+        open={paymentModalVisible}
+        details={transactionDetails}
+        onConfirm={handlePaymentConfirm}
+        onCancel={() => setPaymentModalVisible(false)}
+      />
     </div>
   );
 };
