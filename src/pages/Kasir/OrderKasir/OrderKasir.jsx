@@ -12,6 +12,7 @@ import {
     Dropdown,
     Menu,
     Spin, // --- PERUBAHAN --- Ditambahkan untuk loading indicator
+    Divider
 } from "antd";
 import {
     SearchOutlined,
@@ -26,8 +27,9 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useLocation } from "react-router-dom";
-import { getPosInitData, createOrderKasir } from "../../../services/service"; // Pastikan path ini benar
-
+import { getPosInitData, createOrderKasir, getRoomsToday, createRoomBookingKasir } from "../../../services/service"; // Pastikan path ini benar
+import { MdOutlineShoppingCart } from "react-icons/md";
+import { FaRegIdCard } from "react-icons/fa";
 
 const { Option } = Select;
 
@@ -78,6 +80,16 @@ const OrderKasir = () => {
     const [orderTypes, setOrderTypes] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // --- PERUBAHAN --- State baru untuk mode dan data ruangan
+    const [posMode, setPosMode] = useState('fnb'); // 'fnb' atau 'ruangan'
+    const [rooms, setRooms] = useState([]);
+    const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+    const [selectedRoomForBooking, setSelectedRoomForBooking] = useState(null);
+    const [selectedDuration, setSelectedDuration] = useState(null);
+    const [selectedStartTime, setSelectedStartTime] = useState(null);
+    const [isBookingConfirmModalVisible, setIsBookingConfirmModalVisible] = useState(false);
+    const [bookingForm] = Form.useForm();
+
     // --- DATA FETCHING & INITIALIZATION --- (Tidak ada perubahan, sudah benar)
     useEffect(() => {
         if (initialState.customerName || initialState.orderType) {
@@ -107,6 +119,25 @@ const OrderKasir = () => {
         };
         loadData();
     }, []);
+
+    // --- PERUBAHAN --- useEffect baru untuk mengambil data ruangan
+    useEffect(() => {
+        const loadRoomData = async () => {
+            try {
+                setIsLoadingRooms(true);
+                const roomData = await getRoomsToday();
+                setRooms(roomData || []);
+            } catch (error) {
+                message.error("Gagal memuat data ruangan.");
+            } finally {
+                setIsLoadingRooms(false);
+            }
+        };
+        if (posMode === 'ruangan') {
+            loadRoomData();
+        }
+    }, [posMode]);
+
 
     // --- LOGIC FOR PRODUCTS --- (Tidak ada perubahan)
     const filteredProducts = products.filter((product) => {
@@ -310,166 +341,156 @@ const OrderKasir = () => {
         5000, 10000, 20000, 50000, 100000
     ].filter(amount => amount >= totalAmount || totalAmount === 0);
 
+    const handleRoomCardClick = (room) => {
+        setSelectedRoomForBooking(room);
+        setSelectedDuration(null); // Reset pilihan sebelumnya
+        setSelectedStartTime(null);
+        bookingForm.setFieldsValue({
+            customerName: "Guest",
+            paymentMethod: null,
+        });
+        setIsBookingConfirmModalVisible(true);
+    };
+
+    const handleBookingSubmit = async () => {
+        try {
+            const values = await bookingForm.validateFields();
+            const bookingData = {
+                id_ruangan: selectedRoomForBooking.id_ruangan,
+                durasi_jam: selectedDuration.durasi_jam,
+                waktu_mulai_jam: selectedStartTime,
+                nama_guest: values.customerName,
+                metode_pembayaran: values.paymentMethod,
+                total_harga_final: selectedDuration.harga_paket
+            };
+
+            const result = await createRoomBookingKasir(bookingData);
+            message.success(`Booking untuk ruangan ${selectedRoomForBooking.nama_ruangan} berhasil dibuat (ID Transaksi: ${result.id_transaksi})!`);
+
+            // Refresh data ruangan
+            const updatedRooms = await getRoomsToday();
+            setRooms(updatedRooms || []);
+
+            setIsBookingConfirmModalVisible(false);
+
+        } catch (errorInfo) {
+            if (errorInfo.message) {
+                message.error(`Gagal membuat booking: ${errorInfo.message}`);
+            } else {
+                console.error("Validation Failed:", errorInfo);
+                message.error("Harap isi semua field yang diperlukan.");
+            }
+        }
+    };
+
+
+    // --- JSX / RENDER ---
     // --- JSX / RENDER ---
     return (
-        <div className="flex h-screen bg-gray-50 text-gray-800 font-sans">
+        <div className="flex bg-gray-50 text-gray-800 font-sans">
             {/* Main Content Area */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0">
-                {/* Left Panel - Product List & Categories */}
-                <div className="lg:col-span-2 bg-white flex flex-col p-6 border-r border-gray-100">
-                    {/* Header (Tidak ada perubahan) */}
+            <div className=" flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0">
+                {/* Left Panel - Product/Room List & Categories */}
+                {/* <div className="lg:col-span-2 h-screen bg-white flex flex-col p-6 border-r border-gray-100 overflow-y-auto"> */}
+                <div className="lg:col-span-2 h-screen overflow-y-scroll p-6 bg-white border-r border-gray-100">
+                    {/* Header */}
                     <div className="flex justify-between items-center mb-6">
-                        <div className="flex flex-col">
-                            <span className="text-gray-500 text-sm">{currentDate.format("h:mm A")}</span>
-                            <span className="text-gray-500 text-sm">{currentDate.format("ddd, MMM D")}</span>
-                        </div>
-                        <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-15" />
-                        <div className="flex items-center space-x-2 text-gray-600">
-                            <UserOutlined />
-                            <span>{cashierName}</span>
-                        </div>
+                        <Radio.Group value={posMode} onChange={(e) => setPosMode(e.target.value)}>
+                            <Radio.Button value="fnb"><MdOutlineShoppingCart /> F&B</Radio.Button>
+                            <Radio.Button value="ruangan"><FaRegIdCard /> Ruangan</Radio.Button>
+                        </Radio.Group>
+                        <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" />
+                        <div className="flex items-center space-x-2 text-gray-600"><UserOutlined /><span>{cashierName}</span></div>
                     </div>
 
-                    {/* Search Bar (Tidak ada perubahan) */}
-                    <div className="mb-6">
-                        <Input
-                            placeholder="Search..."
-                            prefix={<SearchOutlined />}
-                            value={searchProductQuery}
-                            onChange={(e) => setSearchProductQuery(e.target.value)}
-                            className="w-full rounded-lg border-gray-300"
-                        />
-                    </div>
-
-                    {/* --- PERUBAHAN --- Mengganti dummy data dengan state dari API */}
-                    {/* Category Type (Merchants) */}
-                    <div className="mb-6">
-                        <h3 className="text-sm text-gray-500 mb-2">
-                            Category Type ({merchantCategories.length > 0 ? merchantCategories.length - 1 : 0})
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {merchantCategories.map((category) => (
-                                <Button
-                                    key={category.id}
-                                    type={selectedMerchant === category.id ? "primary" : "default"}
-                                    size="small"
-                                    shape="round"
-                                    onClick={() => setSelectedMerchant(category.id)}
-                                >
-                                    {category.name}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Product List (Product Types) */}
-                    <div className="mb-6">
-                        <h3 className="text-sm text-gray-500 mb-2">
-                            Product List ({productTypeCategories.length > 0 ? productTypeCategories.length - 1 : 0})
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {productTypeCategories.map((category) => (
-                                <Button
-                                    key={category.id}
-                                    type={selectedProductType === category.id ? "primary" : "default"}
-                                    size="small"
-                                    shape="round"
-                                    onClick={() => setSelectedProductType(category.id)}
-                                >
-                                    {category.name}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* --- PERUBAHAN --- Menambahkan loading indicator */}
-                    {/* Product List */}
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                        {isLoading ? (
-                            <div className="flex justify-center items-center h-full">
-                                <Spin size="large" />
+                    {/* Tampilan Kondisional berdasarkan Mode */}
+                    {posMode === 'fnb' ? (
+                        <>
+                            {/* Search Bar F&B */}
+                            <div className="mb-6">
+                                <Input placeholder="Cari produk F&B..." prefix={<SearchOutlined />} value={searchProductQuery} onChange={(e) => setSearchProductQuery(e.target.value)} />
                             </div>
-                        ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                                {filteredProducts.map((product) => (
-                                    <div
-                                        key={product.id}
-                                        className={`rounded-xl shadow-sm border p-3 ${product.available
-                                            ? "bg-white border-gray-200 cursor-pointer hover:shadow-md transition-all duration-200"
-                                            : "bg-red-50 border-red-200 cursor-not-allowed opacity-70" // <-- UBAH DI SINI
-                                            }`}
-                                        onClick={() => product.available && handleAddProductToCart(product)}
-                                    >
-                                        <h3 className={`font-semibold text-sm mb-1 ${product.available ? "text-gray-800" : "text-gray-500"}`}>
-                                            {product.name}
-                                        </h3>
-                                        <div className="flex items-center justify-between mt-2">
-                                            <span className={`text-base font-bold ${product.available ? "text-blue-600" : "text-gray-500"}`}>
-                                                {formatRupiah(product.price)}
-                                            </span>
-                                            {!product.available && <Tag color="red">Inactive</Tag>}
-                                        </div>
-                                    </div>
-                                ))}
-                                {filteredProducts.length === 0 && !isLoading && (
-                                    <div className="col-span-full text-center py-10 text-gray-500">
-                                        Tidak ada produk ditemukan.
+                            {/* Filter F&B */}
+                            <div className="mb-4">
+                                <h3 className="text-sm text-gray-500 mb-2">Filter Tenant</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {merchantCategories.map((category) => <Button key={category.id} type={selectedMerchant === category.id ? "primary" : "default"} size="small" shape="round" onClick={() => setSelectedMerchant(category.id)}>{category.name}</Button>)}
+                                </div>
+                            </div>
+                            <div className="mb-6">
+                                <h3 className="text-sm text-gray-500 mb-2">Filter Tipe Produk</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {productTypeCategories.map((category) => <Button key={category.id} type={selectedProductType === category.id ? "primary" : "default"} size="small" shape="round" onClick={() => setSelectedProductType(category.id)}>{category.name}</Button>)}
+                                </div>
+                            </div>
+
+                            {/* Product List */}
+                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                                {isLoading ? <div className="flex justify-center items-center h-full"><Spin size="large" /></div> : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {filteredProducts.map((product) => (
+                                            <div key={product.id} className={`rounded-xl shadow-sm border p-3 ${product.available ? "bg-white border-gray-200 cursor-pointer hover:shadow-md" : "bg-red-50 border-red-200 cursor-not-allowed opacity-70"}`} onClick={() => product.available && handleAddProductToCart(product)}>
+                                                <h3 className={`font-semibold text-sm mb-1 ${product.available ? "text-gray-800" : "text-gray-500"}`}>{product.name}</h3>
+                                                <div className="flex items-center justify-between mt-2">
+                                                    <span className={`text-base font-bold ${product.available ? "text-blue-600" : "text-gray-500"}`}>{formatRupiah(product.price)}</span>
+                                                    {!product.available && <Tag color="red">Habis</Tag>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {filteredProducts.length === 0 && !isLoading && (
+                                            <div className="col-span-full text-center py-10 text-gray-500">
+                                                Tidak ada produk ditemukan.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
-                        )}
-                    </div>
+                        </>
+                    ) : (
+                        // --- Tampilan untuk Mode Ruangan ---
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">Pilih Ruangan untuk Booking Hari Ini</h2>
+                            {isLoadingRooms ? <div className="flex justify-center items-center h-full"><Spin size="large" /></div> : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {rooms.map((room) => (
+                                        <div key={room.id_ruangan} className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleRoomCardClick(room)}>
+                                            <h3 className="font-bold text-gray-800">{room.nama_ruangan}</h3>
+                                            <p className="text-sm text-gray-500">{room.nama_kategori} - Kapasitas: {room.kapasitas} orang</p>
+                                            <Tag color="green" className="mt-2">Booking Cepat</Tag>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                {/* Right Panel - Order Cart & Payment */}
-                <div className="bg-gray-50 flex flex-col p-6">
-                    {/* Header Section (Tidak ada perubahan) */}
+                {/* Right Panel - Order Cart & Payment (HANYA UNTUK F&B) */}
+                <div className={`bg-gray-50 flex flex-col p-6 transition-opacity  duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-gray-800">Your Order</h2>
+                        <h2 className="text-xl font-bold text-gray-800">Order F&B</h2>
                         <Dropdown overlay={orderDropdownMenu} trigger={["click"]}>
                             <Button type="text" icon={<MoreOutlined className="text-xl" />} />
                         </Dropdown>
                     </div>
-
-                    {/* --- PERUBAHAN --- Mengganti dummy data dengan state dari API */}
-                    {/* Order Type Tabs */}
                     <div className="flex bg-gray-100 rounded-lg p-1 mb-6 text-sm font-medium">
                         {orderTypes.map((type) => (
-                            <Button
-                                key={type.id}
-                                type={currentOrderType === type.id ? "primary" : "text"}
-                                className={`flex-1 rounded-md py-2 px-4 transition-all duration-200
-                                ${currentOrderType === type.id ? "bg-blue-600 text-white shadow-md" : "text-gray-600 hover:bg-gray-200"}`}
-                                onClick={() => setCurrentOrderType(type.id)}
-                            >
-                                {type.name}
-                            </Button>
+                            <Button key={type.id} type={currentOrderType === type.id ? "primary" : "text"} className={`flex-1 rounded-md py-2 px-4 transition-all duration-200 ${currentOrderType === type.id ? "bg-blue-600 text-white shadow-md" : "text-gray-600 hover:bg-gray-200"}`} onClick={() => setCurrentOrderType(type.id)}>{type.name}</Button>
                         ))}
                     </div>
-
-                    {/* Sisa dari Right Panel, Cart, Summary, dan Modals tidak perlu diubah karena sudah menggunakan state. */}
-                    {/* ... (kode sisanya sama persis seperti yang Anda berikan) ... */}
                     <div className="flex flex-col mb-6">
                         <span className="text-gray-500 text-sm">Order ({currentOrderNumber})</span>
-                        <span className="text-lg font-bold">Order {customerName} {room && `(Room: ${room})`}</span>
+                        <span className="text-lg font-bold">Order {customerName} {room && `(Meja: ${room})`}</span>
                     </div>
-
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 mb-6">
+                    <div className=" space-y-3 mb-6">
                         {selectedItems.length === 0 ? (
-                            <div className="text-center py-10 text-gray-500">
-                                Keranjang kosong. Tambahkan produk!
-                            </div>
+                            <div className="text-center py-10 text-gray-500">Keranjang F&B kosong.</div>
                         ) : (
                             selectedItems.map((item) => (
-                                <div
-                                    key={`${item.id}-${item.note || ''}`}
-                                    className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm border border-gray-200"
-                                >
+                                <div key={`${item.id}-${item.note || ''}`} className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm border border-gray-200">
                                     <div className="flex flex-col flex-1 min-w-0 mr-2">
                                         <span className="font-semibold text-gray-800 truncate">{item.name}</span>
-                                        <span className="text-sm text-gray-500">
-                                            {formatRupiah(item.price)} {item.note && <span className="text-gray-400">({item.note})</span>}
-                                        </span>
+                                        <span className="text-sm text-gray-500">{formatRupiah(item.price)} {item.note && <span className="text-gray-400">({item.note})</span>}</span>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <Button icon={<MinusOutlined />} size="small" onClick={() => handleUpdateItemQty(item.id, item.qty - 1, item.note)} />
@@ -481,31 +502,15 @@ const OrderKasir = () => {
                             ))
                         )}
                     </div>
-
-                    <div className="bg-white rounded-xl shadow-md p-4 mb-6">
-                        <div className="flex justify-between items-center text-sm mb-2">
-                            <span>Subtotal</span>
-                            <span>{formatRupiah(subtotal)}</span>
-                        </div>
-                        {taxPercentage > 0 && (
-                            <div className="flex justify-between items-center text-sm mb-2">
-                                <span>Tax ({taxPercentage * 100}%)</span>
-                                <span>{formatRupiah(totalTax)}</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-center text-sm mb-4">
-                            <span>Discount ({discountPercentage}%)</span>
-                            <span>-{formatRupiah(totalDiscount)}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xl font-bold text-blue-600 border-t pt-4">
-                            <span>Total</span>
-                            <span>{formatRupiah(totalAmount)}</span>
-                        </div>
+                    <div className="bg-white rounded-xl shadow-md p-4 mb-6 border">
+                        <div className="flex justify-between items-center text-sm mb-2"><span>Subtotal</span><span>{formatRupiah(subtotal)}</span></div>
+                        {taxPercentage > 0 && (<div className="flex justify-between items-center text-sm mb-2"><span>Tax ({taxPercentage * 100}%)</span><span>{formatRupiah(totalTax)}</span></div>)}
+                        <div className="flex justify-between items-center text-sm mb-4"><span>Discount ({discountPercentage}%)</span><span>-{formatRupiah(totalDiscount)}</span></div>
+                        <div className="flex justify-between items-center text-xl font-bold text-blue-600 border-t pt-4"><span>Total</span><span>{formatRupiah(totalAmount)}</span></div>
                     </div>
-
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
-                            <Button size="large" onClick={() => message.info("Discount action!")}>Discount</Button>
+                            <Button size="large" onClick={() => message.info("Fungsi diskon belum aktif.")}>Discount</Button>
                             <Button danger size="large" onClick={() => { setSelectedItems([]); message.warning("Order dibatalkan."); }}>Cancel Order</Button>
                         </div>
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-2 text-sm font-medium">
@@ -515,10 +520,91 @@ const OrderKasir = () => {
                         <Button type="primary" size="large" block onClick={handleProcessPayment} disabled={selectedItems.length === 0 || !selectedPaymentMethod}>Payment & Print</Button>
                     </div>
                 </div>
-
             </div>
 
-            {/* ... (semua kode Modal sama persis) ... */}
+            {/* --- MODAL BARU UNTUK BOOKING RUANGAN --- */}
+            <Modal
+                title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>}
+                open={isBookingConfirmModalVisible}
+                onCancel={() => setIsBookingConfirmModalVisible(false)}
+                footer={[
+                    <Button key="back" onClick={() => setIsBookingConfirmModalVisible(false)}>
+                        Batal
+                    </Button>,
+                    <Button key="submit" type="primary" onClick={handleBookingSubmit} disabled={!selectedDuration || !selectedStartTime}>
+                        Konfirmasi & Bayar
+                    </Button>,
+                ]}
+                width={600}
+                centered
+            >
+                <Form form={bookingForm} layout="vertical" className="mt-4">
+                    <p className="mb-4 text-gray-600">Pilih jam mulai dan durasi untuk booking hari ini.</p>
+                    <Divider>Pilih Jam Mulai</Divider>
+                    <div className="grid grid-cols-5 md:grid-cols-7 gap-2 mb-4">
+                        {Array.from({ length: 14 }, (_, i) => 8 + i).map(hour => {
+                            const isBooked = selectedRoomForBooking?.booked_hours.includes(hour);
+                            const isPast = hour < dayjs().hour();
+                            const isDisabled = isBooked || isPast;
+                            return (
+                                <Button
+                                    key={hour}
+                                    type={selectedStartTime === hour ? 'primary' : 'default'}
+                                    disabled={isDisabled}
+                                    onClick={() => { setSelectedStartTime(hour); setSelectedDuration(null); }}
+                                >
+                                    {`${hour}:00`}
+                                </Button>
+                            );
+                        })}
+                    </div>
+
+                    {selectedStartTime && (
+                        <>
+                            <Divider>Pilih Durasi</Divider>
+                            <div className="grid grid-cols-3 md:grid-cols-4 gap-2 mb-4">
+                                {selectedRoomForBooking?.paket_harga
+                                    .sort((a, b) => a.durasi_jam - b.durasi_jam)
+                                    .map(pkg => {
+                                        const endTime = selectedStartTime + pkg.durasi_jam;
+                                        // Cek apakah ada jam yang sudah dibooking di dalam rentang durasi yang dipilih
+                                        const isOverlapping = selectedRoomForBooking.booked_hours.some(h => h >= selectedStartTime && h < endTime);
+                                        const isInvalid = endTime > 22 || isOverlapping;
+                                        return (
+                                            <Button
+                                                key={pkg.durasi_jam}
+                                                type={selectedDuration?.durasi_jam === pkg.durasi_jam ? 'primary' : 'default'}
+                                                disabled={isInvalid}
+                                                onClick={() => setSelectedDuration(pkg)}
+                                                className="h-auto py-2"
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span>{pkg.durasi_jam} Jam</span>
+                                                    <span className="text-xs font-normal">{formatRupiah(pkg.harga_paket)}</span>
+                                                </div>
+                                            </Button>
+                                        );
+                                    })}
+                            </div>
+                        </>
+                    )}
+
+                    <Divider />
+
+                    <Form.Item label="Nama Customer" name="customerName" rules={[{ required: true, message: "Nama customer harus diisi!" }]}>
+                        <Input placeholder="Masukkan nama customer" />
+                    </Form.Item>
+                    <Form.Item label="Metode Pembayaran" name="paymentMethod" rules={[{ required: true, message: "Pilih metode pembayaran!" }]}>
+                        <Radio.Group>
+                            <Radio.Button value="cash">Cash</Radio.Button>
+                            <Radio.Button value="qris">QRIS</Radio.Button>
+                        </Radio.Group>
+                    </Form.Item>
+                    {selectedDuration && <div className="text-right font-bold text-lg text-blue-600">Total: {formatRupiah(selectedDuration.harga_paket)}</div>}
+                </Form>
+            </Modal>
+
+            {/* ... (Modal-modal F&B yang sudah ada tidak berubah) ... */}
             <Modal title={<div className="text-xl font-bold text-gray-800"><PlusOutlined className="mr-2" /> Buat Order Baru</div>} open={isNewOrderModalVisible} onOk={handleNewOrderOk} onCancel={handleNewOrderCancel} okText="Buat Order" cancelText="Batal" width={400} centered className="new-order-modal">
                 <Form form={newOrderForm} layout="vertical" initialValues={{ orderType: currentOrderType, customerName: customerName, room: room }} className="mt-4">
                     <Form.Item label="Tipe Order" name="orderType" rules={[{ required: true, message: "Pilih tipe order!" }]}>
@@ -533,10 +619,10 @@ const OrderKasir = () => {
                     <Form.Item label="Kasir" className="mb-0"><Input value={cashierName} disabled prefix={<UserOutlined />} /></Form.Item>
                 </Form>
             </Modal>
-            <Modal title={<div className="text-xl font-bold text-gray-800">Add Order <span className="font-normal">{itemToAddNote?.name}</span></div>} open={isAddNoteModalVisible} onOk={handleAddNoteOk} onCancel={handleAddNoteCancel} okText="Confirm" cancelText="Cancel" width={400} centered>
+            <Modal title={<div className="text-xl font-bold text-gray-800">Tambahkan Catatan untuk <span className="font-normal">{itemToAddNote?.name}</span></div>} open={isAddNoteModalVisible} onOk={handleAddNoteOk} onCancel={handleAddNoteCancel} okText="Konfirmasi" cancelText="Batal" width={400} centered>
                 <Form form={addNoteForm} layout="vertical" className="mt-4" initialValues={{ note: itemToAddNote?.note || "" }}>
-                    {itemToAddNote && (<><p className="text-sm text-gray-500 mb-2">Category: {itemToAddNote.category}</p><Tag color="blue" className="mb-4">#{itemToAddNote.category.toLowerCase()}</Tag></>)}
-                    <Form.Item label="Note" name="note"><Input.TextArea placeholder="nasi setengah, tidak pedas, dll." rows={2} /></Form.Item>
+                    {itemToAddNote && (<><p className="text-sm text-gray-500 mb-2">Kategori: {itemToAddNote.category}</p></>)}
+                    <Form.Item label="Catatan" name="note"><Input.TextArea placeholder="nasi setengah, tidak pedas, dll." rows={2} /></Form.Item>
                     <div className="flex items-center justify-between text-lg font-bold text-blue-600">
                         <span>{formatRupiah(itemToAddNote?.price || 0)}</span>
                         <div className="flex items-center space-x-2">
@@ -547,9 +633,9 @@ const OrderKasir = () => {
                     </div>
                 </Form>
             </Modal>
-            <Modal title={<div className="text-xl font-bold text-gray-800 flex items-center justify-between">Cash Payment <span className="text-blue-600">{formatRupiah(totalAmount)}</span></div>} open={isCashPaymentModalVisible} onCancel={() => setIsCashPaymentModalVisible(false)} footer={null} width={400} centered>
+            <Modal title={<div className="text-xl font-bold text-gray-800 flex items-center justify-between">Pembayaran Tunai <span className="text-blue-600">{formatRupiah(totalAmount)}</span></div>} open={isCashPaymentModalVisible} onCancel={() => setIsCashPaymentModalVisible(false)} footer={null} width={400} centered>
                 <Form layout="vertical" className="mt-4">
-                    <Form.Item label="Input Cash" className="mb-4">
+                    <Form.Item label="Uang Tunai" className="mb-4">
                         <Input prefix="Rp" value={cashInput > 0 ? cashInput.toLocaleString('id-ID') : ''} onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); setCashInput(Number(value)); }} suffix={cashInput > 0 && (<CloseOutlined className="cursor-pointer text-gray-400" onClick={() => setCashInput(0)} />)} className="text-right text-lg font-medium" size="large" />
                     </Form.Item>
                     <div className="grid grid-cols-3 gap-3 mb-6">
@@ -557,43 +643,36 @@ const OrderKasir = () => {
                         <Button size="large" className="h-12" onClick={() => setCashInput(totalAmount)}>{formatRupiah(totalAmount)}</Button>
                     </div>
                     <div className="flex justify-between items-center mb-4 text-base">
-                        <span>Uang Kembali:</span>
+                        <span>Kembalian:</span>
                         <span className="font-bold text-green-600">{formatRupiah(changeAmount)}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                        <Button size="large" onClick={() => setIsCashPaymentModalVisible(false)}>Cancel</Button>
+                        <Button size="large" onClick={() => setIsCashPaymentModalVisible(false)}>Batal</Button>
                         <Button type="primary" size="large" onClick={handleCashPaymentSubmit} disabled={cashInput < totalAmount}>Submit</Button>
                     </div>
                 </Form>
             </Modal>
-            <Modal title={<div className="text-xl font-bold text-gray-800">Struk</div>} open={isStrukModalVisible} onCancel={paymentSuccess ? handleStrukConfirmPayment : handleStrukCancel} footer={null} width={400} centered>
+            <Modal title={<div className="text-xl font-bold text-gray-800">Struk Pembayaran</div>} open={isStrukModalVisible} onCancel={paymentSuccess ? handleStrukConfirmPayment : handleStrukCancel} footer={null} width={400} centered>
                 <div className="flex flex-col p-4 bg-white rounded-lg shadow-inner mt-4 border border-gray-200">
                     {paymentSuccess && (<div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 flex items-center"><CheckCircleOutlined className="mr-2 text-xl" /><span className="font-semibold">Pembayaran berhasil!</span></div>)}
                     <div className="text-sm text-gray-600 mb-4">
                         <p><strong>Customer:</strong> {customerName}</p>
-                        <p><strong>Order Type:</strong> {currentOrderType === 'dinein' ? 'Dine In' : currentOrderType === 'takeaway' ? 'Take Away' : 'Pick Up'}</p>
+                        <p><strong>Tipe Order:</strong> {currentOrderType === 'dinein' ? 'Dine In' : currentOrderType === 'takeaway' ? 'Take Away' : 'Pick Up'}</p>
                         {room && <p><strong>Ruangan/Meja:</strong> {room}</p>}
                         <p><strong>Order #:</strong> {currentOrderNumber}</p>
-                        <p><strong>Cashier:</strong> {cashierName}</p>
-                        <p><strong>Date:</strong> {currentDate.format("DD MMMM YYYY h:mm A")}</p>
-                        <p><strong>Metode Pembayaran:</strong> {selectedPaymentMethod === 'cash' ? 'Cash' : selectedPaymentMethod === 'qris' ? 'QRIS' : '-'}</p>
+                        <p><strong>Kasir:</strong> {cashierName}</p>
+                        <p><strong>Tanggal:</strong> {currentDate.format("DD MMMM YYYY h:mm A")}</p>
+                        <p><strong>Metode Bayar:</strong> {selectedPaymentMethod === 'cash' ? 'Cash' : selectedPaymentMethod === 'qris' ? 'QRIS' : '-'}</p>
                     </div>
                     <div className="border-t border-b border-gray-200 py-4 mb-4">
-                        {selectedItems.map((item) => (<div key={`${item.id}-${item.note || ''}`} className="flex justify-between items-center mb-2"><div><p className="font-semibold text-gray-800">{item.name} x{item.qty}</p>{item.note && <p className="text-xs text-gray-500 italic">Note: {item.note}</p>}</div><span>{formatRupiah(item.price * item.qty)}</span></div>))}
+                        {selectedItems.map((item) => (<div key={`${item.id}-${item.note || ''}`} className="flex justify-between items-center mb-2"><div><p className="font-semibold text-gray-800">{item.name} x{item.qty}</p>{item.note && <p className="text-xs text-gray-500 italic">Catatan: {item.note}</p>}</div><span>{formatRupiah(item.price * item.qty)}</span></div>))}
                     </div>
                     <div className="mb-4">
                         <div className="flex justify-between text-sm mb-1"><span>Subtotal</span><span>{formatRupiah(subtotal)}</span></div>
-
-                        {taxPercentage > 0 && (
-                            <div className="flex justify-between text-sm mb-1">
-                                <span>Tax ({taxPercentage * 100}%)</span>
-                                <span>{formatRupiah(totalTax)}</span>
-                            </div>
-                        )}
-
-                        <div className="flex justify-between text-sm mb-1"><span>Discount ({discountPercentage}%)</span><span>-{formatRupiah(totalDiscount)}</span></div>
+                        {taxPercentage > 0 && (<div className="flex justify-between text-sm mb-1"><span>Pajak ({taxPercentage * 100}%)</span><span>{formatRupiah(totalTax)}</span></div>)}
+                        <div className="flex justify-between text-sm mb-1"><span>Diskon ({discountPercentage}%)</span><span>-{formatRupiah(totalDiscount)}</span></div>
                         <div className="flex justify-between text-base font-bold text-gray-800 mt-2"><span>Total</span><span>{formatRupiah(totalAmount)}</span></div>
-                        {selectedPaymentMethod === 'cash' && (<><div className="flex justify-between text-sm mt-2"><span>Uang Dibayar</span><span>{formatRupiah(cashInput)}</span></div><div className="flex justify-between text-base font-bold text-green-600 mt-1"><span>Uang Kembali</span><span>{formatRupiah(changeAmount)}</span></div></>)}
+                        {selectedPaymentMethod === 'cash' && (<><div className="flex justify-between text-sm mt-2"><span>Tunai</span><span>{formatRupiah(cashInput)}</span></div><div className="flex justify-between text-base font-bold text-green-600 mt-1"><span>Kembalian</span><span>{formatRupiah(changeAmount)}</span></div></>)}
                     </div>
                     <div className="grid grid-cols-1 gap-3 mt-4">
                         <Button type="primary" size="large" block onClick={handleStrukConfirmPayment}>Simpan & Cetak</Button>

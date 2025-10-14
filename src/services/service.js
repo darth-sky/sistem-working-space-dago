@@ -5,6 +5,53 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
+export const getAdminDashboardData = async () => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/admin/dashboard-data`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Gagal mengambil data dasbor admin');
+    }
+
+    const result = await response.json();
+    return result.datas;
+  } catch (error) {
+    console.error("Error fetching admin dashboard data:", error);
+    throw error;
+  }
+};
+
+
+export const getTransactionHistory = async (startDate, endDate) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    // Mengirim tanggal sebagai query parameter
+    const response = await fetch(`${baseUrl}/api/v1/admin/transactions?startDate=${startDate}&endDate=${endDate}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Gagal mengambil riwayat transaksi');
+    }
+
+    const result = await response.json();
+    return result.datas;
+  } catch (error) {
+    console.error("Error fetching transaction history:", error);
+    throw error;
+  }
+};
+
+
 
 
 export const getVOClientByUserId = async (userId, targetDate) => {
@@ -223,12 +270,14 @@ export const getTenants = async () => {
 };
 
 // ✅ Create
+// ✅ Create (Diubah untuk menggunakan FormData)
 export const createTenant = async (formData) => {
   try {
+    // formData di sini adalah objek FormData, bukan JSON
     const response = await fetch(`${baseUrl}/api/v1/tenantadmin/tenantCreate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
+      // HAPUS headers 'Content-Type'. Browser akan menentukannya secara otomatis
+      body: formData, 
     });
     const result = await response.json();
     return { status: response.status, data: result };
@@ -238,12 +287,13 @@ export const createTenant = async (formData) => {
 };
 
 // ✅ Update
+// ✅ Update (Diubah untuk menggunakan FormData)
 export const updateTenant = async (id_tenant, formData) => {
   try {
     const response = await fetch(`${baseUrl}/api/v1/tenantadmin/tenantUpdate/${id_tenant}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
+      // HAPUS headers 'Content-Type'
+      body: formData,
     });
     const result = await response.json();
     return { status: response.status, data: result };
@@ -621,6 +671,61 @@ export const getWorkspaces = async () => {
     return result.datas; // Mengembalikan array of workspaces
   } catch (error) {
     console.error("Error fetching workspaces:", error);
+    throw error;
+  }
+};
+
+// Tambahkan ini di file service.js Anda
+
+export const getRoomsToday = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/rooms-todays`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.datas; // Mengembalikan array berisi objek-objek ruangan
+
+  } catch (error) {
+    console.error("Error fetching rooms for today:", error);
+    throw error;
+  }
+};
+
+// Tambahkan juga ini di file service.js Anda
+
+export const createRoomBookingKasir = async (bookingData) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/book-room`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bookingData), // Mengirim data booking dalam format JSON
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result; // Mengembalikan respons sukses dari server (termasuk id_transaksi)
+
+  } catch (error) {
+    console.error("Error creating room booking:", error);
     throw error;
   }
 };
@@ -1330,7 +1435,7 @@ export const getAllRuangan = async () => {
 export const getPromo = async () => {
   try {
     const token = jwtStorage.retrieveToken()
-    const response = await fetch(`${baseUrl}/api/v1/ruangan/readPromo`, {
+    const response = await fetch(`${baseUrl}/api/v1/ruangan/readPromos`, {
       headers: {
         Authorization: `Bearer ${token}`
       }

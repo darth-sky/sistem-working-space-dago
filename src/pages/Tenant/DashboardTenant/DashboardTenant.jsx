@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { Input, Modal, Button, Spin, message } from "antd";
-import { getOrdersByTenant, updateOrderStatus } from "../../../services/service"; 
+import { getOrdersByTenant, updateOrderStatus } from "../../../services/service";
 import { AuthContext } from "../../../providers/AuthProvider";
 
 const { Search } = Input;
@@ -14,67 +14,86 @@ const DashboardTenant = () => {
     const [isUpdating, setIsUpdating] = useState(false);
     const { userProfile, loading: authLoading } = useAuth();
     const tenantId = userProfile?.detail?.id_tenant;
-    
+
+    // 💎 1. Buat 'ref' untuk menyimpan objek audio dan melacak pesanan
+    const notificationSound = useRef(null);
+    const knownOrderIds = useRef(new Set());
+
+    // 💎 2. Inisialisasi audio saat komponen pertama kali dimuat
     useEffect(() => {
-        const fetchOrders = async () => {
-            if (!tenantId || authLoading) return; 
+        notificationSound.current = new Audio("../../../../public/sounds/notification.mp3");
+    }, []);
+
+    // 💎 3. Logika untuk mengambil data dan polling
+    useEffect(() => {
+        if (authLoading || !tenantId) return;
+
+        const fetchAndCheckOrders = async () => {
             try {
-                setLoading(true);
                 const res = await getOrdersByTenant(tenantId);
+                const fetchedOrders = res.data.datas || [];
 
-                // FIX 1: AKSES DATA DENGAN BENAR
-                let fetchedOrders = res.data.datas || [];
+                // Cek apakah ada pesanan baru yang belum pernah dilihat
+                const hasNewOrder = fetchedOrders.some(order => !knownOrderIds.current.has(order.id));
 
-                // FIX 2: MAPPING STATUS DARI BACKEND KE FRONTEND
-                const statusMap = {
-                    "Baru": "NEW",
-                    "Diproses": "ON PROSES",
-                    "Selesai": "FINISH"
-                };
+                if (hasNewOrder && knownOrderIds.current.size > 0) { // Hanya putar suara jika bukan fetch pertama kali
+                    notificationSound.current.play().catch(e => console.error("Audio play failed:", e));
+                }
 
-                fetchedOrders = fetchedOrders.map(order => ({
-                    ...order,
-                    status: statusMap[order.status] || order.status // Ubah status ke format UI
-                }));
+                // Perbarui daftar ID pesanan yang sudah diketahui
+                fetchedOrders.forEach(order => knownOrderIds.current.add(order.id));
 
                 setOrders(fetchedOrders);
-                setFilteredOrders(fetchedOrders); // Inisialisasi data filter
+
             } catch (err) {
-                console.error(err);
-                message.error("Terjadi kesalahan saat memuat data pesanan.");
+                console.error("Polling error:", err);
+                // Jangan tampilkan error setiap polling gagal, agar tidak mengganggu user
             } finally {
-                setLoading(false);
+                setLoading(false); // Matikan loading utama hanya sekali
             }
         };
-       
-        if (!authLoading && tenantId) { 
-            fetchOrders();
-        } else if (!authLoading && !tenantId) {
-            setLoading(false); 
-        }
+
+        // Panggil sekali saat komponen dimuat
+        fetchAndCheckOrders();
+
+        // Atur interval polling (setiap 15 detik)
+        const intervalId = setInterval(fetchAndCheckOrders, 15000);
+
+        // Hentikan interval saat komponen dibongkar (pindah halaman)
+        return () => clearInterval(intervalId);
+
     }, [tenantId, authLoading]);
 
+    // Efek untuk memfilter data setiap kali 'orders' atau 'searchText' berubah
+    useEffect(() => {
+        setFilteredOrders(orders); // Inisialisasi awal
+    }, [orders]);
+
+
+
     const updateStatus = async (id, newStatus) => {
+        console.log(id)
         if (selectedOrder.status === newStatus) return;
 
         try {
             setIsUpdating(true);
-            await updateOrderStatus(id, newStatus); 
-            
+            await updateOrderStatus(id, newStatus);
+
             // Logika update state lokal setelah sukses
             const updatedOrders = orders.map((order) =>
-                order.id === id ? { ...order, status: newStatus } : order
+
+                order.id_detail_order === id ? { ...order, status: newStatus } : order
             );
             setOrders(updatedOrders);
             setFilteredOrders(updatedOrders); // Jangan lupa update data filter juga
 
             setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : prev));
-            
+
             message.success(`Status pesanan #${selectedOrder.code} berhasil diperbarui!`);
-            
+
         } catch (err) {
             console.error(err);
-            message.error("Gagal memperbarui status. Silakan coba lagi."); 
+            message.error("Gagal memperbarui status. Silakan coba lagi.");
         } finally {
             setIsUpdating(false);
         }
@@ -82,7 +101,7 @@ const DashboardTenant = () => {
 
     const handleSearch = (value) => {
         const lowercasedValue = value.toLowerCase();
-        const filtered = orders.filter(order => 
+        const filtered = orders.filter(order =>
             (order.code && order.code.toLowerCase().includes(lowercasedValue)) ||
             (order.name && order.name.toLowerCase().includes(lowercasedValue))
         );
@@ -91,17 +110,17 @@ const DashboardTenant = () => {
 
     if (loading || authLoading) {
         return (
-             <div className="flex justify-center items-center h-screen">
-                  <Spin size="large" tip="Memuat Data Tenant..." />
-             </div>
+            <div className="flex justify-center items-center h-screen">
+                <Spin size="large" tip="Memuat Data Tenant..." />
+            </div>
         );
     }
-    
+
     if (!tenantId) {
         return (
             <div className="p-6 text-center">
-              <h2 className="text-xl font-semibold mb-3">Akses Ditolak</h2>
-              <p className="text-gray-600">Akun Anda tidak terhubung dengan Tenant manapun.</p>
+                <h2 className="text-xl font-semibold mb-3">Akses Ditolak</h2>
+                <p className="text-gray-600">Akun Anda tidak terhubung dengan Tenant manapun.</p>
             </div>
         );
     }
@@ -112,9 +131,9 @@ const DashboardTenant = () => {
             <p className="text-gray-600 mb-6">DagoEng Creative Hub & Coffee Lab</p>
 
             <div className="mb-6">
-                <Search 
-                    placeholder="Search Order Code / Customer Name" 
-                    allowClear 
+                <Search
+                    placeholder="Search Order Code / Customer Name"
+                    allowClear
                     className="w-full md:w-1/2"
                     onSearch={handleSearch}
                     onChange={(e) => handleSearch(e.target.value)}
@@ -137,9 +156,9 @@ const DashboardTenant = () => {
                             </div>
                             <span
                                 className={`font-bold py-1 px-3 rounded-full text-xs 
-                                    ${order.status === "NEW"
+                                    ${order.status === "Baru"
                                         ? "bg-red-100 text-red-600"
-                                        : order.status === "ON PROSES"
+                                        : order.status === "Diproses"
                                             ? "bg-blue-100 text-blue-800"
                                             : "bg-green-100 text-green-600"
                                     }`}
@@ -180,11 +199,11 @@ const DashboardTenant = () => {
                         </ul>
 
                         <div className="mt-6 flex gap-3 justify-center">
-                            {selectedOrder.status === "NEW" && (
+                            {selectedOrder.status === "Baru" && (
                                 <>
                                     <Button
                                         type="primary"
-                                        onClick={() => updateStatus(selectedOrder.id, "ON PROSES")}
+                                        onClick={() => updateStatus(selectedOrder.id_detail_order, "Diproses")}
                                         loading={isUpdating}
                                     >
                                         Terima Order
@@ -197,17 +216,17 @@ const DashboardTenant = () => {
                                     </Button>
                                 </>
                             )}
-                            {selectedOrder.status === "ON PROSES" && (
+                            {selectedOrder.status === "Diproses" && (
                                 <Button
                                     type="primary"
                                     style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
-                                    onClick={() => updateStatus(selectedOrder.id, "FINISH")}
+                                    onClick={() => updateStatus(selectedOrder.id_detail_order, "Selesai")}
                                     loading={isUpdating}
                                 >
                                     Tandai Selesai
                                 </Button>
                             )}
-                            {selectedOrder.status === "FINISH" && (
+                            {selectedOrder.status === "Selesai" && (
                                 <div className="text-green-600 font-bold text-lg p-2 border-2 border-green-600 rounded">✅ SELESAI</div>
                             )}
                         </div>

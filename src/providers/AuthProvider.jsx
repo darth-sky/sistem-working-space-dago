@@ -177,7 +177,7 @@ const AuthProvider = ({ children }) => {
                     navigate("/dashboardadmin", { replace: true });
                     break;
                 case "kasir":
-                    navigate("/mengelola-orderan_fb", { replace: true });
+                    navigate("/transaksikasir", { replace: true });
                     break;
                 case "admin_tenant": // PERAN BARU
                     // Admin tenant diarahkan ke DashboardTenant

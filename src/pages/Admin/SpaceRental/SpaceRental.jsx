@@ -1,181 +1,260 @@
-import React, { useState } from "react";
-import {
-  DatePicker,
-  Table,
-  Radio,
-  Select,
-  Card,
-  Row,
-  Col,
-  List,
-  Input,
-  Typography,
-} from "antd";
-import { CalendarOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import React, { useState, useEffect } from "react";
+import { Input, Button, Tag, Spin, Alert } from "antd";
+import { getKasirDashboardData } from "../../../services/service";
+import RentalTimer from "../../../components/RentalTimer"; // Pastikan path ini benar
 
-const { RangePicker } = DatePicker;
-const { Title, Text } = Typography;
+const { Search } = Input;
+
+// Fungsi helper ini sudah benar, tidak perlu diubah
+const getCombinedSpaceUnits = (availableUnits, activeRentals) => {
+  const allUnits = [...availableUnits];
+  const rentedUnits = activeRentals.map((r) => r.unit);
+
+  const combinedUnits = rentedUnits.reduce((acc, unitName) => {
+    const isAlreadyAvailable = acc.some(
+      (u) => u.name.toLowerCase() === unitName.toLowerCase()
+    );
+    if (!isAlreadyAvailable) {
+      acc.push({ name: unitName, isRented: true });
+    }
+    return acc;
+  }, allUnits.map((u) => ({ name: u, isRented: false })));
+
+  const finalUnits = combinedUnits.map((unit) => {
+    const isRented = rentedUnits.some(
+      (rName) => rName.toLowerCase() === unit.name.toLowerCase()
+    );
+    return { name: unit.name, isRented };
+  });
+
+  finalUnits.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
+  );
+  return finalUnits;
+};
 
 const SpaceRental = () => {
   const [status, setStatus] = useState("Active");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [summary, setSummary] = useState({
+    todayTransaction: 0,
+    spaceRental: 0,
+    spaceAvailable: 0,
+  });
+  const [spaceTypes, setSpaceTypes] = useState([]);
+  const [spaceUnitsAvailable, setSpaceUnitsAvailable] = useState([]);
+  const [rentals, setRentals] = useState({ upcoming: [], active: [], finish: [] });
+  const [combinedUnits, setCombinedUnits] = useState([]);
 
-  const columns = [
-    { title: "Product", dataIndex: "product", key: "product" },
-    { title: "Name", dataIndex: "name", key: "name" },
-    { title: "Unit", dataIndex: "unit", key: "unit" },
-    { title: "Start Time", dataIndex: "start", key: "start" },
-    { title: "End Time", dataIndex: "end", key: "end" },
-    { title: "Total (Rp)", dataIndex: "total", key: "total" },
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const data = await getKasirDashboardData();
+        setSummary(data.summary);
+        setSpaceTypes(data.spaceTypes);
+        setSpaceUnitsAvailable(data.availableUnits);
+        setRentals(data.rentals);
+        setCombinedUnits(getCombinedSpaceUnits(data.availableUnits, data.rentals.active));
+        setError(null);
+      } catch (err) {
+        setError("Gagal memuat data dari server. Silakan coba lagi.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
-  const spaceUnits = [
-    { name: "Space Monitor", total: 6, available: 6 },
-    { name: "Open Space", total: 14, available: 14 },
-    { name: "Meeting Room Kecil", total: 2, available: 2 },
-    { name: "Meeting Room Besar", total: 1, available: 1 },
-    { name: "Space Lesehan", total: 6, available: 6 },
-  ];
+  useEffect(() => {
+    if (!loading) {
+      const allUnits = getCombinedSpaceUnits(spaceUnitsAvailable, rentals.active);
+      setCombinedUnits(allUnits);
+    }
+  }, [rentals.active, spaceUnitsAvailable, loading]);
+  
+  // Menggabungkan booking 'upcoming' dan 'active' untuk ditampilkan di tab "Active"
+  const activeAndUpcomingRentals = [...rentals.upcoming, ...rentals.active];
+  const displayedRentals = status === "Active" ? activeAndUpcomingRentals : rentals.finish;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <Spin size="large" tip="Memuat Data Dasbor..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <Alert message="Error" description={error} type="error" showIcon />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ height: "100vh", width: "100%", background: "#f5f5f5" }}>
-      {/* CONTENT */}
-      <div style={{ padding: 24, overflowY: "auto", height: "100%" }}>
-        {/* Date + Month Period */}
-        <Card style={{ marginBottom: 16 }}>
-          <Row gutter={16} align="middle" justify="space-between">
-            <Col>
-              <Title level={4} style={{ margin: 0 }}>
-                <CalendarOutlined style={{ marginRight: 8 }} />
-                  04 September 2025
-              </Title>
-            </Col>
-            <Col>
-              <Text strong style={{ marginRight: 8 }}>
-                Month Period
-              </Text>
-              <RangePicker
-                defaultValue={[
-                  dayjs("2025-09-01", "YYYY-MM-DD"),
-                  dayjs("2025-09-03", "YYYY-MM-DD"),
-                ]}
-                format="YYYY-MM-DD"
-              />
-            </Col>
-          </Row>
-        </Card>
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen transition-all duration-300">
+      {/* Search bar */}
+      <Search
+        placeholder="Search"
+        allowClear
+        className="w-full rounded-lg shadow-sm focus:shadow-md transition-all"
+      />
 
-        {/* Stats */}
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col xs={24} md={8}>
-            <Card bordered={false} style={{ background: "#1677ff", color: "#fff" }}>
-              <Row justify="space-between">
-                <Text style={{ color: "#fff" }}>Today Transaction</Text>
-                <Text strong style={{ color: "#fff" }}>
-                  Rp. 0
-                </Text>
-              </Row>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card bordered={false} style={{ background: "#fde68a" }}>
-              <Row justify="space-between">
-                <Text>Space Rental</Text>
-                <Text strong>0</Text>
-              </Row>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card bordered={false} style={{ background: "#bbf7d0" }}>
-              <Row justify="space-between">
-                <Text>Space Available</Text>
-                <Text strong>29</Text>
-              </Row>
-            </Card>
-          </Col>
-        </Row>
+      {/* Top Summary */}
+      <div className="rounded-xl shadow-md p-6 border border-blue-100 bg-gradient-to-br from-blue-50 to-blue-100">
+        <h3 className="text-lg font-semibold text-gray-700 mb-5 tracking-wide text-center">
+          Space Summary
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+          <div className="flex flex-col items-center justify-center">
+            <p className="text-sm text-gray-600 mb-1">Today Transaction</p>
+            <p className="text-2xl font-bold text-blue-700">
+              Rp {summary.todayTransaction.toLocaleString("id-ID")}
+            </p>
+          </div>
+          <div className="flex flex-col items-center justify-center">
+            <p className="text-sm text-gray-600 mb-1">Space Rental</p>
+            <p className="text-2xl font-bold text-blue-700">{summary.spaceRental}</p>
+          </div>
+          <div className="flex flex-col items-center justify-center">
+            <p className="text-sm text-gray-600 mb-1">Space Available</p>
+            <p className="text-2xl font-bold text-blue-700">{summary.spaceAvailable}</p>
+          </div>
+        </div>
+      </div>
 
-        <Row gutter={16}>
-          {/* Left: Space Unit */}
-          <Col xs={24} md={6}>
-            <Card title="Space Unit Type">
-              <List
-                dataSource={spaceUnits}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Row
-                      style={{ width: "100%" }}
-                      justify="space-between"
-                      align="middle"
-                    >
-                      <Col>
-                        <Text strong style={{ marginRight: 8 }}>
-                          {item.total}
-                        </Text>
-                        <Text type="success" style={{ marginRight: 8 }}>
-                          {item.available}
-                        </Text>
-                        <Text>{item.name}</Text>
-                      </Col>
-                      <Col>
-                        <div
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: "50%",
-                            background: "green",
-                          }}
-                        />
-                      </Col>
-                    </Row>
-                  </List.Item>
-                )}
-              />
-            </Card>
-          </Col>
-
-          {/* Right: Space Rental */}
-          <Col xs={24} md={18}>
-            <Card
-              title="Space Rental (Today)"
-              extra={
-                <Radio.Group
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  optionType="button"
-                  buttonStyle="solid"
-                >
-                  <Radio.Button value="Active">Active</Radio.Button>
-                  <Radio.Button value="Finish">Finish</Radio.Button>
-                </Radio.Group>
-              }
+      {/* Section: Space Unit Type */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-700 mb-3 tracking-wide">
+          Space Unit Type
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {spaceTypes.map((type, index) => (
+            <div
+              key={index}
+              className="flex flex-col items-center justify-center bg-white rounded-lg p-3 shadow-xs hover:shadow-sm border border-gray-100 transition-all duration-200"
             >
-              {/* Filter */}
-              <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
-                <Col>
-                  <Select defaultValue="10" style={{ width: 100 }}>
-                    <Select.Option value="10">10</Select.Option>
-                    <Select.Option value="20">20</Select.Option>
-                  </Select>
-                </Col>
-                <Col>
-                  <Input.Search placeholder="Cari..." allowClear />
-                </Col>
-              </Row>
+              <span className="text-sm font-semibold text-gray-600 mb-1">
+                {type.name}
+              </span>
+              <div className="flex items-center space-x-2">
+                <Tag color="blue" className="text-xs font-medium">
+                  Total: {type.total}
+                </Tag>
+                <Tag color="green" className="text-xs font-medium">
+                  Available: {type.available}
+                </Tag>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-              {/* Table */}
-              <Table
-                columns={columns}
-                dataSource={[]}
-                locale={{ emptyText: "Tidak ada data yang ditemukan - maaf" }}
-                pagination={{ pageSize: 5 }}
-                bordered
-                size="middle"
-                rowKey="id"
-              />
-            </Card>
-          </Col>
-        </Row>
+      {/* Section: Space Units Available */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-700 mb-3 tracking-wide">
+          Space Units Available
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          {combinedUnits.map((unit, index) => {
+            const isRented = unit.isRented;
+            const unitClass = isRented
+              ? "bg-blue-400 text-white cursor-not-allowed"
+              : "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer";
+            return (
+              <div
+                key={index}
+                className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-sm hover:shadow-md border border-gray-200 relative ${unitClass}`}
+                title={isRented ? "Sedang digunakan" : "Tersedia"}
+              >
+                <span className="font-semibold text-center text-sm">
+                  {unit.name}
+                </span>
+                {isRented && (
+                  <span className="absolute top-1 right-1 text-xs">🔒</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Section: Space Rental (Today) */}
+      <div>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-semibold text-gray-700 tracking-wide">
+            Space Rental (Today)
+          </h3>
+          <div className="space-x-2">
+            <Button
+              type={status === "Active" ? "primary" : "default"}
+              onClick={() => setStatus("Active")}
+              className="rounded-lg"
+            >
+              Active
+            </Button>
+            <Button
+              type={status === "Finish" ? "primary" : "default"}
+              onClick={() => setStatus("Finish")}
+              className="rounded-lg"
+            >
+              Finish
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {displayedRentals.length > 0 ? (
+            displayedRentals.map((rental) => {
+              // Menentukan apakah booking ini 'upcoming' atau 'active'
+              const isUpcoming = new Date(rental.waktu_mulai) > new Date();
+
+              return (
+                <div
+                  key={rental.id}
+                  className="flex justify-between items-center bg-white rounded-xl shadow-sm hover:shadow-md p-5 transition-all duration-300 border border-gray-100"
+                >
+                  <div className="space-y-1">
+                    <p className="font-semibold text-gray-800">{rental.client}</p>
+                    <p className="text-sm text-gray-600">{rental.unit.toUpperCase()}</p>
+                    <p className="text-xs text-gray-400">{rental.date}</p>
+                    
+                    {/* PERBAIKAN 1: Tag Status Dinamis */}
+                    <div className="flex gap-2 mt-2">
+                      {isUpcoming ? (
+                        <Tag color="orange">UPCOMING</Tag>
+                      ) : (
+                        <Tag color="green">ACTIVE</Tag>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right space-y-2">
+                    <p className="text-blue-600 font-bold">
+                      Rp {rental.price.toLocaleString("id-ID")}
+                    </p>
+                    {status === "Active" ? (
+                      // PERBAIKAN 2: Melewatkan startTime ke RentalTimer
+                      <RentalTimer
+                        startTime={rental.waktu_mulai}
+                        endTime={rental.waktu_selesai}
+                      />
+                    ) : (
+                      <Tag>Finished</Tag>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-10 text-gray-500">
+              Tidak ada data sewa untuk ditampilkan.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

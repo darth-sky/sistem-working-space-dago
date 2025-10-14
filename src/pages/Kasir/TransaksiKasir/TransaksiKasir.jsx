@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Button,
   Table,
@@ -59,25 +59,85 @@ const TransaksiKasir = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const navigate = useNavigate();
 
+  // 💎 1. Buat 'ref' untuk menyimpan objek audio dan melacak ID transaksi
+  const notificationSound = useRef(null);
+  const knownTransactionIds = useRef(new Set());
+
+  // 💎 2. Inisialisasi audio saat komponen pertama kali dimuat
+  useEffect(() => {
+    notificationSound.current = new Audio("../../../../public/sounds/notification.mp3");
+  }, []);
+
+  // 💎 3. Logika untuk mengambil data dan polling
+  useEffect(() => {
+    const fetchAndCheckOrders = async () => {
+      try {
+        const result = await getDataTransaksiKasir();
+        const fetchedOrders = result.datas.map((o) => ({
+          id: o.id,
+          name: o.customer || "Guest",
+          location: o.location || "-",
+          status: o.status_pesanan,
+          price: o.total,
+          items: o.items || [],
+          time: o.time,
+          type: o.type,
+          room: o.bookings && o.bookings.length > 0 ? o.bookings[0].room_name : null,
+        }));
+
+        // Cek apakah ada transaksi baru yang belum pernah dilihat
+        const hasNewOrder = fetchedOrders.some(order => !knownTransactionIds.current.has(order.id));
+
+        // Hanya putar suara jika ini bukan fetch pertama kali
+        if (hasNewOrder && knownTransactionIds.current.size > 0) {
+          notificationSound.current.play().catch(e => console.error("Audio play failed:", e));
+        }
+
+        // Perbarui daftar ID transaksi yang sudah diketahui
+        fetchedOrders.forEach(order => knownTransactionIds.current.add(order.id));
+
+        setOrders(fetchedOrders);
+
+      } catch (err) {
+        console.error("Polling error:", err);
+      } finally {
+        setLoading(false); // Matikan loading utama hanya sekali
+      }
+    };
+
+    // Panggil sekali saat komponen dimuat
+    fetchAndCheckOrders();
+
+    // Atur interval polling (setiap 15 detik)
+    const intervalId = setInterval(fetchAndCheckOrders, 15000);
+
+    // Hentikan interval saat komponen dibongkar (pindah halaman)
+    return () => clearInterval(intervalId);
+  }, []); // Dependency array kosong agar hanya berjalan sekali untuk setup
+
   const cashierName = "Rossa";
 
-  const statusMap = {
-    Baru: "WAITING",
-    Diproses: "IN_PROGRESS",
-    Selesai: "FINISH",
-    Batal: "CANCELLED",
-  };
+  // const statusMap = {
+  //   Baru: "WAITING",
+  //   Diproses: "IN_PROGRESS",
+  //   "Sebagian Diproses": "PARTIAL", // Nama baru untuk UI
+  //   Selesai: "FINISH",
+  //   Batal: "CANCELLED",
+  // };
 
+  // MODIFIKASI 2: Tambahkan warna untuk status 'PARTIAL'
   const getStatusColor = (status) => {
-    const frontendStatus = statusMap[status] || status;
+    const frontendStatus = status;
     switch (frontendStatus) {
-      case "WAITING":
+      case "Baru":
         return "blue";
-      case "IN_PROGRESS":
+      case "Diproses":
         return "orange";
-      case "FINISH":
+      case "Sebagian Diproses": // Warna baru
+        return "orange";
+      case "Selesai":
         return "green";
-      case "CANCELLED":
+      case "Batal":
         return "red";
       default:
         return "default";
@@ -85,7 +145,7 @@ const TransaksiKasir = () => {
   };
 
   const getDisplayStatus = (status) => {
-    return statusMap[status] || status;
+    return status
   };
 
   useEffect(() => {
@@ -100,7 +160,7 @@ const TransaksiKasir = () => {
         id: o.id,
         name: o.customer || "Guest",
         location: o.location || "-",
-        status: o.status,
+        status: o.status_pesanan,
         price: o.total,
         items: o.items || [],
         time: o.time,
@@ -121,16 +181,25 @@ const TransaksiKasir = () => {
     .filter((o) => o.type !== "Booking")
     .filter((order) => {
       if (filterStatus !== "all" && order.status !== filterStatus) return false;
+      if (filterStatus !== "all") {
+        if (filterStatus === 'Diproses') {
+          // Jika filter 'In Progress', tampilkan 'Diproses' dan 'Sebagian Diproses'
+          if (order.status !== 'Diproses' && order.status !== 'Sebagian Diproses') return false;
+        } else if (order.status !== filterStatus) {
+          return false;
+        }
+      }
+
 
       if (filterType !== "all") {
         const typeMatch =
           filterType === "dinein"
             ? "Dine In"
             : filterType === "takeaway"
-            ? "Takeaway"
-            : filterType === "pickup"
-            ? "Pick Up"
-            : "";
+              ? "Takeaway"
+              : filterType === "pickup"
+                ? "Pick Up"
+                : "";
         if (order.type !== typeMatch) return false;
       }
 

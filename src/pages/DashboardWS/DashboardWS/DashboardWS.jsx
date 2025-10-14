@@ -35,17 +35,17 @@ const DashboardWS = () => {
   const [workspaces, setWorkspaces] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // useEffect untuk redirect berdasarkan role (tidak berubah)
-  useEffect(() => {
-    if (!userProfile) return;
-    if (userProfile.roles === "admin") {
-      navigate("/dashboardadmin", { replace: true });
-    } else if (userProfile.roles === "kasir") {
-      navigate("/mengelola-orderan_fb", { replace: true });
-    } else if (userProfile.roles === "user") {
-      navigate("/dashboard-pengguna", { replace: true });
-    }
-  }, [userProfile, navigate]);
+  // // useEffect untuk redirect berdasarkan role (tidak berubah)
+  // useEffect(() => {
+  //   if (!userProfile) return;
+  //   if (userProfile.roles === "admin") {
+  //     navigate("/dashboardadmin", { replace: true });
+  //   } else if (userProfile.roles === "kasir") {
+  //     navigate("/mengelola-orderan_fb", { replace: true });
+  //   } else if (userProfile.roles === "user") {
+  //     navigate("/dashboard-pengguna", { replace: true });
+  //   }
+  // }, [userProfile, navigate]);
 
   // useEffect untuk mengambil data working space dari API
   useEffect(() => {
@@ -142,11 +142,10 @@ const DashboardWS = () => {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`relative whitespace-nowrap px-4 sm:px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 focus:outline-none
-                  ${
-                    activeTab === tab
+                  ${activeTab === tab
                       ? "bg-blue-600 text-white shadow-md"
                       : "text-gray-600 hover:text-blue-600 hover:bg-gray-200"
-                  }`}
+                    }`}
                 >
                   {tab}
                 </button>
@@ -175,7 +174,7 @@ const DashboardWS = () => {
                           src={`${import.meta.env.VITE_BASE_URL}/static/${card.img}`}
                           alt={card.title}
                           className="w-full h-full object-cover"
-                          onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/600x400/EEE/31343C?text=Image+Not+Found' }}
+                          onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/600x400/EEE/31343C?text=Image+Not+Found' }}
                         />
                       </div>
 
@@ -205,13 +204,13 @@ const DashboardWS = () => {
                             <div className="flex flex-col items-center"><Wifi size={20} className="text-blue-600" /><span className="text-xs mt-1">Internet</span></div>
                           )}
                           {card.features.includes("Refill Water") && (
-                             <div className="flex flex-col items-center"><Coffee size={20} className="text-amber-600" /><span className="text-xs mt-1">Refill Water</span></div>
+                            <div className="flex flex-col items-center"><Coffee size={20} className="text-amber-600" /><span className="text-xs mt-1">Refill Water</span></div>
                           )}
                           {card.features.includes("AC") && (
-                             <div className="flex flex-col items-center"><span className="text-lg">❄️</span><span className="text-xs mt-1">AC</span></div>
+                            <div className="flex flex-col items-center"><span className="text-lg">❄️</span><span className="text-xs mt-1">AC</span></div>
                           )}
                           {card.features.includes("TV") && (
-                             <div className="flex flex-col items-center"><Tv size={20} className="text-purple-600" /><span className="text-xs mt-1">TV</span></div>
+                            <div className="flex flex-col items-center"><Tv size={20} className="text-purple-600" /><span className="text-xs mt-1">TV</span></div>
                           )}
                           <div className="flex flex-col items-center"><Ban size={20} className="text-red-600" /><span className="text-xs mt-1">No Smoking</span></div>
                         </div>
@@ -253,123 +252,127 @@ const DashboardWS = () => {
                     </div>
                   ))
                 ) : (
-                   <div className="text-center py-10 text-gray-500">
-                     <p>Saat ini tidak ada ruang kerja yang tersedia.</p>
-                   </div>
+                  <div className="text-center py-10 text-gray-500">
+                    <p>Saat ini tidak ada ruang kerja yang tersedia.</p>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Virtual Offices, Memberships, Event Spaces (Tidak ada perubahan) */}
             {["Virtual Offices", "Memberships", "Event Spaces"].includes(activeTab) && (
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
-             {/* Swiper Image Slider */}
-             <div className="relative h-64 sm:h-80 md:h-full flex items-center justify-center order-first md:order-none">
-               <Swiper
-                 spaceBetween={20}
-                 slidesPerView={1}
-                 loop={true}
-                 autoplay={{ delay: 3000 }}
-                 pagination={{ clickable: true }}
-                 modules={[Pagination, Autoplay]}
-                 className="w-full h-full rounded-xl shadow-lg"
-               >
-                 {activeTab === "Virtual Offices" && (
-                   <>
-                     <SwiperSlide>
-                       <img
-                         src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=869&auto=format&fit=crop"
-                         alt="Virtual Office 1"
-                         className="w-full h-full object-cover rounded-lg"
-                       />
-                     </SwiperSlide>
-                     <SwiperSlide>
-                       <img
-                         src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop"
-                         alt="Virtual Office 2"
-                         className="w-full h-full object-cover rounded-lg"
-                       />
-                     </SwiperSlide>
-                   </>
-                 )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+                {/* Swiper Image Slider */}
+                <div className="relative h-64 sm:h-80 md:h-full flex items-center justify-center order-first md:order-none">
+                  <Swiper
+                    spaceBetween={20}
+                    slidesPerView={1}
+                    loop={true}
+                    autoplay={{ delay: 3000 }}
+                    pagination={{ clickable: true }}
+                    modules={[Pagination, Autoplay]}
+                    className="w-full h-full rounded-xl shadow-lg"
+                  >
+                    {activeTab === "Virtual Offices" && (
+                      <>
+                        <SwiperSlide>
+                          <img
+                            src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=869&auto=format&fit=crop"
+                            alt="Virtual Office 1"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        </SwiperSlide>
+                        <SwiperSlide>
+                          <img
+                            src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop"
+                            alt="Virtual Office 2"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        </SwiperSlide>
+                      </>
+                    )}
 
-                 {activeTab === "Memberships" && (
-                   <>
-                     <SwiperSlide>
-                       <img
-                         src="https://images.unsplash.com/photo-1565688842882-e0b2693d349a?q=80&w=870&auto=format&fit=crop"
-                         alt="Membership 1"
-                         className="w-full h-full object-cover rounded-lg"
-                       />
-                     </SwiperSlide>
-                     <SwiperSlide>
-                       <img
-                         src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop"
-                         alt="Membership 2"
-                         className="w-full h-full object-cover rounded-lg"
-                       />
-                     </SwiperSlide>
-                   </>
-                 )}
+                    {activeTab === "Memberships" && (
+                      <>
+                        <SwiperSlide>
+                          <img
+                            src="https://images.unsplash.com/photo-1565688842882-e0b2693d349a?q=80&w=870&auto=format&fit=crop"
+                            alt="Membership 1"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        </SwiperSlide>
+                        <SwiperSlide>
+                          <img
+                            src="https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=870&auto=format&fit=crop"
+                            alt="Membership 2"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                        </SwiperSlide>
+                      </>
+                    )}
 
-                 {activeTab === "Event Spaces" && (
-                   <>
-                     <SwiperSlide>
-                       <img
-                         src="https://images.unsplash.com/photo-1503428593586-e225b39bddfe?q=80&w=870&auto=format&fit=crop"
-                         alt="Event Space 1"
-                         className="w-full h-full object-cover rounded-lg"
-                       />
-                     </SwiperSlide>
-                     <SwiperSlide>
-                       <img
-                         src="https://images.unsplash.com/photo-1503424886305-4c2b04aa3ebd?q=80&w=870&auto=format&fit=crop"
-                         alt="Event Space 2"
-                         className="w-full h-full object-cover rounded-lg"
-                       />
-                     </SwiperSlide>
-                   </>
-                 )}
-               </Swiper>
-             </div>
+                    {activeTab === "Event Spaces" && (
+                      <>
+                        <SwiperSlide>
+                          <div className="w-[870px] h-[392px]">
+                            <img
+                              src="../../../../public/img/aula1 (2).jpg"
+                              alt="Event Space 1"
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          </div>
+                        </SwiperSlide>
+                        <SwiperSlide>
+                          <div className="w-[870px] h-[392px]">
+                            <img
+                              src="../../../../public/img/aula2 (1).jpeg"
+                              alt="Event Space 1"
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          </div>
+                        </SwiperSlide>
+                      </>
+                    )}
+                  </Swiper>
+                </div>
 
-             {/* Text Section */}
-             <div className="text-center md:text-left">
-               <h3 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">
-                 {activeTab === "Virtual Offices" && "Virtual Office"}
-                 {activeTab === "Memberships" && "Membership Ruangan"}
-                 {activeTab === "Event Spaces" && "Event Spaces"}
-               </h3>
-               <p className="text-gray-600 mb-4 text-base">
-                 {activeTab === "Virtual Offices" &&
-                   "Sewa tempat dengan alamat bisnis premium. Kelola bisnis Anda dari mana saja tanpa biaya sewa kantor fisik."}
-                 {activeTab === "Memberships" &&
-                   "Pilih paket membership sesuai kebutuhan ruang Anda. Akses ruangan fleksibel menggunakan kredit membership."}
-                 {activeTab === "Event Spaces" &&
-                   "Sewa ruang acara yang nyaman dan fleksibel untuk seminar, workshop, atau perayaan khusus."}
-               </p>
-               <p className="text-gray-600 mb-6 text-base">
-                 {activeTab === "Virtual Offices" &&
-                   "Layanan mencakup alamat resmi dan manajemen surat yang andal, ideal untuk bisnis fleksibel."}
-                 {activeTab === "Memberships" &&
-                   "Nikmati fasilitas modern dan lokasi strategis yang mendukung produktivitas Anda setiap saat."}
-                 {activeTab === "Event Spaces" &&
-                   "Dengan fasilitas modern dan lokasi strategis, acara Anda akan lebih berkesan."}
-               </p>
-               <Link
-                 to={
-                   activeTab === "Virtual Offices"
-                     ? "/informasivo"
-                     : activeTab === "Memberships"
-                     ? "/informasiws"
-                     : "/eventspaces"
-                 }
-                 className="text-blue-600 font-semibold hover:underline"
-               >
-                 Lihat Detail →
-               </Link>
-             </div>
-           </div>
+                {/* Text Section */}
+                <div className="text-center md:text-left">
+                  <h3 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">
+                    {activeTab === "Virtual Offices" && "Virtual Office"}
+                    {activeTab === "Memberships" && "Membership Ruangan"}
+                    {activeTab === "Event Spaces" && "Event Spaces"}
+                  </h3>
+                  <p className="text-gray-600 mb-4 text-base">
+                    {activeTab === "Virtual Offices" &&
+                      "Sewa tempat dengan alamat bisnis premium. Kelola bisnis Anda dari mana saja tanpa biaya sewa kantor fisik."}
+                    {activeTab === "Memberships" &&
+                      "Pilih paket membership sesuai kebutuhan ruang Anda. Akses ruangan fleksibel menggunakan kredit membership."}
+                    {activeTab === "Event Spaces" &&
+                      "Sewa ruang acara yang nyaman dan fleksibel untuk seminar, workshop, atau perayaan khusus."}
+                  </p>
+                  <p className="text-gray-600 mb-6 text-base">
+                    {activeTab === "Virtual Offices" &&
+                      "Layanan mencakup alamat resmi dan manajemen surat yang andal, ideal untuk bisnis fleksibel."}
+                    {activeTab === "Memberships" &&
+                      "Nikmati fasilitas modern dan lokasi strategis yang mendukung produktivitas Anda setiap saat."}
+                    {activeTab === "Event Spaces" &&
+                      "Dengan fasilitas modern dan lokasi strategis, acara Anda akan lebih berkesan."}
+                  </p>
+                  <Link
+                    to={
+                      activeTab === "Virtual Offices"
+                        ? "/informasivo"
+                        : activeTab === "Memberships"
+                          ? "/informasiws"
+                          : "/eventspaces"
+                    }
+                    className="text-blue-600 font-semibold hover:underline"
+                  >
+                    Lihat Detail →
+                  </Link>
+                </div>
+              </div>
             )}
           </div>
         </section>

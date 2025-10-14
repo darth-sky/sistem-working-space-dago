@@ -35,13 +35,13 @@ const EventSpacesPelanggan = () => {
   const navigate = useNavigate();
   const { userProfile } = useContext(AuthContext);
 
-  useEffect(() => {
-    if (userProfile?.roles === "admin") {
-      navigate("/dashboardadmin");
-    } else if (userProfile?.roles === "kasir") {
-      navigate("/mengelola-orderan_fb");
-    }
-  }, [userProfile, navigate]);
+  // useEffect(() => {
+  //   if (userProfile?.roles === "admin") {
+  //     navigate("/dashboardadmin");
+  //   } else if (userProfile?.roles === "kasir") {
+  //     navigate("/mengelola-orderan_fb");
+  //   }
+  // }, [userProfile, navigate]);
 
   // Ambil data dari backend
   useEffect(() => {

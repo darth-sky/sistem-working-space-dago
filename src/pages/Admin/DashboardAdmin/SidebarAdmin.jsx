@@ -49,9 +49,10 @@ const SidebarAdmin = ({ children }) => {
   const menuItems = [
     { name: "Dashboard", icon: <BsGraphUpArrow />, path: "/dashboardadmin" },
     { name: "Space Rental", icon: <MdChair />, path: "/spacerentaladmin" },
-    { name: "Event Spaces", icon: <RiHomeOfficeLine/>, path: "/eventspacesadmin" },
+    { name: "Event Spaces", icon: <RiHomeOfficeLine />, path: "/eventspacesadmin" },
     { name: "Transaksi", icon: <BsCart3 />, path: "/transaksiadmin" },
     { name: "Master Data", icon: <FaDatabase />, path: "/masterdataadmin" },
+    { name: "Cost Bulanan", icon: <FaDatabase />, path: "/costbulananadmin" },
     {
       name: "Logout",
       icon: <SlLogout />,
@@ -136,8 +137,8 @@ const SidebarAdmin = ({ children }) => {
                 key={index}
                 onClick={item.action}
                 className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-800 hover:bg-blue-100"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-800 hover:bg-blue-100"
                   }`}
               >
                 <span
@@ -159,8 +160,8 @@ const SidebarAdmin = ({ children }) => {
                   }
                 }}
                 className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-800 hover:bg-blue-100"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-800 hover:bg-blue-100"
                   }`}
               >
                 <span
@@ -214,7 +215,9 @@ const SidebarAdmin = ({ children }) => {
 
           {/* Right Section */}
           <div className="flex items-center space-x-3">
-            <span className="text-sm font-semibold text-gray-800">ADMIN</span>
+            <span className="text-sm font-semibold text-gray-800">
+              {userProfile?.detail?.nama || "Pengguna"}
+            </span>
             <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-300 flex items-center justify-center">
               <svg
                 xmlns="http://www.w3.org/2000/svg"

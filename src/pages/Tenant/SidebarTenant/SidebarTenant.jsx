@@ -138,8 +138,8 @@ const SidebarTenant = ({ children }) => {
                 key={index}
                 onClick={item.action}
                 className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-800 hover:bg-blue-100"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-800 hover:bg-blue-100"
                   }`}
               >
                 <span
@@ -161,8 +161,8 @@ const SidebarTenant = ({ children }) => {
                   }
                 }}
                 className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-800 hover:bg-blue-100"
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-800 hover:bg-blue-100"
                   }`}
               >
                 <span
@@ -176,7 +176,7 @@ const SidebarTenant = ({ children }) => {
             )
           )}
         </nav>
-      </div> 
+      </div>
       {/* Overlay (hanya tampil di mobile saat sidebar terbuka) */}
       {isSidebarOpen && (
         <div
@@ -215,7 +215,9 @@ const SidebarTenant = ({ children }) => {
 
           {/* Right Section */}
           <div className="flex items-center space-x-3">
-            <span className="text-sm font-semibold text-gray-800">TENANT</span>
+            <span className="text-sm font-semibold text-gray-800">
+              {userProfile?.detail?.nama || "Pengguna"}
+            </span>
             <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-300 flex items-center justify-center">
               <svg
                 xmlns="http://www.w3.org/2000/svg"

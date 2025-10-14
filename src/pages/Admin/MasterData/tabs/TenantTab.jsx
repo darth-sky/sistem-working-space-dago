@@ -1,25 +1,40 @@
 import React, { useState, useEffect } from "react";
-import { Table, Button, Modal, Form, Input, Select, Space, message, Popconfirm } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+  Table, Button, Modal, Form, Input, Select, Space, message, Popconfirm, Upload, Image,
+  // PERBAIKAN 1: Impor Typography
+  Typography,
+} from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import {
   getTenants,
   createTenant,
   updateTenant,
   deleteTenant,
-  getUsers, // Import service untuk get user
-} from "../../../../services/service"; // Sesuaikan path import
+  getUsers,
+} from "../../../../services/service";
 
 const { Option } = Select;
+// PERBAIKAN 2: Ambil Text dari Typography
+const { Text } = Typography;
+const API_URL = import.meta.env.VITE_BASE_URL;
+
+// Helper untuk Ant Design Form & Upload
+const normFile = (e) => {
+  if (Array.isArray(e)) {
+    return e;
+  }
+  return e && e.fileList;
+};
 
 const TenantTab = () => {
   const [tenants, setTenants] = useState([]);
-  const [users, setUsers] = useState([]); // State untuk menyimpan data user
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState(null);
+  const [fileList, setFileList] = useState([]);
   const [form] = Form.useForm();
 
-  // Fungsi untuk mengambil data dari server
   const fetchTenants = async () => {
     setLoading(true);
     try {
@@ -36,12 +51,10 @@ const TenantTab = () => {
     }
   };
 
-  // Fungsi untuk mengambil data user
   const fetchUsers = async () => {
     try {
       const res = await getUsers();
       if (res.status === 200) {
-        // Asumsi data user ada di res.data.datas
         setUsers(res.data.datas);
       }
     } catch (error) {
@@ -49,16 +62,15 @@ const TenantTab = () => {
     }
   };
 
-  // useEffect untuk memuat data saat komponen pertama kali dirender
   useEffect(() => {
     fetchTenants();
     fetchUsers();
   }, []);
 
-  // --- Handlers ---
   const handleAdd = () => {
     setEditingTenant(null);
     form.resetFields();
+    setFileList([]);
     setOpen(true);
   };
 
@@ -69,6 +81,19 @@ const TenantTab = () => {
       deskripsi_tenant: record.deskripsi_tenant,
       id_user: record.id_user
     });
+
+    if (record.gambar_tenant) {
+      setFileList([
+        {
+          uid: '-1',
+          name: record.gambar_tenant,
+          status: 'done',
+          url: `${API_URL}/static/${record.gambar_tenant}`,
+        },
+      ]);
+    } else {
+      setFileList([]);
+    }
     setOpen(true);
   };
 
@@ -77,7 +102,7 @@ const TenantTab = () => {
       const res = await deleteTenant(id_tenant);
       if (res.status === 200) {
         message.success("Tenant berhasil dihapus!");
-        fetchTenants(); // Muat ulang data
+        fetchTenants();
       } else {
         message.error(res.data.error || "Gagal menghapus tenant.");
       }
@@ -86,38 +111,60 @@ const TenantTab = () => {
     }
   };
 
+  const handleCancel = () => {
+    setOpen(false);
+    setFileList([]);
+  };
+
   const handleOk = () => {
     form.validateFields().then(async (values) => {
+      const formData = new FormData();
+      formData.append('nama_tenant', values.nama_tenant);
+      formData.append('deskripsi_tenant', values.deskripsi_tenant || '');
+      formData.append('id_user', values.id_user);
+
+      if (values.gambar_tenant && values.gambar_tenant.length > 0 && values.gambar_tenant[0].originFileObj) {
+        formData.append('gambar_tenant', values.gambar_tenant[0].originFileObj);
+      }
+
       try {
+        setLoading(true);
         let res;
         if (editingTenant) {
-          // Mode Update
-          res = await updateTenant(editingTenant.id_tenant, values);
+          res = await updateTenant(editingTenant.id_tenant, formData);
         } else {
-          // Mode Create
-          res = await createTenant(values);
+          res = await createTenant(formData);
         }
 
         if (res.status === 200 || res.status === 201) {
           message.success(`Tenant berhasil ${editingTenant ? 'diperbarui' : 'ditambahkan'}!`);
           setOpen(false);
-          fetchTenants(); // Muat ulang data
+          fetchTenants();
         } else {
           message.error(res.data.error || "Operasi gagal.");
         }
       } catch (error) {
         message.error("Terjadi kesalahan: " + error.message);
+      } finally {
+        setLoading(false);
       }
     });
   };
 
   const columns = [
-    {
-      title: "No",
-      key: "no",
-      render: (text, record, index) => index + 1
+    { title: "No", key: "no", render: (text, record, index) => index + 1, width: 70 },
+    { 
+      title: "Gambar", 
+      dataIndex: "gambar_tenant", 
+      key: "gambar_tenant",
+      render: (text) => 
+        text ? (
+          <Image width={80} src={`${API_URL}/static/${text}`} />
+        ) : (
+          <Text type="secondary">No Image</Text>
+        )
     },
-    { title: "Tenant", dataIndex: "nama_tenant", key: "nama_tenant" },
+    { title: "Tenant", dataIndex: "nama_tenant", key: "nama_tenant", sorter: (a, b) => a.nama_tenant.localeCompare(b.nama_tenant) },
     { title: "Owner", dataIndex: "nama_owner", key: "nama_owner" },
     { title: "Deskripsi", dataIndex: "deskripsi_tenant", key: "deskripsi_tenant" },
     {
@@ -125,18 +172,14 @@ const TenantTab = () => {
       key: "actions",
       render: (text, record) => (
         <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
-          </Button>
+          <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
           <Popconfirm
             title="Anda yakin ingin menghapus tenant ini?"
             onConfirm={() => handleDelete(record.id_tenant)}
             okText="Ya"
             cancelText="Tidak"
           >
-            <Button danger icon={<DeleteOutlined />}>
-              Delete
-            </Button>
+            <Button danger icon={<DeleteOutlined />}>Delete</Button>
           </Popconfirm>
         </Space>
       ),
@@ -151,43 +194,49 @@ const TenantTab = () => {
         </Button>
       </div>
 
-      <Table
-        columns={columns}
-        dataSource={tenants}
-        rowKey="id_tenant"
-        loading={loading}
-      />
+      <Table columns={columns} dataSource={tenants} rowKey="id_tenant" loading={loading} />
 
       <Modal
         title={editingTenant ? "Edit Tenant" : "Add Tenant"}
         open={open}
-        onCancel={() => setOpen(false)}
+        onCancel={handleCancel}
         onOk={handleOk}
+        confirmLoading={loading}
         okText={editingTenant ? "Update" : "Create"}
         cancelText="Cancel"
       >
         <Form layout="vertical" form={form}>
-          <Form.Item label="Tenant Name" name="nama_tenant" rules={[{ required: true }]}>
+          <Form.Item label="Tenant Name" name="nama_tenant" rules={[{ required: true, message: 'Nama tenant tidak boleh kosong' }]}>
             <Input />
           </Form.Item>
-          <Form.Item label="Owner" name="id_user" rules={[{ required: true }]}>
-            <Select
-              showSearch
-              placeholder="Pilih atau cari owner"
-              optionFilterProp="children"
-              filterOption={(input, option) =>
-                (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-            >
+          <Form.Item label="Owner" name="id_user" rules={[{ required: true, message: 'Owner harus dipilih' }]}>
+            <Select showSearch placeholder="Pilih atau cari owner" optionFilterProp="children" filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}>
               {users.map(user => (
-                <Option key={user.id_user} value={user.id_user}>
-                  {user.nama}
-                </Option>
+                <Option key={user.id_user} value={user.id_user}>{user.nama}</Option>
               ))}
             </Select>
           </Form.Item>
           <Form.Item label="Deskripsi" name="deskripsi_tenant">
             <Input.TextArea rows={4} />
+          </Form.Item>
+          <Form.Item
+            label="Gambar Tenant"
+            name="gambar_tenant"
+            valuePropName="fileList"
+            getValueFromEvent={normFile}
+          >
+            <Upload
+              listType="picture-card"
+              maxCount={1}
+              beforeUpload={() => false}
+              fileList={fileList}
+              onChange={({ fileList: newFileList }) => setFileList(newFileList)}
+            >
+              <div>
+                <PlusOutlined />
+                <div style={{ marginTop: 8 }}>Upload</div>
+              </div>
+            </Upload>
           </Form.Item>
         </Form>
       </Modal>

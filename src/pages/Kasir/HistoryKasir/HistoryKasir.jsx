@@ -14,8 +14,8 @@ import { getHistoryKasir } from "../../../services/service"; // ⬅️ import se
 const HistoryKasir = () => {
     const [openBalance] = useState(1895000);
     const [filterPayment, setFilterPayment] = useState("All");
-    const [openCashier, setOpenCashier] = useState(dayjs("2025-09-02 08:26:06"));
-    const [closeCashier, setCloseCashier] = useState(dayjs("2025-09-02 23:59:59"));
+    const [openCashier, setOpenCashier] = useState(dayjs().startOf('month'));
+    const [closeCashier, setCloseCashier] = useState(dayjs().endOf('month'));
     const [data, setData] = useState([]);
     const [searchTerm, setSearchTerm] = useState(""); // Perubahan: State untuk input pencarian
 

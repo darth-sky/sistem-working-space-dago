@@ -171,7 +171,9 @@ const SidebarKasir = ({ children }) => {
 
                     {/* Right Section */}
                     <div className="flex items-center space-x-3">
-                        <span className="text-sm font-semibold text-gray-800">KASIR</span>
+                        <span className="text-sm font-semibold text-gray-800">
+                            {userProfile?.detail?.nama || "Pengguna"}
+                        </span>
                         <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-300 flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5.121 17.804A9.969 9.969 0 0112 15c2.21 0 4.236.714 5.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />

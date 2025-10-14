@@ -86,6 +86,26 @@ const RoomDetail = () => {
         ? (isMeetingRoom ? virtualOfficeClient.benefit_tersisa.meeting_room : virtualOfficeClient.benefit_tersisa.working_space)
         : 0;
 
+    // --- (MOVED UP) HELPER VARIABLE: Check if promo conditions are met ---
+    let isPromoConditionsMet = false;
+    if (appliedPromo && appliedPromo.syarat) {
+        try {
+            const syarat = typeof appliedPromo.syarat === 'string' ? JSON.parse(appliedPromo.syarat) : appliedPromo.syarat;
+            if (syarat.min_durasi_jam !== undefined) {
+                if (duration > syarat.min_durasi_jam) {
+                    isPromoConditionsMet = true;
+                }
+            }
+            // Add other condition checks here in the future
+        } catch (e) {
+            console.error("Failed to parse promo conditions:", e);
+        }
+    } else if (appliedPromo) {
+        // If promo exists but has no special conditions, it's valid
+        isPromoConditionsMet = true;
+    }
+
+
     // --- EFFECTS (LOGIKA PENGAMBILAN DATA) ---
 
     // 1. Ambil data user
@@ -162,15 +182,16 @@ const RoomDetail = () => {
         fetchPromo();
     }, []);
 
-    // 5. Cek promo aktif
+    // 5. Cek promo aktif (Find potentially applicable promo)
     useEffect(() => {
         if (paymentMethod !== 'normal' || !promo.length || !selectedRange?.from || !selectedStartTime) {
             setAppliedPromo(null);
             return;
         }
-        const selectedDate = moment(selectedRange.from);
-        const startHour = selectedStartTime;
-        const activePromo = promo.find(p => {
+
+        const potentialPromo = promo.find(p => {
+            const selectedDate = moment(selectedRange.from);
+            const startHour = selectedStartTime;
             const withinDate = selectedDate.isBetween(moment(p.tanggal_mulai), moment(p.tanggal_selesai), "day", "[]");
             let withinTime = true;
             if (p.waktu_mulai && p.waktu_selesai) {
@@ -178,10 +199,12 @@ const RoomDetail = () => {
                 const [endH] = p.waktu_selesai.split(":").map(Number);
                 withinTime = startHour >= startH && startHour < endH;
             }
-            return withinDate && withinTime && p.status_aktif === "aktif";
+            return withinDate && withinTime;
         });
-        setAppliedPromo(activePromo || null);
-    }, [promo, selectedRange?.from, selectedStartTime, paymentMethod]);
+
+        setAppliedPromo(potentialPromo || null);
+
+    }, [promo, selectedRange, selectedStartTime, paymentMethod]);
 
     // 6. Ambil jam yang sudah dibooking
     useEffect(() => {
@@ -214,7 +237,7 @@ const RoomDetail = () => {
         if (duration > 0) {
             const days = countedDays > 0 ? countedDays : 1;
             if (paymentMethod === 'credit' && userMembership) {
-                setCreditCost(duration); // Biaya kredit adalah per hari
+                setCreditCost(duration);
                 setTotalPrice(0);
                 setAppliedPromo(null);
             } else if (paymentMethod === 'virtual_office') {
@@ -224,9 +247,11 @@ const RoomDetail = () => {
             } else {
                 const pricePerDay = room.paket_harga.find(p => p.durasi_jam === duration)?.harga_paket || 0;
                 let total = pricePerDay * days;
-                if (appliedPromo) {
+
+                if (appliedPromo && isPromoConditionsMet) {
                     total = Math.max(total - (Number(appliedPromo.nilai_diskon) || 0), 0);
                 }
+
                 setTotalPrice(total);
                 setCreditCost(0);
             }
@@ -234,7 +259,8 @@ const RoomDetail = () => {
             setTotalPrice(0);
             setCreditCost(0);
         }
-    }, [selectedRange, duration, room.paket_harga, appliedPromo, paymentMethod, userMembership, includeSaturday, includeSunday, countedDays]);
+    }, [selectedRange, duration, room.paket_harga, appliedPromo, paymentMethod, userMembership, countedDays, isPromoConditionsMet]);
+
 
     // --- HANDLER & GUARDS ---
 
@@ -279,7 +305,6 @@ const RoomDetail = () => {
 
     const imageUrl = `${baseUrl}/static/${room.gambar_ruangan}`;
 
-    // --- PERBAIKAN UTAMA: LOGIKA VALIDASI TOMBOL ---
     const isBookingDataValid = duration > 0 && selectedRange?.from && !isLoadingTimes;
     let isPaymentValid = false;
     if (isBookingDataValid) {
@@ -401,15 +426,38 @@ const RoomDetail = () => {
                                 </div>
 
                                 {/* Pemilih Durasi */}
+
                                 {selectedStartTime && (
                                     <div>
                                         <h3 className="font-semibold text-gray-700 mb-2"><Clock size={16} /> Pilih Paket Durasi</h3>
                                         <div className="grid grid-cols-3 gap-2">
                                             {[...room.paket_harga].sort((a, b) => a.durasi_jam - b.durasi_jam).map((paket, index) => {
                                                 const endTime = selectedStartTime + paket.durasi_jam;
-                                                const isInvalid = endTime > 22;
+
+                                                // --- PERBAIKAN LOGIKA ADA DI SINI ---
+                                                // Cek apakah ada jam yang sudah dibooking di dalam rentang durasi yang dipilih
+                                                const isOverlapping = bookedHours.some(
+                                                    bookedHour => bookedHour >= selectedStartTime && bookedHour < endTime
+                                                );
+
+                                                // Tombol durasi menjadi tidak valid jika:
+                                                // 1. Waktu selesai melebihi jam tutup (22:00)
+                                                // 2. Ada tumpang tindih dengan jadwal yang sudah ada
+                                                const isInvalid = endTime > 22 || isOverlapping;
+                                                // --- AKHIR PERBAIKAN LOGIKA ---
+
                                                 return (
-                                                    <button key={index} onClick={() => handleDurationSelect(paket)} disabled={isInvalid} className={`p-2 text-xs rounded-lg font-medium transition flex flex-col items-center justify-center h-16 ${isInvalid ? "bg-gray-200 text-gray-400 cursor-not-allowed" : duration === paket.durasi_jam ? "bg-blue-600 text-white" : "bg-gray-100 hover:bg-blue-100"}`}>
+                                                    <button
+                                                        key={index}
+                                                        onClick={() => handleDurationSelect(paket)}
+                                                        disabled={isInvalid}
+                                                        className={`p-2 text-xs rounded-lg font-medium transition flex flex-col items-center justify-center h-16 ${isInvalid
+                                                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                                                : duration === paket.durasi_jam
+                                                                    ? "bg-blue-600 text-white"
+                                                                    : "bg-gray-100 hover:bg-blue-100"
+                                                            }`}
+                                                    >
                                                         <span className="font-bold text-base">{paket.durasi_jam} Jam</span>
                                                         <span className="text-xs font-semibold opacity-90">{formatRupiah(paket.harga_paket)}</span>
                                                         <span className="text-xs opacity-70">s.d {String(endTime).padStart(2, '0')}:00</span>
@@ -426,7 +474,21 @@ const RoomDetail = () => {
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center"><span className="text-gray-600">Durasi Harian</span><strong>{duration || 0} Jam</strong></div>
                                     {selectedRange?.from && <div className="flex justify-between items-center"><span className="text-gray-600">Total Hari Dikenakan Biaya</span><strong>{countedDays} Hari</strong></div>}
-                                    {paymentMethod === 'normal' && appliedPromo && (<div className="flex justify-between items-center text-green-700"><span><Tag color="green">Promo ({appliedPromo.kode_promo})</Tag></span><strong>-{formatRupiah(Number(appliedPromo.nilai_diskon))}</strong></div>)}
+
+                                    {/* --- (MODIFIED) PROMO DISPLAY LOGIC --- */}
+                                    {paymentMethod === 'normal' && appliedPromo && (
+                                        <>
+                                            <div className={`flex justify-between items-center ${isPromoConditionsMet ? 'text-green-700' : 'text-gray-500'}`}>
+                                                <span><Tag color={isPromoConditionsMet ? "green" : "default"}>Promo ({appliedPromo.kode_promo})</Tag></span>
+                                                <strong>-{formatRupiah(Number(appliedPromo.nilai_diskon))}</strong>
+                                            </div>
+                                            {!isPromoConditionsMet && duration > 0 && appliedPromo.syarat && (
+                                                <div className="text-right text-xs text-orange-600 mt-1">
+                                                    Syarat: Booking di atas {appliedPromo.syarat.min_durasi_jam} jam
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
 
                                     {paymentMethod === 'virtual_office' ? (
                                         <div className="flex justify-between items-center"><span className="text-gray-600">Total Biaya</span><strong className="text-green-600 text-xl">Benefit VO (Gratis)</strong></div>

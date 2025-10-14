@@ -102,13 +102,13 @@ const InformasiRuangan = () => {
   const [width] = useWindowSize();
   const isMobile = width < 768;
 
-  useEffect(() => {
-    if (userProfile?.roles === "admin") {
-      navigate("/dashboardadmin");
-    } else if (userProfile?.roles === "kasir") {
-      navigate("/mengelola-orderan_fb");
-    }
-  }, [userProfile, navigate]);
+  // useEffect(() => {
+  //   if (userProfile?.roles === "admin") {
+  //     navigate("/dashboardadmin");
+  //   } else if (userProfile?.roles === "kasir") {
+  //     navigate("/mengelola-orderan_fb");
+  //   }
+  // }, [userProfile, navigate]);
 
   const fetchRuangan = async () => {
     try {

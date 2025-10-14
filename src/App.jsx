@@ -57,6 +57,7 @@ import { useNavigate } from "react-router-dom";
 import Forbidden from "./pages/Forbidden/Forbidden";
 import OrderKasir from "./pages/Kasir/OrderKasir/OrderKasir";
 import BuatOrderKasir from "./pages/Kasir/BuatOrderKasir/BuatOrderKasir";
+import CostBulanan from "./pages/Admin/CostBulanan/CostBulanan";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -203,6 +204,7 @@ const App = () => {
           }
         />
 
+
         <Route
           path="/eventspacesadmin"
           element={
@@ -236,13 +238,26 @@ const App = () => {
           }
         />
 
+        <Route
+          path="costbulananadmin"
+          element={
+            <PrivateRoute>
+              <SidebarAdmin>
+                <CostBulanan />
+              </SidebarAdmin>
+            </PrivateRoute>
+          }
+        />
+
         {/* 1. Route dengan :tabKey (lebih spesifik) */}
         <Route
           path="/masterdataadmin/:tabKey"
           element={
-            <SidebarAdmin>
-              <MasterData />
-            </SidebarAdmin>
+            <PrivateRoute>
+              <SidebarAdmin>
+                <MasterData />
+              </SidebarAdmin>
+            </PrivateRoute>
           }
         />
 
