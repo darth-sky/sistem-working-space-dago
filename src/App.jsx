@@ -58,6 +58,8 @@ import Forbidden from "./pages/Forbidden/Forbidden";
 import OrderKasir from "./pages/Kasir/OrderKasir/OrderKasir";
 import BuatOrderKasir from "./pages/Kasir/BuatOrderKasir/BuatOrderKasir";
 import CostBulanan from "./pages/Admin/CostBulanan/CostBulanan";
+import VirtualOfficeApproval from "./pages/Admin/VirtualOfficeApproval/VirtualOfficeApproval";
+import HutangAdmin from "./pages/Admin/HutangAdmin/HutangAdmin";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -194,11 +196,11 @@ const App = () => {
         />
 
         <Route
-          path="/spacerentaladmin"
+          path="/virtualofficeadmin"
           element={
             <PrivateRoute>
               <SidebarAdmin>
-                <SpaceRental />
+                <VirtualOfficeApproval />
               </SidebarAdmin>
             </PrivateRoute>
           }
@@ -244,6 +246,16 @@ const App = () => {
             <PrivateRoute>
               <SidebarAdmin>
                 <CostBulanan />
+              </SidebarAdmin>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="hutangadmin"
+          element={
+            <PrivateRoute>
+              <SidebarAdmin>
+                <HutangAdmin />
               </SidebarAdmin>
             </PrivateRoute>
           }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -452,15 +452,15 @@ const RoomDetail = () => {
                                                         onClick={() => handleDurationSelect(paket)}
                                                         disabled={isInvalid}
                                                         className={`p-2 text-xs rounded-lg font-medium transition flex flex-col items-center justify-center h-16 ${isInvalid
-                                                                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                                                                : duration === paket.durasi_jam
-                                                                    ? "bg-blue-600 text-white"
-                                                                    : "bg-gray-100 hover:bg-blue-100"
+                                                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                                            : duration === paket.durasi_jam
+                                                                ? "bg-blue-600 text-white"
+                                                                : "bg-gray-100 hover:bg-blue-100"
                                                             }`}
                                                     >
                                                         <span className="font-bold text-base">{paket.durasi_jam} Jam</span>
                                                         <span className="text-xs font-semibold opacity-90">{formatRupiah(paket.harga_paket)}</span>
-                                                        <span className="text-xs opacity-70">s.d {String(endTime).padStart(2, '0')}:00</span>
+                                                        
                                                     </button>
                                                 )
                                             })}
@@ -472,7 +472,17 @@ const RoomDetail = () => {
 
                                 {/* Ringkasan Harga */}
                                 <div className="space-y-3">
-                                    <div className="flex justify-between items-center"><span className="text-gray-600">Durasi Harian</span><strong>{duration || 0} Jam</strong></div>
+                                    {/* PERBAIKAN DI BARIS INI */}
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600">Durasi Harian</span>
+                                        <strong>
+                                            {selectedStartTime !== null && selectedEndTime !== null
+                                                ? `${String(selectedStartTime).padStart(2, '0')}:00 - ${String(selectedEndTime).padStart(2, '0')}:00`
+                                                : `${duration || 0} Jam`
+                                            }
+                                        </strong>
+                                    </div>
+
                                     {selectedRange?.from && <div className="flex justify-between items-center"><span className="text-gray-600">Total Hari Dikenakan Biaya</span><strong>{countedDays} Hari</strong></div>}
 
                                     {/* --- (MODIFIED) PROMO DISPLAY LOGIC --- */}

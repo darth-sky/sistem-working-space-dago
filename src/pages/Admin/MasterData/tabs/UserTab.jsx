@@ -19,6 +19,9 @@ const UserTab = () => {
     const [searchText, setSearchText] = useState("");
     const [form] = Form.useForm();
 
+    // PERBAIKAN 1: Inisialisasi state pageSize
+    const [pageSize, setPageSize] = useState(5);
+
     // Ambil data dari database
     const fetchUsers = async () => {
         setLoading(true);
@@ -120,7 +123,7 @@ const UserTab = () => {
             setLoading(false);
         }
     };
-    
+
     const handleCancel = () => {
         setOpen(false);
         setEditingUser(null);
@@ -142,7 +145,24 @@ const UserTab = () => {
             </Row>
 
             <Card style={{ borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <Table columns={columns} dataSource={filteredData} pagination={{ pageSize: 5, showSizeChanger: true, showQuickJumper: true, showTotal: (total, range) => `Menampilkan ${range[0]}-${range[1]} dari ${total} pengguna` }} loading={loading} scroll={{ x: 800 }} />
+                <Table
+                    columns={columns}
+                    dataSource={filteredData}
+                    pagination={{
+                        // PERBAIKAN 2: Gunakan state 'pageSize' di sini
+                        pageSize: pageSize,
+                        showSizeChanger: true,
+                        showQuickJumper: true,
+                        pageSizeOptions: ["5", "10", "50", "100"],
+                        showTotal: (total, range) => `Menampilkan ${range[0]}-${range[1]} dari ${total} pengguna`,
+                        // onChange tidak lagi dibutuhkan di sini karena onShowSizeChange yang menangani
+                        onShowSizeChange: (current, size) => {
+                            setPageSize(size);
+                        },
+                    }}
+                    loading={loading}
+                    scroll={{ x: 800 }}
+                />
             </Card>
 
             <Modal title={<Space>{editingUser ? <EditOutlined /> : <PlusOutlined />}{editingUser ? "Edit User" : "Add New User"}</Space>} open={open} onCancel={handleCancel} onOk={handleOk} confirmLoading={loading}>

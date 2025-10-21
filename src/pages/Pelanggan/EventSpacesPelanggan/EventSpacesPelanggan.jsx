@@ -70,7 +70,6 @@ const EventSpacesPelanggan = () => {
           justifyContent: "center",
           alignItems: "center",
           minHeight: "100vh",
-          background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
         }}
       >
         <Spin size="large" />

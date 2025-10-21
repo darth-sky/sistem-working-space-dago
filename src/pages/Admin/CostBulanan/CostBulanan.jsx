@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ConfigProvider,
   Table,
@@ -35,6 +35,7 @@ import {
 import dayjs from "dayjs";
 import "dayjs/locale/id";
 import locale from "antd/locale/id_ID";
+import { getExpenses, createExpense, updateExpense, deleteExpense } from "../../../services/service";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -59,47 +60,54 @@ const formatRupiah = (amount) =>
     minimumFractionDigits: 0,
   }).format(amount);
 
-// Dummy data awal
-const initialExpenses = [
-  { id: 1, tanggal: "2025-10-05", kategori: "wifi", deskripsi: "Pembayaran Internet Biznet bulan Oktober", jumlah: 350000 },
-  { id: 2, tanggal: "2025-10-01", kategori: "gaji", deskripsi: "Gaji FO & OB bulan Oktober", jumlah: 5000000 },
-  { id: 3, tanggal: "2025-10-10", kategori: "listrik", deskripsi: "Tagihan listrik", jumlah: 1000000 },
-  { id: 4, tanggal: "2025-10-15", kategori: "office", deskripsi: "Pembelian alat tulis dan supplies", jumlah: 200000 },
-  { id: 5, tanggal: "2025-10-20", kategori: "kebersihan", deskripsi: "Bahan kebersihan dan sanitasi", jumlah: 150000 },
-  { id: 6, tanggal: "2025-09-05", kategori: "wifi", deskripsi: "Pembayaran Internet Biznet bulan September", jumlah: 350000 },
-  { id: 7, tanggal: "2025-09-01", kategori: "gaji", deskripsi: "Gaji FO & OB bulan September", jumlah: 5000000 },
-  { id: 8, tanggal: "2025-10-25", kategori: "maintenance", deskripsi: "Perbaikan AC ruangan", jumlah: 750000 },
-  { id: 9, tanggal: "2025-10-10", kategori: "air", deskripsi: "Tagihan air", jumlah: 1000000 },
-];
+
 
 const CostBulanan = () => {
   dayjs.locale("id");
-  
-  const [expenses, setExpenses] = useState(initialExpenses);
+
+  // <-- MODIFIKASI: State 'expenses' diawali dengan array kosong
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true); // <-- BARU: State untuk loading indicator
   const [filteredExpenses, setFilteredExpenses] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [form] = Form.useForm();
   const [searchText, setSearchText] = useState("");
-  
-  // Filter state
+
   const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
 
+  // <-- BARU: Fungsi untuk mengambil data dari API, dibungkus dengan useCallback
+  const fetchExpenses = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getExpenses(selectedMonth, selectedYear);
+      setExpenses(data);
+    } catch (error) {
+      message.error(error.message || "Gagal memuat data dari server.");
+      setExpenses([]); // Kosongkan data jika terjadi error
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMonth, selectedYear]);
+
+  // <-- MODIFIKASI: useEffect ini sekarang memanggil API saat filter berubah
+  useEffect(() => {
+    fetchExpenses();
+  }, [fetchExpenses]);
+
+
   // Filter expenses
+  // <-- MODIFIKASI: useEffect ini sekarang hanya untuk filter pencarian teks (client-side)
   useEffect(() => {
     const filtered = expenses.filter((expense) => {
-      const expenseDate = dayjs(expense.tanggal);
-      const matchMonth = expenseDate.month() + 1 === selectedMonth;
-      const matchYear = expenseDate.year() === selectedYear;
-      const matchSearch = 
+      const matchSearch =
         expense.deskripsi.toLowerCase().includes(searchText.toLowerCase()) ||
         expense.kategori.toLowerCase().includes(searchText.toLowerCase());
-      
-      return matchMonth && matchYear && matchSearch;
+      return matchSearch;
     });
     setFilteredExpenses(filtered);
-  }, [expenses, selectedMonth, selectedYear, searchText]);
+  }, [expenses, searchText]);
 
   const totalExpense = filteredExpenses.reduce((sum, expense) => sum + expense.jumlah, 0);
 
@@ -129,31 +137,51 @@ const CostBulanan = () => {
     form.resetFields();
   };
 
-  const handleSubmit = (values) => {
-    const newExpense = {
-      id: editingExpense ? editingExpense.id : Date.now(),
+  const handleSubmit = async (values) => {
+    const expenseData = {
       tanggal: values.tanggal.format("YYYY-MM-DD"),
       kategori: values.kategori,
       deskripsi: values.deskripsi,
       jumlah: parseInt(values.jumlah.toString().replace(/[^\d]/g, "")),
     };
 
-    if (editingExpense) {
-      setExpenses(expenses.map((exp) => 
-        exp.id === editingExpense.id ? newExpense : exp
-      ));
-      message.success("Pengeluaran berhasil diperbarui!");
-    } else {
-      setExpenses([...expenses, newExpense]);
-      message.success("Pengeluaran berhasil ditambahkan!");
+    try {
+      if (editingExpense) {
+        // Proses UPDATE
+        const response = await updateExpense(editingExpense.id, expenseData);
+        if (response.status === 200) {
+          message.success("Pengeluaran berhasil diperbarui!");
+        } else {
+          throw new Error(response.data.error || "Gagal memperbarui pengeluaran.");
+        }
+      } else {
+        // Proses CREATE
+        const response = await createExpense(expenseData);
+        if (response.status === 201) {
+          message.success("Pengeluaran berhasil ditambahkan!");
+        } else {
+          throw new Error(response.data.error || "Gagal menambahkan pengeluaran.");
+        }
+      }
+      handleCancel();
+      fetchExpenses(); // <-- PENTING: Muat ulang data dari server setelah berhasil
+    } catch (error) {
+      message.error(error.message);
     }
-
-    handleCancel();
   };
 
-  const handleDelete = (id) => {
-    setExpenses(expenses.filter((exp) => exp.id !== id));
-    message.success("Pengeluaran berhasil dihapus!");
+  const handleDelete = async (id) => {
+    try {
+      const response = await deleteExpense(id);
+      if (response.status === 200) {
+        message.success("Pengeluaran berhasil dihapus!");
+        fetchExpenses(); // <-- PENTING: Muat ulang data dari server setelah berhasil
+      } else {
+        throw new Error(response.data.error || "Gagal menghapus pengeluaran.");
+      }
+    } catch (error) {
+      message.error(error.message);
+    }
   };
 
   const handleExport = () => {
@@ -162,7 +190,7 @@ const CostBulanan = () => {
       const category = CATEGORIES.find((c) => c.value === exp.kategori)?.label || exp.kategori;
       return `${idx + 1},${exp.tanggal},${category},${exp.deskripsi},${exp.jumlah}`;
     }).join("\n");
-    
+
     const blob = new Blob([header + csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -390,6 +418,7 @@ const CostBulanan = () => {
         {/* Table */}
         <Card className="shadow-md">
           <Table
+            loading={loading}
             columns={columns}
             dataSource={filteredExpenses}
             rowKey="id"

@@ -14,6 +14,12 @@ import PaketMembershipTab from "./tabs/PaketMembershipTab";
 import VirtualOfficePackageTab from "./tabs/VirtualOfficePackageTab";
 import PromoTab from "./tabs/PromoTab";
 import EventSpacesTab from "./tabs/EventSpacesTab";
+import { AiOutlineProduct } from "react-icons/ai";
+import { MdOutlineProductionQuantityLimits, MdChair, MdCardMembership, MdDiscount, MdEvent } from "react-icons/md";
+import { GiPostOffice } from "react-icons/gi";
+
+
+
 
 // Konfigurasi tab
 export const tabsConfig = [
@@ -34,57 +40,57 @@ export const tabsConfig = [
     {
         key: "productkategori",
         path: "productkategori",
-        label: "Produk Kategori",
-        icon: ShopOutlined,
+        label: "Kategori Produk",
+        icon: AiOutlineProduct,
         component: <ProductKategoriTab />,
     },
     {
         key: "product",
         path: "product",
         label: "Produk",
-        icon: ShopOutlined,
+        icon: MdOutlineProductionQuantityLimits,
         component: <ProductTab />,
     },
     {
         key: "ruangankategori",
         path: "ruangankategori",
         label: "Kategori Ruangan",
-        icon: ShopOutlined,
+        icon: AiOutlineProduct,
         component: <RuanganKategoriTab />,
     },
     {
         key: "ruangan",
         path: "ruangan",
         label: "Ruangan",
-        icon: ShopOutlined,
+        icon: MdChair,
         component: <RuanganTab />,
     },
     {
         key: "paketmembership",
         path: "paketmembership",
         label: "Paket Membership",
-        icon: ShopOutlined,
+        icon: MdCardMembership,
         component: <PaketMembershipTab />,
     },
     {
         key: "paketvirtualoffice",
         path: "paketvirtualoffice",
         label: "Paket Virtual Office",
-        icon: ShopOutlined,
+        icon: GiPostOffice,
         component: <VirtualOfficePackageTab />,
     },
     {
         key: "promo",
         path: "promo",
         label: "Promo",
-        icon: ShopOutlined,
+        icon: MdDiscount,
         component: <PromoTab />,
     },
     {
         key: "eventspaces",
         path: "eventspaces",
         label: "Event Spaces",
-        icon: ShopOutlined,
+        icon: MdEvent,
         component: <EventSpacesTab />,
     },
 ];

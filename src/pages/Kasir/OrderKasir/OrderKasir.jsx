@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
     Button,
     Input,
@@ -11,8 +11,9 @@ import {
     message,
     Dropdown,
     Menu,
-    Spin, // --- PERUBAHAN --- Ditambahkan untuk loading indicator
-    Divider
+    Spin,
+    Divider,
+    ConfigProvider,
 } from "antd";
 import {
     SearchOutlined,
@@ -24,17 +25,16 @@ import {
     DollarOutlined,
     QrcodeOutlined,
     CheckCircleOutlined,
+    PercentageOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useLocation } from "react-router-dom";
-import { getPosInitData, createOrderKasir, getRoomsToday, createRoomBookingKasir } from "../../../services/service"; // Pastikan path ini benar
+import { getPosInitData, createOrderKasir, getRoomsToday, createRoomBookingKasir } from "../../../services/service";
 import { MdOutlineShoppingCart } from "react-icons/md";
 import { FaRegIdCard } from "react-icons/fa";
 
 const { Option } = Select;
 
-
-// --- FUNGSI HELPER --- (Tidak ada perubahan)
 const formatRupiah = (amount) =>
     new Intl.NumberFormat("id-ID", {
         style: "currency",
@@ -46,12 +46,10 @@ const generateOrderNumber = () => {
     return `T${Math.floor(100000 + Math.random() * 900000)}`;
 };
 
-
 const OrderKasir = () => {
     const location = useLocation();
     const initialState = location.state || {};
 
-    // --- STATE MANAGEMENT --- (Tidak ada perubahan signifikan, sudah siap)
     const [searchProductQuery, setSearchProductQuery] = useState("");
     const [selectedMerchant, setSelectedMerchant] = useState("all_merchants");
     const [selectedProductType, setSelectedProductType] = useState("all_types");
@@ -62,7 +60,6 @@ const OrderKasir = () => {
     const [cashierName, setCashierName] = useState("Rossa");
     const [currentDate, setCurrentDate] = useState(dayjs());
     const [selectedItems, setSelectedItems] = useState([]);
-    const [discountPercentage, setDiscountPercentage] = useState(0);
     const [taxPercentage, setTaxPercentage] = useState(0);
     const [isNewOrderModalVisible, setIsNewOrderModalVisible] = useState(false);
     const [newOrderForm] = Form.useForm();
@@ -79,9 +76,10 @@ const OrderKasir = () => {
     const [productTypeCategories, setProductTypeCategories] = useState([]);
     const [orderTypes, setOrderTypes] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    // --- PERUBAHAN --- State baru untuk mode dan data ruangan
-    const [posMode, setPosMode] = useState('fnb'); // 'fnb' atau 'ruangan'
+    const [discountPercentage, setDiscountPercentage] = useState(0);
+    const [isDiscountModalVisible, setIsDiscountModalVisible] = useState(false);
+    const [discountForm] = Form.useForm();
+    const [posMode, setPosMode] = useState('fnb');
     const [rooms, setRooms] = useState([]);
     const [isLoadingRooms, setIsLoadingRooms] = useState(false);
     const [selectedRoomForBooking, setSelectedRoomForBooking] = useState(null);
@@ -90,7 +88,6 @@ const OrderKasir = () => {
     const [isBookingConfirmModalVisible, setIsBookingConfirmModalVisible] = useState(false);
     const [bookingForm] = Form.useForm();
 
-    // --- DATA FETCHING & INITIALIZATION --- (Tidak ada perubahan, sudah benar)
     useEffect(() => {
         if (initialState.customerName || initialState.orderType) {
             newOrderForm.setFieldsValue({
@@ -120,7 +117,6 @@ const OrderKasir = () => {
         loadData();
     }, []);
 
-    // --- PERUBAHAN --- useEffect baru untuk mengambil data ruangan
     useEffect(() => {
         const loadRoomData = async () => {
             try {
@@ -138,8 +134,32 @@ const OrderKasir = () => {
         }
     }, [posMode]);
 
+    // Filter kategori produk berdasarkan merchant yang dipilih
+    const availableProductTypes = useMemo(() => {
+        if (selectedMerchant === "all_merchants") {
+            return productTypeCategories;
+        }
+        
+        const merchantProducts = products.filter(p => p.merchantId === selectedMerchant);
+        const merchantCategories = [...new Set(merchantProducts.map(p => p.category))];
+        
+        return productTypeCategories.filter(cat => 
+            cat.id === "all_types" || merchantCategories.includes(cat.id)
+        );
+    }, [selectedMerchant, products, productTypeCategories]);
 
-    // --- LOGIC FOR PRODUCTS --- (Tidak ada perubahan)
+    // Reset tipe produk jika tidak tersedia di merchant baru
+    useEffect(() => {
+        if (selectedMerchant !== "all_merchants") {
+            const isCurrentTypeAvailable = availableProductTypes.some(
+                cat => cat.id === selectedProductType
+            );
+            if (!isCurrentTypeAvailable) {
+                setSelectedProductType("all_types");
+            }
+        }
+    }, [selectedMerchant, availableProductTypes, selectedProductType]);
+
     const filteredProducts = products.filter((product) => {
         const matchesMerchant =
             selectedMerchant === "all_merchants" || product.merchantId === selectedMerchant;
@@ -171,17 +191,33 @@ const OrderKasir = () => {
         setSelectedItems(selectedItems.filter((item) => !(item.id === productId && item.note === itemNote)));
     };
 
-    // --- CALCULATION LOGIC --- (Tidak ada perubahan)
-    const subtotal = selectedItems.reduce(
-        (sum, item) => sum + item.price * item.qty,
-        0
-    );
+    const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.qty, 0);
     const totalTax = subtotal * taxPercentage;
     const totalDiscount = subtotal * (discountPercentage / 100);
     const totalAmount = subtotal - totalDiscount + totalTax;
     const changeAmount = cashInput > totalAmount ? cashInput - totalAmount : 0;
 
-    // --- MODAL HANDLERS --- (Tidak ada perubahan)
+    const showDiscountModal = () => {
+        discountForm.setFieldsValue({ discount: discountPercentage });
+        setIsDiscountModalVisible(true);
+    };
+
+    const handleDiscountSubmit = async () => {
+        try {
+            const values = await discountForm.validateFields();
+            const discountValue = parseFloat(values.discount) || 0;
+            if (discountValue < 0 || discountValue > 100) {
+                message.error("Diskon harus antara 0 dan 100.");
+                return;
+            }
+            setDiscountPercentage(discountValue);
+            setIsDiscountModalVisible(false);
+            message.success(`Diskon ${discountValue}% berhasil diterapkan.`);
+        } catch (error) {
+            console.error("Validation failed:", error);
+        }
+    };
+
     const showNewOrderModal = () => {
         setIsNewOrderModalVisible(true);
     };
@@ -246,7 +282,6 @@ const OrderKasir = () => {
         addNoteForm.resetFields();
     };
 
-    // --- PAYMENT FLOW HANDLERS --- (Tidak ada perubahan)
     const handleProcessPayment = () => {
         if (selectedItems.length === 0) {
             message.warning("Keranjang masih kosong.");
@@ -278,8 +313,6 @@ const OrderKasir = () => {
         setIsStrukModalVisible(true);
     };
 
-    // --- PERUBAHAN ---
-    // Memastikan fungsi ini memanggil service 'createOrderKasir'
     const handleStrukConfirmPayment = async () => {
         const orderData = {
             customerName: customerName,
@@ -296,22 +329,17 @@ const OrderKasir = () => {
         };
 
         try {
-            // Memanggil service yang benar
             const result = await createOrderKasir(orderData);
-
             message.success(`Order #${result.id_transaksi} berhasil disimpan!`);
-
-            // Reset state setelah berhasil
             setIsStrukModalVisible(false);
             setPaymentSuccess(false);
             setSelectedItems([]);
             setDiscountPercentage(0);
             setCashInput(0);
-            setCustomerName("Guest"); // Reset ke default
+            setCustomerName("Guest");
             setRoom(null);
             setCurrentOrderNumber(generateOrderNumber());
             setSelectedPaymentMethod(null);
-
         } catch (error) {
             message.error(`Gagal menyimpan order: ${error.message}`);
         }
@@ -323,7 +351,6 @@ const OrderKasir = () => {
         message.info("Pembayaran dibatalkan.");
     };
 
-    // --- DROPDOWN & QUICK AMOUNTS --- (Tidak ada perubahan)
     const orderDropdownMenu = (
         <Menu>
             <Menu.Item key="1" onClick={showNewOrderModal}>Ganti/Buat Order Baru</Menu.Item>
@@ -337,13 +364,11 @@ const OrderKasir = () => {
         </Menu>
     );
 
-    const paymentQuickAmounts = [
-        5000, 10000, 20000, 50000, 100000
-    ].filter(amount => amount >= totalAmount || totalAmount === 0);
+    const paymentQuickAmounts = [5000, 10000, 20000, 50000, 100000].filter(amount => amount >= totalAmount || totalAmount === 0);
 
     const handleRoomCardClick = (room) => {
         setSelectedRoomForBooking(room);
-        setSelectedDuration(null); // Reset pilihan sebelumnya
+        setSelectedDuration(null);
         setSelectedStartTime(null);
         bookingForm.setFieldsValue({
             customerName: "Guest",
@@ -367,12 +392,9 @@ const OrderKasir = () => {
             const result = await createRoomBookingKasir(bookingData);
             message.success(`Booking untuk ruangan ${selectedRoomForBooking.nama_ruangan} berhasil dibuat (ID Transaksi: ${result.id_transaksi})!`);
 
-            // Refresh data ruangan
             const updatedRooms = await getRoomsToday();
             setRooms(updatedRooms || []);
-
             setIsBookingConfirmModalVisible(false);
-
         } catch (errorInfo) {
             if (errorInfo.message) {
                 message.error(`Gagal membuat booking: ${errorInfo.message}`);
@@ -383,34 +405,34 @@ const OrderKasir = () => {
         }
     };
 
-
-    // --- JSX / RENDER ---
-    // --- JSX / RENDER ---
     return (
         <div className="flex bg-gray-50 text-gray-800 font-sans">
-            {/* Main Content Area */}
-            <div className=" flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0">
-                {/* Left Panel - Product/Room List & Categories */}
-                {/* <div className="lg:col-span-2 h-screen bg-white flex flex-col p-6 border-r border-gray-100 overflow-y-auto"> */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0">
                 <div className="lg:col-span-2 h-screen overflow-y-scroll p-6 bg-white border-r border-gray-100">
-                    {/* Header */}
                     <div className="flex justify-between items-center mb-6">
                         <Radio.Group value={posMode} onChange={(e) => setPosMode(e.target.value)}>
-                            <Radio.Button value="fnb"><MdOutlineShoppingCart /> F&B</Radio.Button>
-                            <Radio.Button value="ruangan"><FaRegIdCard /> Ruangan</Radio.Button>
+                            <Radio.Button value="fnb">
+                                <div className="flex items-center justify-center gap-2">
+                                    <MdOutlineShoppingCart />
+                                    <span>F&B</span>
+                                </div>
+                            </Radio.Button>
+                            <Radio.Button value="ruangan">
+                                <div className="flex items-center justify-center gap-2">
+                                    <FaRegIdCard />
+                                    <span>Ruangan</span>
+                                </div>
+                            </Radio.Button>
                         </Radio.Group>
                         <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" />
                         <div className="flex items-center space-x-2 text-gray-600"><UserOutlined /><span>{cashierName}</span></div>
                     </div>
 
-                    {/* Tampilan Kondisional berdasarkan Mode */}
                     {posMode === 'fnb' ? (
                         <>
-                            {/* Search Bar F&B */}
                             <div className="mb-6">
                                 <Input placeholder="Cari produk F&B..." prefix={<SearchOutlined />} value={searchProductQuery} onChange={(e) => setSearchProductQuery(e.target.value)} />
                             </div>
-                            {/* Filter F&B */}
                             <div className="mb-4">
                                 <h3 className="text-sm text-gray-500 mb-2">Filter Tenant</h3>
                                 <div className="flex flex-wrap gap-2">
@@ -418,13 +440,15 @@ const OrderKasir = () => {
                                 </div>
                             </div>
                             <div className="mb-6">
-                                <h3 className="text-sm text-gray-500 mb-2">Filter Tipe Produk</h3>
+                                <h3 className="text-sm text-gray-500 mb-2">
+                                    Filter Tipe Produk
+
+                                </h3>
                                 <div className="flex flex-wrap gap-2">
-                                    {productTypeCategories.map((category) => <Button key={category.id} type={selectedProductType === category.id ? "primary" : "default"} size="small" shape="round" onClick={() => setSelectedProductType(category.id)}>{category.name}</Button>)}
+                                    {availableProductTypes.map((category) => <Button key={category.id} type={selectedProductType === category.id ? "primary" : "default"} size="small" shape="round" onClick={() => setSelectedProductType(category.id)}>{category.name}</Button>)}
                                 </div>
                             </div>
 
-                            {/* Product List */}
                             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                                 {isLoading ? <div className="flex justify-center items-center h-full"><Spin size="large" /></div> : (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -447,7 +471,6 @@ const OrderKasir = () => {
                             </div>
                         </>
                     ) : (
-                        // --- Tampilan untuk Mode Ruangan ---
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                             <h2 className="text-xl font-bold text-gray-800 mb-4">Pilih Ruangan untuk Booking Hari Ini</h2>
                             {isLoadingRooms ? <div className="flex justify-center items-center h-full"><Spin size="large" /></div> : (
@@ -465,8 +488,7 @@ const OrderKasir = () => {
                     )}
                 </div>
 
-                {/* Right Panel - Order Cart & Payment (HANYA UNTUK F&B) */}
-                <div className={`bg-gray-50 flex flex-col p-6 transition-opacity  duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
+                <div className={`bg-gray-50 flex flex-col p-6 transition-opacity duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800">Order F&B</h2>
                         <Dropdown overlay={orderDropdownMenu} trigger={["click"]}>
@@ -482,7 +504,7 @@ const OrderKasir = () => {
                         <span className="text-gray-500 text-sm">Order ({currentOrderNumber})</span>
                         <span className="text-lg font-bold">Order {customerName} {room && `(Meja: ${room})`}</span>
                     </div>
-                    <div className=" space-y-3 mb-6">
+                    <div className="space-y-3 mb-6">
                         {selectedItems.length === 0 ? (
                             <div className="text-center py-10 text-gray-500">Keranjang F&B kosong.</div>
                         ) : (
@@ -510,7 +532,14 @@ const OrderKasir = () => {
                     </div>
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
-                            <Button size="large" onClick={() => message.info("Fungsi diskon belum aktif.")}>Discount</Button>
+                            <div className="flex items-center gap-1">
+                                <Button size="large" icon={<PercentageOutlined />} onClick={showDiscountModal} className="flex-1">
+                                    {discountPercentage > 0 ? `Edit Diskon (${discountPercentage}%)` : 'Tambah Diskon'}
+                                </Button>
+                                {discountPercentage > 0 && (
+                                    <Button danger type="primary" size="large" icon={<CloseOutlined />} onClick={() => { setDiscountPercentage(0); message.info("Diskon berhasil dihapus."); }} />
+                                )}
+                            </div>
                             <Button danger size="large" onClick={() => { setSelectedItems([]); message.warning("Order dibatalkan."); }}>Cancel Order</Button>
                         </div>
                         <div className="flex bg-gray-100 rounded-lg p-1 mb-2 text-sm font-medium">
@@ -522,22 +551,15 @@ const OrderKasir = () => {
                 </div>
             </div>
 
-            {/* --- MODAL BARU UNTUK BOOKING RUANGAN --- */}
-            <Modal
-                title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>}
-                open={isBookingConfirmModalVisible}
-                onCancel={() => setIsBookingConfirmModalVisible(false)}
-                footer={[
-                    <Button key="back" onClick={() => setIsBookingConfirmModalVisible(false)}>
-                        Batal
-                    </Button>,
-                    <Button key="submit" type="primary" onClick={handleBookingSubmit} disabled={!selectedDuration || !selectedStartTime}>
-                        Konfirmasi & Bayar
-                    </Button>,
-                ]}
-                width={600}
-                centered
-            >
+            <Modal title="Masukkan Diskon Manual" open={isDiscountModalVisible} onOk={handleDiscountSubmit} onCancel={() => setIsDiscountModalVisible(false)} okText="Terapkan" cancelText="Batal">
+                <Form form={discountForm} layout="vertical" className="mt-4">
+                    <Form.Item label="Persentase Diskon" name="discount" rules={[{ required: true, message: 'Harap masukkan nilai diskon!' }]}>
+                        <InputNumber min={0} max={100} formatter={(value) => `${value}%`} parser={(value) => value.replace('%', '')} className="w-full" size="large" />
+                    </Form.Item>
+                </Form>
+            </Modal>
+
+            <Modal title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>} open={isBookingConfirmModalVisible} onCancel={() => setIsBookingConfirmModalVisible(false)} footer={[<Button key="back" onClick={() => setIsBookingConfirmModalVisible(false)}>Batal</Button>, <Button key="submit" type="primary" onClick={handleBookingSubmit} disabled={!selectedDuration || !selectedStartTime}>Konfirmasi & Bayar</Button>]} width={600} centered>
                 <Form form={bookingForm} layout="vertical" className="mt-4">
                     <p className="mb-4 text-gray-600">Pilih jam mulai dan durasi untuk booking hari ini.</p>
                     <Divider>Pilih Jam Mulai</Divider>
@@ -547,12 +569,7 @@ const OrderKasir = () => {
                             const isPast = hour < dayjs().hour();
                             const isDisabled = isBooked || isPast;
                             return (
-                                <Button
-                                    key={hour}
-                                    type={selectedStartTime === hour ? 'primary' : 'default'}
-                                    disabled={isDisabled}
-                                    onClick={() => { setSelectedStartTime(hour); setSelectedDuration(null); }}
-                                >
+                                <Button key={hour} type={selectedStartTime === hour ? 'primary' : 'default'} disabled={isDisabled} onClick={() => { setSelectedStartTime(hour); setSelectedDuration(null); }}>
                                     {`${hour}:00`}
                                 </Button>
                             );
@@ -563,28 +580,19 @@ const OrderKasir = () => {
                         <>
                             <Divider>Pilih Durasi</Divider>
                             <div className="grid grid-cols-3 md:grid-cols-4 gap-2 mb-4">
-                                {selectedRoomForBooking?.paket_harga
-                                    .sort((a, b) => a.durasi_jam - b.durasi_jam)
-                                    .map(pkg => {
-                                        const endTime = selectedStartTime + pkg.durasi_jam;
-                                        // Cek apakah ada jam yang sudah dibooking di dalam rentang durasi yang dipilih
-                                        const isOverlapping = selectedRoomForBooking.booked_hours.some(h => h >= selectedStartTime && h < endTime);
-                                        const isInvalid = endTime > 22 || isOverlapping;
-                                        return (
-                                            <Button
-                                                key={pkg.durasi_jam}
-                                                type={selectedDuration?.durasi_jam === pkg.durasi_jam ? 'primary' : 'default'}
-                                                disabled={isInvalid}
-                                                onClick={() => setSelectedDuration(pkg)}
-                                                className="h-auto py-2"
-                                            >
-                                                <div className="flex flex-col">
-                                                    <span>{pkg.durasi_jam} Jam</span>
-                                                    <span className="text-xs font-normal">{formatRupiah(pkg.harga_paket)}</span>
-                                                </div>
-                                            </Button>
-                                        );
-                                    })}
+                                {selectedRoomForBooking?.paket_harga.sort((a, b) => a.durasi_jam - b.durasi_jam).map(pkg => {
+                                    const endTime = selectedStartTime + pkg.durasi_jam;
+                                    const isOverlapping = selectedRoomForBooking.booked_hours.some(h => h >= selectedStartTime && h < endTime);
+                                    const isInvalid = endTime > 22 || isOverlapping;
+                                    return (
+                                        <Button key={pkg.durasi_jam} type={selectedDuration?.durasi_jam === pkg.durasi_jam ? 'primary' : 'default'} disabled={isInvalid} onClick={() => setSelectedDuration(pkg)} className="h-auto py-2">
+                                            <div className="flex flex-col">
+                                                <span>{pkg.durasi_jam} Jam</span>
+                                                <span className="text-xs font-normal">{formatRupiah(pkg.harga_paket)}</span>
+                                            </div>
+                                        </Button>
+                                    );
+                                })}
                             </div>
                         </>
                     )}
@@ -604,7 +612,6 @@ const OrderKasir = () => {
                 </Form>
             </Modal>
 
-            {/* ... (Modal-modal F&B yang sudah ada tidak berubah) ... */}
             <Modal title={<div className="text-xl font-bold text-gray-800"><PlusOutlined className="mr-2" /> Buat Order Baru</div>} open={isNewOrderModalVisible} onOk={handleNewOrderOk} onCancel={handleNewOrderCancel} okText="Buat Order" cancelText="Batal" width={400} centered className="new-order-modal">
                 <Form form={newOrderForm} layout="vertical" initialValues={{ orderType: currentOrderType, customerName: customerName, room: room }} className="mt-4">
                     <Form.Item label="Tipe Order" name="orderType" rules={[{ required: true, message: "Pilih tipe order!" }]}>
@@ -619,6 +626,7 @@ const OrderKasir = () => {
                     <Form.Item label="Kasir" className="mb-0"><Input value={cashierName} disabled prefix={<UserOutlined />} /></Form.Item>
                 </Form>
             </Modal>
+
             <Modal title={<div className="text-xl font-bold text-gray-800">Tambahkan Catatan untuk <span className="font-normal">{itemToAddNote?.name}</span></div>} open={isAddNoteModalVisible} onOk={handleAddNoteOk} onCancel={handleAddNoteCancel} okText="Konfirmasi" cancelText="Batal" width={400} centered>
                 <Form form={addNoteForm} layout="vertical" className="mt-4" initialValues={{ note: itemToAddNote?.note || "" }}>
                     {itemToAddNote && (<><p className="text-sm text-gray-500 mb-2">Kategori: {itemToAddNote.category}</p></>)}
@@ -633,6 +641,7 @@ const OrderKasir = () => {
                     </div>
                 </Form>
             </Modal>
+
             <Modal title={<div className="text-xl font-bold text-gray-800 flex items-center justify-between">Pembayaran Tunai <span className="text-blue-600">{formatRupiah(totalAmount)}</span></div>} open={isCashPaymentModalVisible} onCancel={() => setIsCashPaymentModalVisible(false)} footer={null} width={400} centered>
                 <Form layout="vertical" className="mt-4">
                     <Form.Item label="Uang Tunai" className="mb-4">
@@ -652,6 +661,7 @@ const OrderKasir = () => {
                     </div>
                 </Form>
             </Modal>
+
             <Modal title={<div className="text-xl font-bold text-gray-800">Struk Pembayaran</div>} open={isStrukModalVisible} onCancel={paymentSuccess ? handleStrukConfirmPayment : handleStrukCancel} footer={null} width={400} centered>
                 <div className="flex flex-col p-4 bg-white rounded-lg shadow-inner mt-4 border border-gray-200">
                     {paymentSuccess && (<div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 flex items-center"><CheckCircleOutlined className="mr-2 text-xl" /><span className="font-semibold">Pembayaran berhasil!</span></div>)}

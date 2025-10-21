@@ -15,7 +15,6 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 // Definisikan base URL untuk gambar di satu tempat agar mudah diubah
-const IMAGE_BASE_URL = "http://localhost:5000/static";
 
 // State awal untuk form, memastikan reset form selalu konsisten
 const initialFormData = {
@@ -308,10 +307,7 @@ const RuanganTab = () => {
                             <Switch checkedChildren="Active" unCheckedChildren="Inactive" checked={formData.status_ketersediaan === "Active"} onChange={(checked) => handleChange("status_ketersediaan", checked ? "Active" : "Inactive")} />
                         </Space>
 
-                        <Text strong>Gambar Ruangan</Text>
-                        <Upload listType="picture" maxCount={1} beforeUpload={(file) => { setFileGambar(file); return false; }} onRemove={() => setFileGambar(null)}>
-                            <Button icon={<UploadOutlined />}>Pilih Gambar</Button>
-                        </Upload>
+
                     </Col>
 
                     {/* KOLOM KANAN: KELOLA PAKET HARGA */}
@@ -355,6 +351,21 @@ const RuanganTab = () => {
                         ) : (
                             <Text type="secondary">Simpan data ruangan terlebih dahulu untuk bisa menambahkan paket harga.</Text>
                         )}
+                        {/* --- PERBAIKAN: BLOK UPLOAD GAMBAR DENGAN TEKS DI ATAS DAN BAWAH --- */}
+                        <Divider>Gambar Ruangan</Divider>
+
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+
+                            <Upload
+                                listType="picture"
+                                maxCount={1}
+                                beforeUpload={(file) => { setFileGambar(file); return false; }}
+                                onRemove={() => setFileGambar(null)}
+                                style={{ marginBottom: 8 }}
+                            >
+                                <Button icon={<UploadOutlined />}>Pilih Gambar</Button>
+                            </Upload>
+                        </div>
                     </Col>
                 </Row>
             </Modal>

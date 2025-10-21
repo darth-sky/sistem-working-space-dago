@@ -16,6 +16,7 @@ import {
   Tag,
   Spin,
   Alert,
+  Divider,
 } from "antd";
 import { useNavigate } from "react-router-dom";
 import { getAllMemberships } from "../../../services/service";
@@ -23,15 +24,19 @@ import { getAllMemberships } from "../../../services/service";
 const { Title, Text } = Typography;
 const { Search } = Input;
 
+// Icons for membership categories
 const categoryIcons = {
   "Open Space": <CoffeeOutlined />,
   "Space Monitor": <SafetyOutlined />,
   "Room Meeting": <UserOutlined />,
 };
 
-// Horizontal Card
+// Horizontal Card (Kredit Biru, Tanpa Checklist, Garis Gelap)
 const HorizontalPackageCard = ({ item, navigate, categoryIcon }) => {
+  // 1. Menampilkan kuota dengan teks "Credits" dan warna biru
   const creditValue = item.quota.replace(" credit", "").replace(" credits", "").trim();
+  const creditText = `${creditValue} Credits`;
+
   return (
     <Card
       key={item.id}
@@ -42,79 +47,80 @@ const HorizontalPackageCard = ({ item, navigate, categoryIcon }) => {
         overflow: "hidden",
         boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
       }}
-      bodyStyle={{ padding: 0 }}
+      bodyStyle={{ padding: "24px" }}
     >
-      <Row gutter={[0, 16]} align="middle">
-        <Col xs={24} md={8}>
-          <div style={{ height: "100%", minHeight: 200, position: "relative" }}>
-            <Tag
-              color="blue"
-              style={{
-                position: "absolute",
-                top: 12,
-                left: 12,
-                fontWeight: 600,
-                zIndex: 10,
-              }}
-            >
-              {categoryIcon} {creditValue} Credits
-            </Tag>
-            <img
-              alt={item.name}
-              src={item.image}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
+      <Row gutter={[24, 16]} align="middle">
+        {/* Kiri: Nama Paket dan Fitur */}
+        <Col xs={24} md={16}>
+          <div style={{ paddingRight: "16px" }}>
+            <Space style={{ marginBottom: 8 }}>
+              {/* Judul Diperbesar */}
+              <Title level={3} style={{ margin: 0, lineHeight: 1.2, fontWeight: 700 }}>
+                {item.name}
+              </Title>
+              <Tag
+                color="blue"
+                style={{ fontWeight: 600 }}
+              >
+                {categoryIcon} {creditText} {/* Kredit Biru & Teks */}
+              </Tag>
+            </Space>
+
+            {/* Garis pemisah horizontal (itemin/gelap) */}
+            <Divider style={{ margin: '12px 0', borderColor: '#d9d9d9' }} />
+
+            <Row gutter={[16, 8]}>
+              {item.features.slice(0, 6).map((feature, idx) => (
+                <Col
+                  xs={24}
+                  sm={12}
+                  key={idx}
+                  style={{ display: "flex", alignItems: "flex-start" }}
+                >
+                  <Text style={{ fontSize: 13, flex: 1, color: '#595959' }}>
+                    {feature} {/* Tanpa Checklist, menggunakan bullet point */}
+                  </Text>
+                </Col>
+              ))}
+            </Row>
           </div>
         </Col>
-        <Col xs={24} md={16}>
-          <div style={{ padding: "24px" }}>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={14}>
-                <Title level={4} style={{ margin: "0 0 4px 0", lineHeight: 1.2 }}>
-                  {item.name}
-                </Title>
-                <Row gutter={[16, 8]}>
-                  {item.features.slice(0, 6).map((feature, idx) => (
-                    <Col
-                      xs={24}
-                      sm={12}
-                      key={idx}
-                      style={{ display: "flex", alignItems: "flex-start" }}
-                    >
-                      <Text style={{ fontSize: 13, flex: 1 }}>{feature}</Text>
-                    </Col>
-                  ))}
-                </Row>
-              </Col>
-              <Col
-                xs={24}
-                md={10}
-                style={{
-                  textAlign: "right",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "center",
-                }}
-              >
-                <Title level={3} style={{ margin: 0, fontWeight: 700, color: "#ff7a45" }}>
-                  {item.price}
-                </Title>
-                <Text
-                  type="secondary"
-                  style={{ fontSize: 14, display: "block", marginBottom: 16 }}
-                >
-                  {item.period}
-                </Text>
-                <Button
-                  type="primary"
-                  onClick={() => navigate(`/daftar-member/${item.id}`)}
-                  style={{ width: "100%", height: 40, fontWeight: 600 }}
-                >
-                  Pilih Plan
-                </Button>
 
-              </Col>
-            </Row>
+        {/* Kanan: Harga dan Tombol */}
+        <Col
+          xs={24}
+          md={8}
+          style={{
+            textAlign: "center",
+            // Garis pembatas vertikal (itemin/gelap)
+            borderLeft: '1px solid #d9d9d9',
+            paddingLeft: '24px',
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+          }}
+        >
+          <div style={{ paddingLeft: "16px" }}>
+            <Text type="secondary" style={{ fontSize: 14, display: "block", marginBottom: 4 }}>
+              Mulai Dari
+            </Text>
+            {/* Harga Biru */}
+            <Title level={2} style={{ margin: 0, fontWeight: 700, color: "#1890ff" }}>
+              {item.price}
+            </Title>
+            <Text
+              type="secondary"
+              style={{ fontSize: 14, display: "block", marginBottom: 16 }}
+            >
+              {item.period}
+            </Text>
+            <Button
+              type="primary"
+              onClick={() => navigate(`/daftar-member/${item.id}`)}
+              style={{ width: "100%", height: 40, fontWeight: 600 }}
+            >
+              Pilih Plan
+            </Button>
           </div>
         </Col>
       </Row>
@@ -127,7 +133,7 @@ const Membership = () => {
   const [memberships, setMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("Space Monitor"); // default tab
+  const [activeTab, setActiveTab] = useState("Space Monitor");
   const navigate = useNavigate();
   const sectionRefs = useRef({});
 
@@ -160,6 +166,11 @@ const Membership = () => {
             return acc;
           }, {});
           setMemberships(Object.values(grouped));
+
+          const firstCategory = Object.keys(grouped)[0];
+          if (firstCategory) {
+            setActiveTab(firstCategory);
+          }
         } else {
           setError(result.error || "Gagal memuat data");
         }
@@ -172,6 +183,7 @@ const Membership = () => {
     fetchData();
   }, []);
 
+  // Logika Filter: Hanya kategori dengan data yang lolos filter pencarian yang akan ditampilkan.
   const filteredMemberships = memberships
     .map((section) => ({
       ...section,
@@ -179,12 +191,12 @@ const Membership = () => {
         item.name.toLowerCase().includes(searchTerm.toLowerCase())
       ),
     }))
-    .filter((section) => section.data.length > 0);
+    .filter((section) => section.data.length > 0); // <-- MENYARING KATEGORI KOSONG (SESUAI PERMINTAAN)
 
   const scrollToCategory = (category) => {
     setActiveTab(category);
     if (sectionRefs.current[category]) {
-      sectionRefs.current[category].scrollIntoView({ behavior: "smooth" });
+      sectionRefs.current[category].scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
@@ -212,13 +224,15 @@ const Membership = () => {
         />
       </div>
 
-      {/* Tabs dengan underline */}
+      {/* Tabs Kategori */}
       <div
         style={{
           display: "flex",
           gap: "40px",
-          borderBottom: "1px solid #eee",
+          borderBottom: "1px solid #d9d9d9", // Garis Tabs Itemin
           marginBottom: "32px",
+          overflowX: 'auto',
+          paddingBottom: '2px',
         }}
       >
         {filteredMemberships.map((section) => (
@@ -228,13 +242,14 @@ const Membership = () => {
             style={{
               cursor: "pointer",
               paddingBottom: "12px",
-              borderBottom: activeTab === section.title ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === section.title ? "#3b82f6" : "#333",
+              borderBottom: activeTab === section.title ? "2px solid #1890ff" : "2px solid transparent",
+              color: activeTab === section.title ? "#1890ff" : "#333",
               fontWeight: activeTab === section.title ? 600 : 400,
               display: "flex",
               alignItems: "center",
               gap: "6px",
               transition: "all 0.3s ease",
+              flexShrink: 0,
             }}
           >
             <span style={{ fontSize: "18px" }}>{section.icon}</span>
@@ -244,11 +259,12 @@ const Membership = () => {
       </div>
 
       {/* Loading & Error */}
-      {loading && <Spin tip="Memuat data membership..." />}
-      {error && <Alert type="error" message={error} />}
+      {loading && <Spin tip="Memuat data membership..." style={{ display: 'block', margin: '50px 0', textAlign: 'center' }} />}
+      {error && <Alert type="error" message="Gagal Memuat Data" description={error} showIcon style={{ marginBottom: 24 }} />}
 
-      {!loading && !error && (
+      {!loading && !error && filteredMemberships.length > 0 && (
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
+          {/* Hanya iterasi kategori yang memiliki paket */}
           {filteredMemberships.map((section, idx) => (
             <div
               key={idx}
@@ -256,7 +272,7 @@ const Membership = () => {
             >
               <div style={{ marginBottom: "24px" }}>
                 <Title level={3} style={{ display: "flex", alignItems: "center" }}>
-                  <span style={{ marginRight: "8px", fontSize: "28px", color: "#ff7a45" }}>
+                  <span style={{ marginRight: "8px", fontSize: "28px", color: "#1890ff" }}>
                     {section.icon}
                   </span>
                   {section.title}
@@ -276,6 +292,25 @@ const Membership = () => {
             </div>
           ))}
         </Space>
+      )}
+
+      {/* Handle kasus tidak ada data sama sekali */}
+      {!loading && !error && filteredMemberships.length === 0 && searchTerm && (
+        <Alert
+          message="Tidak Ditemukan"
+          description={`Tidak ada paket membership yang cocok dengan kata kunci "${searchTerm}" di semua kategori.`}
+          type="info"
+          showIcon
+        />
+      )}
+
+      {!loading && !error && memberships.length === 0 && !searchTerm && (
+        <Alert
+          message="Tidak Ada Data"
+          description="Tidak ada paket membership yang tersedia saat ini."
+          type="info"
+          showIcon
+        />
       )}
     </div>
   );

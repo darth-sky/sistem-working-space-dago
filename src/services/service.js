@@ -5,10 +5,140 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
-export const getAdminDashboardData = async () => {
+export const getVORequests = async () => {
   try {
     const token = jwtStorage.retrieveToken();
-    const response = await fetch(`${baseUrl}/api/v1/admin/dashboard-data`, {
+    const response = await fetch(`${baseUrl}/api/v1/virtualofficeadmin/getRequests`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Gagal mengambil data permintaan VO");
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const approveVORequest = async (clientId) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/virtualofficeadmin/approveRequests/${clientId}/approve`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Gagal menyetujui permintaan");
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const rejectVORequest = async (clientId) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/virtualofficeadmin/rejectRequests/${clientId}/reject`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Gagal menolak permintaan");
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+export const getBagiHasilReport = async (startDate, endDate) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/laporanBagiHasil?startDate=${startDate}&endDate=${endDate}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || "Gagal mengambil data laporan bagi hasil");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching bagi hasil report:", error);
+    throw error;
+  }
+};
+
+
+export const getExpenses = async (startDate, endDate) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/costBulananRead?startDate=${startDate}&endDate=${endDate}`);
+    if (!response.ok) {
+      throw new Error("Gagal mengambil data pengeluaran");
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error in getExpenses:", error);
+    throw error;
+  }
+};
+
+// POST: Membuat pengeluaran baru
+export const createExpense = async (expenseData) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/costBulananCreate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(expenseData),
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    console.error("Error in createExpense:", error);
+    throw error;
+  }
+};
+
+// PUT: Memperbarui pengeluaran
+export const updateExpense = async (id, expenseData) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/costBulananUpdate/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(expenseData),
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    console.error("Error in updateExpense:", error);
+    throw error;
+  }
+};
+
+// DELETE: Menghapus pengeluaran
+export const deleteExpense = async (id) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/costBulananDelete/${id}`, {
+      method: "DELETE",
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    console.error("Error in deleteExpense:", error);
+    throw error;
+  }
+};
+
+
+
+export const getAdminDashboardData = async (startDate, endDate) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+
+    // PERBAIKAN: Tambahkan parameter tanggal ke URL
+    let url = `${baseUrl}/api/v1/admin/dashboard-data`;
+    if (startDate && endDate) {
+      url += `?startDate=${startDate}&endDate=${endDate}`;
+    }
+
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -26,6 +156,7 @@ export const getAdminDashboardData = async () => {
     throw error;
   }
 };
+
 
 
 export const getTransactionHistory = async (startDate, endDate) => {
@@ -277,7 +408,7 @@ export const createTenant = async (formData) => {
     const response = await fetch(`${baseUrl}/api/v1/tenantadmin/tenantCreate`, {
       method: "POST",
       // HAPUS headers 'Content-Type'. Browser akan menentukannya secara otomatis
-      body: formData, 
+      body: formData,
     });
     const result = await response.json();
     return { status: response.status, data: result };
@@ -452,6 +583,7 @@ export const getOrdersByTenant = async (tenantId) => {
     throw error;
   }
 };
+
 
 export const updateOrderStatus = async (orderId, newStatus) => {
   try {
@@ -675,8 +807,8 @@ export const getWorkspaces = async () => {
   }
 };
 
-// Tambahkan ini di file service.js Anda
 
+// Tambahkan ini di file service.js Anda
 export const getRoomsToday = async () => {
   try {
     const token = await jwtStorage.retrieveToken();
@@ -729,6 +861,7 @@ export const createRoomBookingKasir = async (bookingData) => {
     throw error;
   }
 };
+
 
 export const getPosInitData = async () => {
   try {
@@ -1090,13 +1223,12 @@ export const getKategoriRuangan = async () => {
   }
 };
 
-// ✅ Create kategori ruangan
 export const createKategoriRuangan = async (formData) => {
   try {
     const response = await fetch(`${baseUrl}/api/v1/ruanganadmin/createKategori`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
+      // Headers tidak perlu di-set, browser akan menanganinya
+      body: formData,
     });
     const result = await response.json();
     return { status: response.status, data: result };
@@ -1105,15 +1237,14 @@ export const createKategoriRuangan = async (formData) => {
   }
 };
 
-// ✅ Update kategori ruangan
+// ✅ Update kategori ruangan (mengirim FormData)
 export const updateKategoriRuangan = async (id_kategori, formData) => {
   try {
     const response = await fetch(
       `${baseUrl}/api/v1/ruanganadmin/updateKategori/${id_kategori}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: formData,
       }
     );
     const result = await response.json();
@@ -1199,6 +1330,21 @@ export const deleteKategori = async (id_kategori) => {
     );
     const result = await response.json();
     return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+
+export const getTenantsForDropdown = async () => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/produkadmin/tenants`); // Panggil endpoint baru
+    const result = await response.json();
+    return {
+      status: response.status,
+      data: result,
+    };
   } catch (error) {
     throw error;
   }
@@ -1781,6 +1927,7 @@ export const getRiwayatTransaksi = async () => {
   }
 };
 
+
 // HALAMAN RiwayatTransaksi Pelanggan end
 
 
@@ -1825,25 +1972,94 @@ export const getPaketVO = async () => {
 // halaman virtual office end
 
 
+// ... (service Anda yang lain)
 
-// cek masa vo start
-
-export const getVirtualOfficeDetail = async (userId) => {
+// BARU: Service untuk submit bukti pembayaran VO
+export const submitVOPaymentProof = async (transactionId) => { // Hapus parameter formData
   try {
     const token = jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/virtualOffice/submit-payment/${transactionId}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // Content-Type bisa ditambahkan jika backend memerlukannya, 
+        // tapi untuk POST tanpa body biasanya tidak wajib.
+        // 'Content-Type': 'application/json' 
+      },
+      // Hapus baris body: formData,
+    });
+
+    // Cek jika response TIDAK ok (selain 200 OK)
+    if (!response.ok) {
+      let errorData;
+      try {
+        // Coba parse error JSON dari backend
+        errorData = await response.json();
+      } catch (parseError) {
+        // Jika backend tidak kirim JSON atau ada error lain
+        throw new Error(`Aktivasi gagal. Status: ${response.status} ${response.statusText}`);
+      }
+      // Gunakan pesan error dari backend jika ada
+      throw new Error(errorData.error || `Aktivasi gagal. Status: ${response.status}`);
+    }
+
+    // Jika response OK (200)
+    return await response.json(); // Harusnya berisi {"message": "OK", "new_status": "Aktif"}
+
+  } catch (error) {
+    console.error("Error activating VO service:", error); // Ubah pesan console
+    throw error; // Lempar error agar bisa ditangkap di komponen
+  }
+};
+// cek masa vo start
+export const getVirtualOfficeDetail = async (userId) => {
+  try {
+    const token = jwtStorage.retrieveToken(); // Mengambil token
+    if (!token) {
+      throw new Error("Token otentikasi tidak ditemukan.");
+    }
+
+    // Memanggil endpoint yang benar dengan menyertakan userId
     const response = await fetch(`${baseUrl}/api/v1/virtualOffice/cekMasaVO/${userId}`, {
+      method: 'GET', // Method GET adalah default, tapi lebih eksplisit
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    // Cek jika respons tidak OK (misal: 404 Not Found, 500 Server Error)
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
     return await response.json();
+
   } catch (error) {
-    console.error("Error fetching VO detail:", error);
+    console.error("Error fetching Virtual Office detail:", error);
+    // Melempar kembali error agar bisa ditangani oleh komponen yang memanggil
     throw error;
   }
 };
+
+
+// export const getVirtualOfficeDetail = async (userId) => {
+//   try {
+//     const token = jwtStorage.retrieveToken();
+//     const response = await fetch(`${baseUrl}/api/v1/virtualOffice/cekMasaVO/${userId}`, {
+//       headers: {
+//         "Authorization": `Bearer ${token}`,
+//         "Content-Type": "application/json",
+//       },
+//     });
+//     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+//     return await response.json();
+//   } catch (error) {
+//     console.error("Error fetching VO detail:", error);
+//     throw error;
+//   }
+// };
 
 // cek masa vo end
 

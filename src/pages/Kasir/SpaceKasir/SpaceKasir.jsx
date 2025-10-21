@@ -73,10 +73,12 @@ const SpaceKasir = () => {
       setCombinedUnits(allUnits);
     }
   }, [rentals.active, spaceUnitsAvailable, loading]);
-  
-  // Menggabungkan booking 'upcoming' dan 'active' untuk ditampilkan di tab "Active"
-  const activeAndUpcomingRentals = [...rentals.upcoming, ...rentals.active];
-  const displayedRentals = status === "Active" ? activeAndUpcomingRentals : rentals.finish;
+
+  // Tentukan data sewa yang akan ditampilkan berdasarkan tab
+  let displayedRentals = [];
+  if (status === "Upcoming") displayedRentals = rentals.upcoming;
+  else if (status === "Active") displayedRentals = rentals.active;
+  else displayedRentals = rentals.finish;
 
   if (loading) {
     return (
@@ -190,6 +192,13 @@ const SpaceKasir = () => {
           </h3>
           <div className="space-x-2">
             <Button
+              type={status === "Upcoming" ? "primary" : "default"}
+              onClick={() => setStatus("Upcoming")}
+              className="rounded-lg"
+            >
+              Upcoming
+            </Button>
+            <Button
               type={status === "Active" ? "primary" : "default"}
               onClick={() => setStatus("Active")}
               className="rounded-lg"
@@ -209,7 +218,6 @@ const SpaceKasir = () => {
         <div className="space-y-4">
           {displayedRentals.length > 0 ? (
             displayedRentals.map((rental) => {
-              // Menentukan apakah booking ini 'upcoming' atau 'active'
               const isUpcoming = new Date(rental.waktu_mulai) > new Date();
 
               return (
@@ -221,13 +229,14 @@ const SpaceKasir = () => {
                     <p className="font-semibold text-gray-800">{rental.client}</p>
                     <p className="text-sm text-gray-600">{rental.unit.toUpperCase()}</p>
                     <p className="text-xs text-gray-400">{rental.date}</p>
-                    
-                    {/* PERBAIKAN 1: Tag Status Dinamis */}
+
                     <div className="flex gap-2 mt-2">
                       {isUpcoming ? (
                         <Tag color="orange">UPCOMING</Tag>
-                      ) : (
+                      ) : status === "Active" ? (
                         <Tag color="green">ACTIVE</Tag>
+                      ) : (
+                        <Tag color="default">FINISHED</Tag>
                       )}
                     </div>
                   </div>
@@ -236,14 +245,13 @@ const SpaceKasir = () => {
                     <p className="text-blue-600 font-bold">
                       Rp {rental.price.toLocaleString("id-ID")}
                     </p>
-                    {status === "Active" ? (
-                      // PERBAIKAN 2: Melewatkan startTime ke RentalTimer
+                    {status === "Finish" ? (
+                      <Tag>Finished</Tag>
+                    ) : (
                       <RentalTimer
                         startTime={rental.waktu_mulai}
                         endTime={rental.waktu_selesai}
                       />
-                    ) : (
-                      <Tag>Finished</Tag>
                     )}
                   </div>
                 </div>

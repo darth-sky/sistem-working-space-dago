@@ -27,6 +27,7 @@ import {
     createKategori,
     updateKategori,
     deleteKategori,
+    getTenantsForDropdown
 } from "../../../../services/service"; // pastikan service sudah export semua fungsi
 
 const { Text } = Typography;
@@ -40,9 +41,9 @@ const ProductKategoriTab = () => {
     const [formData, setFormData] = useState({});
     const [loading, setLoading] = useState(false);
 
-    const [merchants, setMerchants] = useState([]);
+    // PERBAIKAN: Ganti nama 'merchants' menjadi 'tenantsForDropdown' agar lebih jelas
+    const [tenantsForDropdown, setTenantsForDropdown] = useState([]); 
     const [data, setData] = useState([]);
-
     const [pageSize, setPageSize] = useState(5);
 
 
@@ -54,24 +55,12 @@ const ProductKategoriTab = () => {
             if (res.status === 200 && res.data.message === "OK") {
                 const kategori = res.data.datas.map((item, index) => ({
                     key: index + 1,
-                    id_kategori: item.id_kategori, // ✅ pakai nama field yang sesuai API
+                    id_kategori: item.id_kategori,
                     merchantId: item.id_tenant,
                     nama_merchant: item.nama_tenant,
                     nama_kategori: item.nama_kategori,
                 }));
-
                 setData(kategori);
-
-                // ambil unique merchant untuk dropdown
-                const uniqMerchants = [
-                    ...new Map(
-                        kategori.map((m) => [
-                            m.merchantId,
-                            { id: m.merchantId, name: m.nama_merchant },
-                        ])
-                    ).values(),
-                ];
-                setMerchants(uniqMerchants);
             }
         } catch (err) {
             console.error("Gagal fetch kategori:", err);
@@ -83,7 +72,21 @@ const ProductKategoriTab = () => {
 
     useEffect(() => {
         fetchData();
+        fetchTenants();
     }, []);
+
+        // PERBAIKAN: Fungsi baru untuk fetch data tenant untuk modal
+    const fetchTenants = async () => {
+        try {
+            const res = await getTenantsForDropdown();
+            if (res.status === 200) {
+                setTenantsForDropdown(res.data.datas);
+            }
+        } catch (err) {
+            console.error("Gagal fetch tenants for dropdown:", err);
+        }
+    };
+
 
     // 🔎 Filter pencarian
     const filteredData = data.filter(
@@ -314,9 +317,9 @@ const ProductKategoriTab = () => {
                                 onChange={(value) => handleChange("merchantId", value)}
                                 style={{ width: "100%" }}
                             >
-                                {merchants.map((m) => (
-                                    <Option key={m.id} value={m.id}>
-                                        {m.name}
+                                  {tenantsForDropdown.map((tenant) => (
+                                    <Option key={tenant.id_tenant} value={tenant.id_tenant}>
+                                        {tenant.nama_tenant}
                                     </Option>
                                 ))}
                             </Select>

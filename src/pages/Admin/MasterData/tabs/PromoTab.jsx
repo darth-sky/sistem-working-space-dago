@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Input, Typography, Row, Col, Card, Space, message,
-  Popconfirm, Tooltip, InputNumber, DatePicker, TimePicker, Select, Tag
+  Popconfirm, Tooltip, InputNumber, DatePicker, TimePicker, Select, Tag, Switch
 } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, TagOutlined
@@ -101,11 +101,11 @@ const PromoTab = () => {
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
   };
-  
+
   const handleDateChange = (dates, dateStrings) => {
     setFormData({ ...formData, tanggal_mulai: dateStrings[0], tanggal_selesai: dateStrings[1] });
   };
-  
+
   const handleTimeChange = (times, timeStrings) => {
     setFormData({ ...formData, waktu_mulai: timeStrings[0] || null, waktu_selesai: timeStrings[1] || null });
   };
@@ -173,7 +173,7 @@ const PromoTab = () => {
     setFormData({});
     setEditingPromo(null);
   };
-  
+
   // Menyiapkan nilai default untuk Date/Time Picker saat edit
   const dateRangeValue = formData.tanggal_mulai && formData.tanggal_selesai
     ? [dayjs(formData.tanggal_mulai), dayjs(formData.tanggal_selesai)]
@@ -233,10 +233,12 @@ const PromoTab = () => {
           </div>
           <div style={{ marginTop: '16px' }}>
             <Text strong>Status <span style={{ color: "red" }}>*</span></Text>
-            <Select placeholder="Pilih status" value={formData.status_aktif || 'inaktif'} onChange={(value) => handleChange("status_aktif", value)} style={{ marginTop: '8px', width: '100%' }}>
-              <Select.Option value="aktif">Aktif</Select.Option>
-              <Select.Option value="inaktif">Inaktif</Select.Option>
-            </Select>
+            <Switch
+              checkedChildren="Aktif"
+              unCheckedChildren="Inaktif"
+              checked={formData.status_aktif === 'aktif'}
+              onChange={(checked) => handleChange("status_aktif", checked ? "aktif" : "inaktif")}
+            />
           </div>
         </div>
       </Modal>

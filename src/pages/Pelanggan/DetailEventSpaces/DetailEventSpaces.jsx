@@ -388,22 +388,7 @@ const DetailEventSpaces = () => {
                   <Divider orientation="left">Pilih Tanggal & Waktu (08:00 - 22:00, Min. {MIN_DURATION_HOURS} Jam)</Divider>
 
                   {/* Input Tampilan Tanggal */}
-                  <Form.Item
-                      name="tanggal_display"
-                      label="Tanggal Event"
-                      rules={[
-                        { required: true, message: "Silakan pilih tanggal booking" },
-                      ]}
-                  >
-                    <Input
-                        readOnly
-                        placeholder="Pilih Tanggal"
-                        value={selectedDate ? selectedDate.toLocaleDateString("id-ID", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''}
-                        suffix={<CalendarOutlined style={{ color: '#1890ff' }} />}
-                        onClick={() => { /* Open custom date picker modal if needed, here we just show the calendar below */ }}
-                        style={{ cursor: 'pointer' }}
-                    />
-                  </Form.Item>
+                  <p className="pb-2.5">Tanggal Event</p>
                   
                   {/* DayPicker/Kalender */}
                   <div

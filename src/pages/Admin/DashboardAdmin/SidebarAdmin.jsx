@@ -17,7 +17,7 @@ import {
   MdOutlineChair,
   MdOutlineHistory,
 } from "react-icons/md";
-import { FaDatabase } from "react-icons/fa";
+import { FaDatabase, FaMoneyBill } from "react-icons/fa";
 import { GrCart } from "react-icons/gr";
 import { FaHouse } from "react-icons/fa6";
 import { RiHomeOfficeLine } from "react-icons/ri";
@@ -48,11 +48,13 @@ const SidebarAdmin = ({ children }) => {
 
   const menuItems = [
     { name: "Dashboard", icon: <BsGraphUpArrow />, path: "/dashboardadmin" },
-    { name: "Space Rental", icon: <MdChair />, path: "/spacerentaladmin" },
+    { name: "Virtual Office", icon: <MdChair />, path: "/virtualofficeadmin" },
     { name: "Event Spaces", icon: <RiHomeOfficeLine />, path: "/eventspacesadmin" },
     { name: "Transaksi", icon: <BsCart3 />, path: "/transaksiadmin" },
     { name: "Master Data", icon: <FaDatabase />, path: "/masterdataadmin" },
-    { name: "Cost Bulanan", icon: <FaDatabase />, path: "/costbulananadmin" },
+    { name: "Cost Bulanan", icon: <FaMoneyBill />, path: "/costbulananadmin" },
+    { name: "Hutang Admin", icon: <FaMoneyBill />, path: "/hutangadmin" },
+
     {
       name: "Logout",
       icon: <SlLogout />,
