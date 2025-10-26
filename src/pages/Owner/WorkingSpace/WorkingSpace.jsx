@@ -1,411 +1,307 @@
-import React, { useState, useMemo } from "react"; // KESALAHAN DIPERBAIKI: Mengganti "react-hook-form" menjadi "react"
-import { Doughnut, Bar, Line } from "react-chartjs-2";
+import React, { useEffect, useState, useMemo } from "react";
 import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-} from "chart.js";
-import { ConfigProvider, DatePicker } from "antd";
+  ConfigProvider, DatePicker, Row, Col, Card, Statistic, Space, Tag,
+  Divider, Typography, Select, Tooltip, Table, Empty, Spin, Alert,
+} from "antd";
+import locale from "antd/locale/id_ID";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
-import locale from "antd/locale/id_ID";
+import { Line, Doughnut, Bar } from "react-chartjs-2";
+import { getWorkingSpaceDashboardData } from "../../../services/service";
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
+  BarElement, ArcElement, Tooltip as ChartTooltip, Legend,
+} from "chart.js";
+// Import ChartDataLabels akan bekerja jika di-load via CDN
+// import ChartDataLabels from 'chartjs-plugin-datalabels'; 
+import { motion } from "framer-motion";
+import {
+  ArrowUpOutlined, FieldTimeOutlined, UsergroupAddOutlined, DollarCircleOutlined,
+} from "@ant-design/icons";
 
+
+dayjs.locale("id");
+
+// Registrasi plugin datalabels. Ini mengasumsikan library sudah di-load secara global (misal: via CDN)
+// karena import langsung tidak didukung di lingkungan ini.
+if (window.ChartDataLabels) {
+    ChartJS.register(window.ChartDataLabels);
+}
 ChartJS.register(
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement
+  CategoryScale, LinearScale, PointElement, LineElement, BarElement,
+  ArcElement, ChartTooltip, Legend
 );
 
+
 const { RangePicker } = DatePicker;
+const { Title, Text } = Typography;
 
-// --- UTILITY AND DATA FUNCTIONS ---
+// --- Helper Functions and Services (Digabungkan ke dalam satu file) ---
 
-// Fungsi bantuan untuk memformat Rupiah
-const formatRupiah = (number) => {
-  if (typeof number !== "number") return "";
-  return new Intl.NumberFormat("id-ID").format(number);
+const formatRupiah = (num) => {
+  if (num === null || num === undefined || Number.isNaN(Number(num))) return "0";
+  return new Intl.NumberFormat("id-ID").format(Math.round(Number(num)));
 };
 
-// Simulasi data Daily Selling berdasarkan rentang tanggal
-const generateDailySellingDataWS = (startDayjs, endDayjs) => {
-  if (!startDayjs || !endDayjs) return { labels: [], data: [] };
-  const days = endDayjs.diff(startDayjs, "day") + 1;
-  const labels = [];
-  const data = [];
-  let current = startDayjs;
-
-  for (let i = 0; i < days; i++) {
-    labels.push(current.format("D")); // Day number
-    // Dummy data for Working Space sales (e.g., 200k to 500k per day)
-    data.push(200000 + Math.random() * 300000);
-    current = current.add(1, "day");
-  }
-  return { labels, data };
-};
-
-// Simulasi data Profit Summary (6 bulan terakhir)
-const generateProfitSummaryDataWS = (endMonth, endYear) => {
-  const months = [];
-  const profits = [];
-  for (let i = 5; i >= 0; i--) {
-    const date = dayjs(`${endYear}-${endMonth}-01`).subtract(i, "month");
-    months.push(date.format("MMM"));
-    // Data dummy profit WS per bulan (misalnya 1M hingga 2.5M)
-    const profit = 1000000 + Math.random() * 1500000;
-    profits.push(profit);
-  }
-  return { labels: months, data: profits };
-};
+// --- Komponen React Utama ---
 
 const WorkingSpace = () => {
-  // Mengatur rentang tanggal default ke awal bulan hingga hari ini
-  const [dateRange, setDateRange] = useState([
-    dayjs().startOf("month"),
-    dayjs(),
-  ]);
+  const [dateRange, setDateRange] = useState([dayjs().startOf("month"), dayjs()]);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const formatCurrency = formatRupiah;
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const startDate = dateRange[0].format("YYYY-MM-DD");
+        const endDate = dateRange[1].format("YYYY-MM-DD");
+        const data = await getWorkingSpaceDashboardData(startDate, endDate);
+        if(data) {
+            setDashboardData(data);
+        } else {
+            throw new Error("Tidak ada data yang diterima dari server.");
+        }
+      } catch (err) {
+        setError(err.message || "Gagal memuat data. Coba lagi nanti.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [dateRange]);
 
-  // --- Dynamic Data Generation using useMemo ---
-  const endDate = dateRange[1];
-  const currentMonth = endDate ? endDate.month() + 1 : dayjs().month() + 1;
-  const currentYear = endDate ? endDate.year() : dayjs().year();
-  const totalWorkingSpaceRevenue = 3000000; // Total pendapatan dummy
+  // --- Memoized values derived from fetched data ---
+  const stats = useMemo(() => dashboardData?.stats || { totalRevenue: 0, totalBookings: 0, totalVisitors: 0 }, [dashboardData]);
+  const totalDays = Math.max(1, dateRange[1].diff(dateRange[0], "day") + 1);
+  const avgDaily = Math.round(stats.totalRevenue / totalDays) || 0;
 
-  // 1. Daily Selling Data (Dynamic based on selected range)
-  const { labels: dailyLabels, data: dailyData } = useMemo(
-    () => generateDailySellingDataWS(dateRange[0], dateRange[1]),
-    [dateRange]
-  );
+  // --- Chart Data from Backend ---
+  const lineData = useMemo(() => {
+    const daily = dashboardData?.dailyRevenue;
+    if (!daily || !daily.datasets) return { labels: [], datasets: [] };
+    
+    const meetingRoomData = (daily.datasets["Room Meeting Besar"] || []).map((val, i) => val + (daily.datasets["Room Meeting Kecil"]?.[i] || 0));
 
-  const dailySellingData = {
-    labels: dailyLabels,
-    datasets: [
-      {
-        label: "Daily Working Space Sales",
-        data: dailyData,
-        fill: false,
-        borderColor: "#4A6AFF",
-        tension: 0.1,
-        pointBackgroundColor: "#4A6AFF",
-        pointBorderColor: "#4A6AFF",
-      },
-    ],
-  };
+    return {
+      labels: daily.labels || [],
+      datasets: [
+        { label: "Open Space", data: daily.datasets["Open Space"] || [], fill: false, borderColor: "#2563eb", tension: 0.2, pointRadius: 3, pointHoverRadius: 5 },
+        { label: "Space Monitor", data: daily.datasets["Space Monitor"] || [], fill: false, borderColor: "#10B981", tension: 0.2, pointRadius: 3, pointHoverRadius: 5 },
+        { label: "Meeting Room", data: meetingRoomData, fill: false, borderColor: "#F59E0B", tension: 0.2, pointRadius: 3, pointHoverRadius: 5 },
+      ],
+    };
+  }, [dashboardData]);
 
-  // 2. Profit Summary Data (Dynamic based on selected month/year end date)
-  const { labels: profitLabels, data: profitData } = useMemo(
-    () => generateProfitSummaryDataWS(currentMonth, currentYear),
-    [currentMonth, currentYear]
-  );
+  const doughnutData = useMemo(() => {
+    const contribution = dashboardData?.categoryContribution || [];
+    if (!contribution.length) return { labels: [], datasets: [{ data: [] }] };
 
-  const profitSummaryData = {
-    labels: profitLabels,
-    datasets: [
-      {
-        label: "Working Space Profit",
-        data: profitData,
-        backgroundColor: "#4A6AFF",
-      },
-    ],
-  };
+    const dataMap = contribution.reduce((acc, item) => {
+        acc[item.name] = (acc[item.name] || 0) + item.value;
+        return acc;
+    }, {});
 
-  // 3. Top 10 Space Data Update & Sorting
-  let rawOpenSpaceTopData = [
-    { item: "Open Space 1", qty: 45, total: 1350000 },
-    { item: "Open Space 2", qty: 38, total: 1140000 },
-    { item: "Open Space 3", qty: 32, total: 960000 },
-    { item: "Open Space 4", qty: 28, total: 840000 },
-    { item: "Space Monitor 1", qty: 15, total: 750000 },
-    { item: "Space Monitor 2", qty: 12, total: 600000 },
-    { item: "Ruang Meeting 03", qty: 10, total: 300000 },
-    { item: "Ruang Meeting 01", qty: 8, total: 480000 },
-    { item: "Event Space", qty: 2, total: 2000000 },
-    { item: "Ruang Meeting 02", qty: 4, total: 240000 },
-    { item: "Space Monitor 9", qty: 20, total: 1000000 },
-    { item: "Lesehan 1", qty: 25, total: 500000 },
-  ];
+    const totalMeetingRoom = (dataMap['Room Meeting Besar'] || 0) + (dataMap['Room Meeting Kecil'] || 0);
 
-  // Sorting berdasarkan jumlah booking (qty) secara descending
-  const openSpaceTopData = useMemo(() => {
-    return rawOpenSpaceTopData
-      .sort((a, b) => b.qty - a.qty)
-      .slice(0, 10) // Ambil hanya Top 10
-      .map((item) => ({
-        ...item,
-        total: formatCurrency(item.total), // Format Rupiah untuk tampilan
-      }));
-  }, []);
-
-  // Menghitung Total Bookings
-  const totalBookings = rawOpenSpaceTopData.reduce(
-    (sum, item) => sum + item.qty,
-    0
-  );
-
-  // 4. Space Terjual Data (Doughnut)
-  const spaceCategories = rawOpenSpaceTopData.reduce((acc, item) => {
-    let category;
-    if (item.item.includes("Open Space")) category = "Open Space";
-    else if (item.item.includes("Space Monitor")) category = "Space Monitor";
-    else if (item.item.includes("Ruang Meeting")) category = "Ruang Meeting";
-    else if (item.item.includes("Lesehan")) category = "Lesehan";
-    else if (item.item.includes("Event Space")) category = "Event Space";
-    else category = "Lain-lain";
-
-    acc[category] = (acc[category] || 0) + item.qty;
-    return acc;
-  }, {});
-
-  const spaceTerjualDataChart = {
-    labels: Object.keys(spaceCategories),
-    datasets: [
-      {
-        data: Object.values(spaceCategories),
-        backgroundColor: [
-          "#4A6AFF", // Biru Tua (Open Space)
-          "#3B4FFC", // Biru Lebih Tua (Space Monitor)
-          "#6B7AFF", // Biru Sedang (Ruang Meeting)
-          "#8B9AFF", // Biru Muda (Lesehan)
-          "#ABBDFF", // Biru Sangat Muda (Event Space)
+    return {
+      labels: ["Open Space", "Space Monitor", "Meeting Room"],
+      datasets: [{
+        data: [
+            dataMap['Open Space'] || 0,
+            dataMap['Space Monitor'] || 0,
+            totalMeetingRoom,
         ],
-        borderColor: ["#ffffff"],
-        borderWidth: 1.5,
-      },
-    ],
-  };
+        backgroundColor: ["#2563eb", "#10B981", "#F59E0B"],
+        hoverOffset: 8
+      }],
+    };
+  }, [dashboardData]);
+  
+  const totalOpenSpace = doughnutData.datasets[0].data[0] || 0;
+  const totalSpaceMonitor = doughnutData.datasets[0].data[1] || 0;
+  const totalMeetingRoom = doughnutData.datasets[0].data[2] || 0;
 
-  const chartOptions = {
-    responsive: true,
+  const hourlyTrafficData = useMemo(() => {
+    const hourly = dashboardData?.hourlyTraffic;
+    if (!hourly) return { labels: [], datasets: [] };
+    return {
+      labels: hourly.labels,
+      datasets: [{ label: "Jumlah Pengunjung", data: hourly.data, backgroundColor: "#2563eb", borderWidth: 1 }]
+    };
+  }, [dashboardData]);
+
+  const peakBarData = useMemo(() => {
+    const hourly = dashboardData?.hourlyTraffic;
+    if (!hourly) return { labels: [], datasets: [] };
+    return {
+        labels: hourly.labels,
+        datasets: [{ label: "Jumlah Booking Aktif", data: hourly.data, backgroundColor: "#EF4444" }]
+    };
+  }, [dashboardData]);
+
+  // --- Chart Options ---
+  const nonDoughnutOptions = { 
+    responsive: true, maintainAspectRatio: false, 
+    plugins: { legend: { display: true }, datalabels: { display: false } }, 
+    scales: { y: { ticks: { callback: (v) => `Rp ${formatRupiah(v)}` } } } 
+  };
+  const doughnutOptions = {
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: "right",
-        labels: {
-          padding: 15,
-          usePointStyle: true,
-          font: {
-            size: 11,
-          },
-          boxWidth: 12,
+      legend: { position: "bottom" },
+      tooltip: { 
+        callbacks: { 
+          label: (ctx) => { 
+            const value = ctx.parsed || 0; 
+            const total = ctx.dataset.data.reduce((s,v)=>s+v,0); 
+            const pct = total === 0 ? 0 : ((value/total)*100).toFixed(1); 
+            return `${ctx.label}: Rp ${formatRupiah(value)} (${pct}%)`; 
+          } 
+        } 
+      },
+      datalabels: {
+        formatter: (value, ctx) => {
+          const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+          return total === 0 ? "0.0%" : ((value / total) * 100).toFixed(1) + "%";
         },
-      },
+        color: '#fff', font: { weight: 'bold', size: 16 }
+      }
     },
-    elements: {
-      arc: {
-        borderWidth: 3,
-      },
-    },
+  };
+  const trafficBarOptions = { 
+    maintainAspectRatio: false, 
+    plugins: { legend: { display: false }, datalabels: { display: false } }, 
+    scales: { y: { beginAtZero: true, title: { display: true, text: "Jumlah Booking Aktif" } }, x: { title: { display: true, text: "Jam (WIB)" } } } 
+  };
+  const peakBarOptions = { 
+    maintainAspectRatio:false, plugins:{legend:{display:false}, datalabels: { display: false }}, scales:{y:{beginAtZero:true}} 
   };
 
-  const lineChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: (value) => "Rp " + formatCurrency(value),
-        },
-      },
-    },
-  };
-
-  const barChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          callback: (value) => "Rp " + (value / 1000000).toFixed(1) + "M",
-        },
-      },
-    },
-  };
+  const topColumns = [
+    { title: "Nama Space", dataIndex: "item", key: "item" },
+    { title: "Kategori", dataIndex: "category", key: "category", width: 150, render: (text) => <Tag color={text.includes("Open Space")?"blue":text.includes("Space Monitor")?"green":"amber"}>{text}</Tag> },
+    { title: "Qty Booking", dataIndex: "qty", key: "qty", align:"center", width:100 },
+    { title: "Total Revenue (Rp)", dataIndex: "total", key: "total", align:"right", width:180, render:(t)=><b>Rp {formatRupiah(t)}</b> }
+  ];
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100 font-sans">
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 overflow-y-auto">
+    <ConfigProvider locale={locale}>
+      <div style={{ padding: 20 }}>
         {/* Header */}
-        <header className="flex justify-between items-center mb-6 lg:mb-8 bg-white p-4 rounded-lg shadow-sm">
-          <div>
-            <h1 className="text-lg sm:text-2xl font-semibold text-gray-800">
-              Working Space Dashboard
-            </h1>
-            <p className="text-sm text-gray-600">
-              Dago Creative Hub & Coffee Lab - Working Space
-            </p>
-          </div>
-        </header>
-
-        {/* Info Bar */}
-        <div className="flex flex-col mb-6 p-4 rounded-lg shadow-sm bg-white border">
-          <div className="flex flex-col sm:flex-row justify-between items-center">
-            {/* Kiri */}
-            <div className="flex justify-start gap-3">
-              <a
-                href="/laporan"
-                className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-              >
-                Laporan
-              </a>
-              <a
-                href="/fnbdashboard"
-                className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-              >
-                FNB
-              </a>
-              <a
-                href="/workingspace"
-                className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100"
-              >
-                Working Space
-              </a>
-            </div>
-
-            {/* Kanan */}
-            <div className="flex items-center space-x-2 text-sm sm:text-base mt-3 sm:mt-0">
-              <span className="text-gray-700 hidden sm:inline">
-                Pilih Tanggal:
-              </span>
-              <ConfigProvider locale={locale}>
+        <Row gutter={[16,16]} justify="space-between" align="middle" style={{ marginBottom: 14 }}>
+            <Col>
+                <Title level={4} style={{ margin: 0 }}>Working Space Dashboard</Title>
+                <Text type="secondary">Dago Creative Hub & Coffee Lab — Working Space</Text>
+            </Col>
+            <Col>
+                <Space align="center">
+                <Text type="secondary">Rentang:</Text>
                 <RangePicker
-                  value={dateRange}
-                  onChange={setDateRange}
-                  format="DD-MM-YYYY"
-                  className="border-gray-300 w-full sm:w-auto"
+                    value={dateRange}
+                    onChange={(vals)=>{ if(!vals) return; setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]); }}
+                    format="DD-MM-YYYY"
+                    disabled={loading}
                 />
-              </ConfigProvider>
-            </div>
-          </div>
+                </Space>
+            </Col>
+        </Row>
+        
+        {/* Quick Links */}
+        <div className="flex justify-start gap-2 mb-4">
+             <a href="/laporan" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100">Laporan</a>
+             <a href="/fnbdashboard" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100">FNB</a>
+             <a href="/workingspace" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100">Working Space</a>
         </div>
 
-        {/* Dashboard Grid - Row 1: Popular Space (LEFT) and Total Revenue (RIGHT) */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6 mb-6">
-          {/* 1. Combined Space Overview - Total Pendapatan and Space Terjual Chart - KANAN */}
-          <div className="xl:col-span-2 bg-white p-6 rounded-lg shadow-sm">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Total Pendapatan - Kiri */}
-              <div className="flex flex-col">
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">
-                    Total Pendapatan Working Space
-                  </h3>
-                  <div className="text-2xl font-bold text-gray-900">
-                    Rp {formatCurrency(totalWorkingSpaceRevenue)}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Pendapatan dari semua jenis space pada periode ini
-                  </p>
-                </div>
-              </div>
+        {error && <Alert message="Error" description={error} type="error" showIcon closable style={{ marginBottom: 16 }} />}
 
-              {/* Space Terjual Description - Kanan */}
-              <div className="flex flex-col">
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">
-                    Total Bookings
-                  </h3>
-                  <div className="text-lg font-semibold text-gray-800">
-                    Total: {totalBookings} Bookings
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Berdasarkan popularitas space
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Statistic Cards */}
+        <Row gutter={[16,16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} sm={12} md={6}>
+                <motion.div initial={{opacity:0, y:6}} animate={{opacity:1, y:0}}>
+                    <Card><Spin spinning={loading}><Statistic title="Total Revenue" value={`Rp ${formatRupiah(stats.totalRevenue)}`} prefix={<DollarCircleOutlined />} /></Spin></Card>
+                </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+                <motion.div initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} transition={{ delay: 0.05 }}>
+                    <Card><Spin spinning={loading}><Statistic title="Total Pengunjung" value={formatRupiah(stats.totalVisitors)} prefix={<UsergroupAddOutlined />} /></Spin></Card>
+                </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+                <motion.div initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} transition={{ delay: 0.1 }}>
+                    <Card><Spin spinning={loading}><Statistic title="Jumlah Booking" value={stats.totalBookings} prefix={<FieldTimeOutlined />} /></Spin></Card>
+                </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+                 <motion.div initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} transition={{ delay: 0.15 }}>
+                     <Card><Spin spinning={loading}><Statistic title="Rata-rata Harian" value={`Rp ${formatRupiah(avgDaily)}`} prefix={<ArrowUpOutlined />} /></Spin></Card>
+                 </motion.div>
+            </Col>
+        </Row>
 
-            {/* Space Terjual Diagram - Bawah */}
-            <div className="w-full h-[350px] flex justify-center items-center mt-4">
-              <div className="w-full max-w-sm h-full">
-                <Doughnut data={spaceTerjualDataChart} options={chartOptions} />
-              </div>
-            </div>
-          </div>
+        {/* Charts */}
+        <Row gutter={[16,16]}>
+            <Col xs={24} lg={16}>
+                <Card style={{ marginBottom: 16 }}>
+                    <Spin spinning={loading}>
+                        <Title level={5}>Daily Revenue (per Space Category)</Title>
+                        <div style={{ height: 300 }}><Line data={lineData} options={nonDoughnutOptions} /></div>
+                    </Spin>
+                </Card>
+                <Card style={{ marginBottom: 16 }}>
+                    <Spin spinning={loading}>
+                        <Title level={5}>Trafik Pengguna Setiap Jam</Title>
+                        <div style={{ height: 300, marginTop: 10 }}><Bar data={hourlyTrafficData} options={trafficBarOptions} /></div>
+                    </Spin>
+                </Card>
+                <Card>
+                    <Spin spinning={loading}>
+                        <Title level={5}>Peak Hours Booking</Title>
+                        <div style={{ height: 220, marginTop: 10 }}><Bar data={peakBarData} options={peakBarOptions} /></div>
+                    </Spin>
+                </Card>
+            </Col>
+            <Col xs={24} lg={8}>
+                <Card>
+                    <Spin spinning={loading}>
+                        <Title level={5}>Kontribusi Space (Revenue)</Title>
+                        <div style={{ height: 220 }}><Doughnut data={doughnutData} options={doughnutOptions} /></div>
+                        <Divider />
+                        <Space direction="vertical" size="small" style={{ width:"100%" }}>
+                            <div style={{ display:"flex", justifyContent:"space-between" }}><Text><Tag color="#2563eb" /> Open Space</Text><Text strong>Rp {formatRupiah(totalOpenSpace)}</Text></div>
+                            <div style={{ display:"flex", justifyContent:"space-between" }}><Text><Tag color="#10B981" /> Space Monitor</Text><Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text></div>
+                            <div style={{ display:"flex", justifyContent:"space-between" }}><Text><Tag color="#F59E0B" /> Meeting Room</Text><Text strong>Rp {formatRupiah(totalMeetingRoom)}</Text></div>
+                        </Space>
+                    </Spin>
+                </Card>
+            </Col>
+        </Row>
 
-          {/* 2. Top 10 Popular Space - KIRI */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Top 10 Popular Space
-            </h3>
-            <div className="overflow-x-auto h-[400px]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-1 text-xs font-medium text-gray-600 sticky top-0 bg-white">
-                      Space Name
-                    </th>
-                    <th className="text-center py-2 px-1 text-xs font-medium text-gray-600">
-                      Bookings
-                    </th>
-                    <th className="text-right py-2 px-1 text-xs font-medium text-gray-600">
-                      Total (Rp)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {openSpaceTopData.map((item, index) => (
-                    <tr
-                      key={index}
-                      className="border-b border-gray-100 hover:bg-gray-50"
-                    >
-                      <td className="py-2 px-1 text-xs">{item.item}</td>
-                      <td className="py-2 px-1 text-xs text-center font-medium">
-                        {item.qty}
-                      </td>
-                      <td className="py-2 px-1 text-xs text-right font-semibold">
-                        Rp {item.total}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Dashboard Grid - Row 2: Daily Working Space Booking (LEFT) & Profit Summary (RIGHT) */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
-          {/* 3. Daily Working Space Booking Chart (Dynamic) - KIRI */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">
-              Daily Working Space Booking (IDR){" "}
-              {dayjs(endDate).format("MMMM YYYY")}
-            </h3>
-            <div className="w-full h-64 sm:h-80">
-              <Line data={dailySellingData} options={lineChartOptions} />
-            </div>
-          </div>
-
-          {/* 4. Working Space Profit Summary - 6 bulan terakhir (Dynamic) - KANAN */}
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-700 mb-4">
-              Working Space Profit Summary (6 Bulan Terakhir IDR)
-            </h3>
-            <div className="w-full h-64 sm:h-80">
-              <Bar data={profitSummaryData} options={barChartOptions} />
-            </div>
-          </div>
-        </div>
+        {/* Top 10 Working Spaces */}
+        <Card style={{ marginTop: 16 }}>
+             <Spin spinning={loading}>
+                <Title level={5}>Top 10 Working Spaces (Revenue)</Title>
+                {(dashboardData?.topSpaces || []).length > 0 ? (
+                    <Table
+                        dataSource={dashboardData.topSpaces}
+                        columns={topColumns}
+                        pagination={false}
+                        rowKey="item"
+                        scroll={{ x: "max-content" }}
+                    />
+                ) : (
+                    !loading && <Empty description="Tidak ada data" />
+                )}
+            </Spin>
+        </Card>
       </div>
-    </div>
+    </ConfigProvider>
   );
 };
 
 export default WorkingSpace;
+

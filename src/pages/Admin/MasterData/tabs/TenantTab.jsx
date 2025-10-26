@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Form, Input, Select, Space, message, Popconfirm, Upload, Image,
-  // PERBAIKAN 1: Impor Typography
-  Typography,
+  Typography, Tag,
+  Switch, // PERUBAHAN: Impor Switch
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import {
@@ -11,10 +11,10 @@ import {
   updateTenant,
   deleteTenant,
   getUsers,
+  updateTenantStatus
 } from "../../../../services/service";
 
 const { Option } = Select;
-// PERBAIKAN 2: Ambil Text dari Typography
 const { Text } = Typography;
 const API_URL = import.meta.env.VITE_BASE_URL;
 
@@ -30,6 +30,7 @@ const TenantTab = () => {
   const [tenants, setTenants] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState(null); // PERUBAHAN: State untuk loading per-switch
   const [open, setOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState(null);
   const [fileList, setFileList] = useState([]);
@@ -48,6 +49,7 @@ const TenantTab = () => {
       message.error("Terjadi kesalahan: " + error.message);
     } finally {
       setLoading(false);
+      setUpdatingStatusId(null); // PERUBAHAN: Pastikan loading switch mati setelah fetch
     }
   };
 
@@ -111,6 +113,34 @@ const TenantTab = () => {
     }
   };
 
+  // PERUBAHAN: Logika untuk menangani loading per-switch
+  const handleStatusChange = async (newStatus, id_tenant) => {
+    setUpdatingStatusId(id_tenant); // Atur loading HANYA untuk switch ini
+    try {
+      const res = await updateTenantStatus(id_tenant, newStatus);
+      if (res.status === 200) {
+        message.success(res.data.message || "Status tenant diperbarui!");
+        // Update state lokal secara manual agar UI cepat merespons
+        // Ini opsional, tapi UX-nya lebih baik daripada fetchTenants()
+        setTenants(prevTenants =>
+          prevTenants.map(tenant =>
+            tenant.id_tenant === id_tenant
+              ? { ...tenant, status_tenant: newStatus }
+              : tenant
+          )
+        );
+      } else {
+        message.error(res.data.error || "Gagal memperbarui status.");
+      }
+    } catch (error) {
+      message.error("Terjadi kesalahan: " + error.message);
+    } finally {
+      // Hentikan loading untuk switch ini
+      setUpdatingStatusId(null); 
+      // fetchTenants(); // Anda bisa juga fetch ulang, tapi update manual lebih cepat
+    }
+  };
+
   const handleCancel = () => {
     setOpen(false);
     setFileList([]);
@@ -153,11 +183,11 @@ const TenantTab = () => {
 
   const columns = [
     { title: "No", key: "no", render: (text, record, index) => index + 1, width: 70 },
-    { 
-      title: "Gambar", 
-      dataIndex: "gambar_tenant", 
+    {
+      title: "Gambar",
+      dataIndex: "gambar_tenant",
       key: "gambar_tenant",
-      render: (text) => 
+      render: (text) =>
         text ? (
           <Image width={80} src={`${API_URL}/static/${text}`} />
         ) : (
@@ -168,11 +198,36 @@ const TenantTab = () => {
     { title: "Owner", dataIndex: "nama_owner", key: "nama_owner" },
     { title: "Deskripsi", dataIndex: "deskripsi_tenant", key: "deskripsi_tenant" },
     {
+      title: "Status",
+      dataIndex: "status_tenant",
+      key: "status_tenant",
+      render: (text, record) => (
+        <Space size="middle">
+          
+          
+          {/* PERUBAHAN: Ganti dua tombol Popconfirm dengan satu Switch */}
+          <Switch
+            checkedChildren="Active"
+            unCheckedChildren="Inactive"
+            checked={record.status_tenant === 'Active'}
+            onChange={(checked) => handleStatusChange(checked ? 'Active' : 'Inactive', record.id_tenant)}
+            loading={updatingStatusId === record.id_tenant} // Loading per-baris
+            disabled={loading} // Disable jika tabel sedang loading
+          />
+
+
+        </Space>
+      ),
+    },
+    {
       title: "Actions",
       key: "actions",
       render: (text, record) => (
         <Space size="middle">
           <Button icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
+          
+
+
           <Popconfirm
             title="Anda yakin ingin menghapus tenant ini?"
             onConfirm={() => handleDelete(record.id_tenant)}

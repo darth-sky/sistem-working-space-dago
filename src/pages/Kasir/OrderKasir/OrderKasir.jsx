@@ -60,7 +60,10 @@ const OrderKasir = () => {
     const [cashierName, setCashierName] = useState("Rossa");
     const [currentDate, setCurrentDate] = useState(dayjs());
     const [selectedItems, setSelectedItems] = useState([]);
-    const [taxPercentage, setTaxPercentage] = useState(0);
+
+    const [taxRateFnbPercentFromAPI, setTaxRateFnbPercentFromAPI] = useState(0); // Untuk pajak dari API
+    const [loadingError, setLoadingError] = useState(null); // Untuk pesan error
+
     const [isNewOrderModalVisible, setIsNewOrderModalVisible] = useState(false);
     const [newOrderForm] = Form.useForm();
     const [isCashPaymentModalVisible, setIsCashPaymentModalVisible] = useState(false);
@@ -99,22 +102,36 @@ const OrderKasir = () => {
     }, [initialState, newOrderForm]);
 
     useEffect(() => {
+        let isMounted = true;
         const loadData = async () => {
             try {
                 setIsLoading(true);
+                setLoadingError(null); // Reset error
                 const data = await getPosInitData();
-                setProducts(data.products || []);
-                setMerchantCategories(data.merchantCategories || []);
-                setProductTypeCategories(data.productTypeCategories || []);
-                setOrderTypes(data.orderTypes || []);
-                message.success("Data produk berhasil dimuat!");
+                if (isMounted) {
+                    setProducts(data.products || []);
+                    setMerchantCategories(data.merchantCategories || []);
+                    setProductTypeCategories(data.productTypeCategories || []);
+                    setOrderTypes(data.orderTypes || []);
+                    // --> TAMBAHKAN BARIS INI <--
+                    setTaxRateFnbPercentFromAPI(data.taxRateFnbPercent || 0);
+                    message.success("Data POS siap digunakan!");
+                }
             } catch (error) {
-                message.error("Gagal memuat data dari server. Coba muat ulang halaman.");
+                if (isMounted) {
+                    const errorMsg = "Gagal memuat data POS. Menggunakan pajak default 10%.";
+                    message.error(errorMsg);
+                    setLoadingError(errorMsg); // Set pesan error
+                    console.error("Error loading POS data:", error);
+                    // --> TAMBAHKAN FALLBACK DI SINI <--
+                    setTaxRateFnbPercentFromAPI(10);
+                }
             } finally {
-                setIsLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
         loadData();
+        return () => { isMounted = false; };
     }, []);
 
     useEffect(() => {
@@ -139,11 +156,11 @@ const OrderKasir = () => {
         if (selectedMerchant === "all_merchants") {
             return productTypeCategories;
         }
-        
+
         const merchantProducts = products.filter(p => p.merchantId === selectedMerchant);
         const merchantCategories = [...new Set(merchantProducts.map(p => p.category))];
-        
-        return productTypeCategories.filter(cat => 
+
+        return productTypeCategories.filter(cat =>
             cat.id === "all_types" || merchantCategories.includes(cat.id)
         );
     }, [selectedMerchant, products, productTypeCategories]);
@@ -191,11 +208,40 @@ const OrderKasir = () => {
         setSelectedItems(selectedItems.filter((item) => !(item.id === productId && item.note === itemNote)));
     };
 
-    const subtotal = selectedItems.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const totalTax = subtotal * taxPercentage;
-    const totalDiscount = subtotal * (discountPercentage / 100);
-    const totalAmount = subtotal - totalDiscount + totalTax;
-    const changeAmount = cashInput > totalAmount ? cashInput - totalAmount : 0;
+
+    // --- Kalkulasi Harga (Memoized) ---
+    // Subtotal (tidak berubah)
+    const subtotal = useMemo(() =>
+        selectedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.qty) || 0), 0),
+        [selectedItems]);
+
+    // Diskon Nominal (tidak berubah)
+    const totalDiscountNominal = useMemo(() =>
+        subtotal * (discountPercentage / 100),
+        [subtotal, discountPercentage]);
+
+    // Jumlah Kena Pajak (setelah diskon) (tidak berubah)
+    const taxableAmount = useMemo(() =>
+        subtotal - totalDiscountNominal,
+        [subtotal, totalDiscountNominal]);
+
+    // --> PERUBAHAN DI SINI <--
+    // Hitung Pajak Nominal menggunakan state dari API
+    const totalTaxNominal = useMemo(() =>
+        // Pastikan pembulatan jika diperlukan, misal: Math.round(taxableAmount * (taxRateFnbPercentFromAPI / 100) * 100) / 100
+        taxableAmount * (taxRateFnbPercentFromAPI / 100), // Gunakan taxRateFnbPercentFromAPI
+        [taxableAmount, taxRateFnbPercentFromAPI]); // Tambahkan taxRateFnbPercentFromAPI ke dependency
+
+    // Hitung Total Akhir (tidak berubah, tapi kini berdasarkan totalTaxNominal yang benar)
+    const totalAmount = useMemo(() =>
+        taxableAmount + totalTaxNominal,
+        [taxableAmount, totalTaxNominal]);
+    // --> AKHIR PERUBAHAN <--
+
+    // Perhitungan Kembalian (tidak berubah)
+    const changeAmount = useMemo(() =>
+        cashInput > totalAmount ? cashInput - totalAmount : 0,
+        [cashInput, totalAmount]);
 
     const showDiscountModal = () => {
         discountForm.setFieldsValue({ discount: discountPercentage });
@@ -314,34 +360,56 @@ const OrderKasir = () => {
     };
 
     const handleStrukConfirmPayment = async () => {
+        // Prepare data object, ensure numbers are numbers
         const orderData = {
             customerName: customerName,
-            orderType: currentOrderType,
-            room: room,
-            paymentMethod: selectedPaymentMethod,
-            items: selectedItems,
-            subtotal: subtotal,
-            totalTax: totalTax,
-            totalDiscount: totalDiscount,
-            totalAmount: totalAmount,
-            cashInput: selectedPaymentMethod === 'cash' ? cashInput : totalAmount,
-            changeAmount: selectedPaymentMethod === 'cash' ? changeAmount : 0
+            orderType: currentOrderType, // dinein, takeaway, pickup
+            room: currentOrderType === 'dinein' ? room : null, // Only send room if dinein
+            // Map frontend state ('cash'/'qris') to backend expected values ('CASH'/'QRIS')
+            paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : 'QRIS',
+            items: selectedItems.map(item => ({
+                id: item.id, // Should match backend expected field (e.g., id_produk)
+                qty: parseInt(item.qty) || 0, // Ensure integer
+                price: parseFloat(item.price) || 0, // Ensure number (harga_saat_order)
+                note: item.note || null // catatan_pesanan
+            })),
+            // --- PERUBAHAN DI SINI ---
+            subtotal: subtotal,                     // Kirim subtotal (hasil useMemo)
+            discountPercentage: discountPercentage, // Kirim persentase diskon dari state
+            discountNominal: totalDiscountNominal,  // Kirim nominal diskon (hasil useMemo)
+            taxPercentage: taxRateFnbPercentFromAPI,// Kirim persentase pajak dari state API
+            taxNominal: totalTaxNominal,            // Kirim nominal pajak (hasil useMemo)
+            totalAmount: totalAmount,               // Kirim total akhir (hasil useMemo)
+            // Hapus cashInput & changeAmount, backend tidak memerlukannya untuk membuat transaksi
+            // cashInput: selectedPaymentMethod === 'cash' ? cashInput : totalAmount,
+            // changeAmount: selectedPaymentMethod === 'cash' ? changeAmount : 0
+            // --- AKHIR PERUBAHAN ---
         };
 
         try {
-            const result = await createOrderKasir(orderData);
-            message.success(`Order #${result.id_transaksi} berhasil disimpan!`);
+            console.log("Mengirim Order Data (Kasir):", orderData); // Log data yang akan dikirim
+            const result = await createOrderKasir(orderData); // Panggil service API
+            message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`); // Tampilkan ID jika ada
+
+            // Reset state setelah order berhasil disimpan
             setIsStrukModalVisible(false);
             setPaymentSuccess(false);
             setSelectedItems([]);
             setDiscountPercentage(0);
             setCashInput(0);
-            setCustomerName("Guest");
+            setCustomerName("Guest"); // Reset ke default
             setRoom(null);
-            setCurrentOrderNumber(generateOrderNumber());
+            setCurrentOrderNumber(generateOrderNumber()); // Nomor order baru
             setSelectedPaymentMethod(null);
+            newOrderForm.resetFields({ // Reset form order baru juga
+                customerName: "Guest",
+                orderType: "dinein",
+                room: null
+            });
+
         } catch (error) {
-            message.error(`Gagal menyimpan order: ${error.message}`);
+            message.error(`Gagal menyimpan order: ${error.message || 'Error tidak diketahui'}`);
+            console.error("Error saving order:", error); // Log error detail ke console
         }
     };
 
@@ -449,23 +517,36 @@ const OrderKasir = () => {
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                                {isLoading ? <div className="flex justify-center items-center h-full"><Spin size="large" /></div> : (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {/* List Produk (Scrollable Area) */}
+                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pt-1">
+                                {isLoading ? (
+                                    <div className="flex justify-center items-center h-40"><Spin tip="Memuat produk..." /></div>
+                                ) : filteredProducts.length === 0 ? (
+                                    <div className="text-center py-10 text-gray-500">Tidak ada produk ditemukan.</div>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                        {/* TIDAK ADA PERUBAHAN DI SINI */}
                                         {filteredProducts.map((product) => (
-                                            <div key={product.id} className={`rounded-xl shadow-sm border p-3 ${product.available ? "bg-white border-gray-200 cursor-pointer hover:shadow-md" : "bg-red-50 border-red-200 cursor-not-allowed opacity-70"}`} onClick={() => product.available && handleAddProductToCart(product)}>
-                                                <h3 className={`font-semibold text-sm mb-1 ${product.available ? "text-gray-800" : "text-gray-500"}`}>{product.name}</h3>
-                                                <div className="flex items-center justify-between mt-2">
-                                                    <span className={`text-base font-bold ${product.available ? "text-blue-600" : "text-gray-500"}`}>{formatRupiah(product.price)}</span>
-                                                    {!product.available && <Tag color="red">Habis</Tag>}
+                                            <div
+                                                key={product.id} // Gunakan ID produk sebagai key
+                                                className={`rounded-lg shadow-sm border p-3 flex flex-col justify-between transition-all duration-150 h-full ${product.available
+                                                    ? "bg-white border-gray-200 cursor-pointer hover:shadow-md hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                                    : "bg-gray-100 border-gray-200 cursor-not-allowed opacity-60"
+                                                    }`}
+                                                onClick={() => product.available && handleAddProductToCart(product)}
+                                                tabIndex={product.available ? 0 : -1} // Aksesibilitas keyboard
+                                                role="button"
+                                                aria-disabled={!product.available}
+                                            >
+                                                <div className="flex-1 mb-1">
+                                                    <h3 className={`font-semibold text-sm leading-tight ${product.available ? "text-gray-800" : "text-gray-500"}`}>{product.name}</h3>
+                                                </div>
+                                                <div className="flex items-center justify-between mt-1">
+                                                    <span className={`text-xs font-bold ${product.available ? "text-blue-600" : "text-gray-500"}`}>{formatRupiah(product.price)}</span>
+                                                    {!product.available && <Tag color="red" className="ml-1 text-xs">Habis</Tag>}
                                                 </div>
                                             </div>
                                         ))}
-                                        {filteredProducts.length === 0 && !isLoading && (
-                                            <div className="col-span-full text-center py-10 text-gray-500">
-                                                Tidak ada produk ditemukan.
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </div>
@@ -524,12 +605,47 @@ const OrderKasir = () => {
                             ))
                         )}
                     </div>
+                    {/* --- BAGIAN TOTAL HARGA BARU --- */}
                     <div className="bg-white rounded-xl shadow-md p-4 mb-6 border">
-                        <div className="flex justify-between items-center text-sm mb-2"><span>Subtotal</span><span>{formatRupiah(subtotal)}</span></div>
-                        {taxPercentage > 0 && (<div className="flex justify-between items-center text-sm mb-2"><span>Tax ({taxPercentage * 100}%)</span><span>{formatRupiah(totalTax)}</span></div>)}
-                        <div className="flex justify-between items-center text-sm mb-4"><span>Discount ({discountPercentage}%)</span><span>-{formatRupiah(totalDiscount)}</span></div>
-                        <div className="flex justify-between items-center text-xl font-bold text-blue-600 border-t pt-4"><span>Total</span><span>{formatRupiah(totalAmount)}</span></div>
+                        {/* Tampilkan loading jika data awal (termasuk pajak) belum siap */}
+                        {isLoading ? (
+                            <div className="flex justify-center items-center py-4"><Spin /></div>
+                        ) : (
+                            <>
+                                {/* Subtotal */}
+                                <div className="flex justify-between items-center text-sm mb-1 text-gray-600">
+                                    <span>Subtotal</span>
+                                    <span className="font-medium">{formatRupiah(subtotal)}</span>
+                                </div>
+                                {/* Diskon (jika ada) */}
+                                {discountPercentage > 0 && (
+                                    <div className="flex justify-between items-center text-sm mb-1 text-red-600">
+                                        <span>Diskon ({discountPercentage}%)</span>
+                                        <span className="font-medium">-{formatRupiah(totalDiscountNominal)}</span> {/* Gunakan totalDiscountNominal */}
+                                    </div>
+                                )}
+                                {/* Pajak (jika ada subtotal & pajak > 0) */}
+                                {/* --> PERUBAHAN DI SINI <-- */}
+                                {subtotal > 0 && taxRateFnbPercentFromAPI > 0 && ( // Gunakan state API untuk kondisi
+                                    <div className="flex justify-between items-center text-sm mb-3 text-gray-600">
+                                        {/* Tampilkan persen dari state API (tanpa * 100) */}
+                                        <span>Pajak F&B ({taxRateFnbPercentFromAPI}%)</span>
+                                        {/* Tampilkan nominal dari useMemo */}
+                                        <span className="font-medium">{formatRupiah(totalTaxNominal)}</span>
+                                    </div>
+                                )}
+                                {/* --> AKHIR PERUBAHAN <-- */}
+
+                                {/* Total */}
+                                <div className="flex justify-between items-center text-lg font-bold text-blue-600 border-t border-gray-200 pt-3 mt-2">
+                                    <span>Total</span>
+                                    {/* Gunakan totalAmount hasil useMemo */}
+                                    <span>{formatRupiah(totalAmount)}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
+                    {/* --- AKHIR BAGIAN TOTAL HARGA BARU --- */}
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                             <div className="flex items-center gap-1">
@@ -662,31 +778,109 @@ const OrderKasir = () => {
                 </Form>
             </Modal>
 
-            <Modal title={<div className="text-xl font-bold text-gray-800">Struk Pembayaran</div>} open={isStrukModalVisible} onCancel={paymentSuccess ? handleStrukConfirmPayment : handleStrukCancel} footer={null} width={400} centered>
-                <div className="flex flex-col p-4 bg-white rounded-lg shadow-inner mt-4 border border-gray-200">
-                    {paymentSuccess && (<div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 flex items-center"><CheckCircleOutlined className="mr-2 text-xl" /><span className="font-semibold">Pembayaran berhasil!</span></div>)}
-                    <div className="text-sm text-gray-600 mb-4">
-                        <p><strong>Customer:</strong> {customerName}</p>
-                        <p><strong>Tipe Order:</strong> {currentOrderType === 'dinein' ? 'Dine In' : currentOrderType === 'takeaway' ? 'Take Away' : 'Pick Up'}</p>
-                        {room && <p><strong>Ruangan/Meja:</strong> {room}</p>}
+            <Modal
+                title={<div className="text-xl font-bold text-gray-800">Struk Pembayaran</div>}
+                open={isStrukModalVisible}
+                // Gunakan handleStrukConfirmPayment saat OK ditekan JIKA paymentSuccess=true
+                // Gunakan handleStrukCancel saat modal ditutup (klik X atau area luar)
+                onOk={handleStrukConfirmPayment} // Tombol OK/Simpan akan memanggil ini
+                onCancel={handleStrukCancel}      // Tombol Cancel/X akan memanggil ini
+                footer={[ // Custom footer
+                    // Tombol Batal hanya muncul jika pembayaran belum dianggap 'sukses'
+                    !paymentSuccess && (
+                        <Button key="back" size="large" onClick={handleStrukCancel}>
+                            Batal
+                        </Button>
+                    ),
+                    <Button
+                        key="submit"
+                        type="primary"
+                        size="large"
+                        block={!paymentSuccess} // Block jika hanya satu tombol
+                        onClick={handleStrukConfirmPayment}
+                    // loading={isSavingOrder} // Tambah loading state jika perlu
+                    >
+                        Simpan & Cetak Struk
+                    </Button>,
+                ]}
+                width={380} // Lebar disesuaikan
+                centered
+                destroyOnClose // Reset state modal saat ditutup
+            >
+                <div className="flex flex-col pt-4 bg-white rounded-lg text-xs"> {/* Font dasar struk diperkecil */}
+                    {/* Pesan Sukses */}
+                    {paymentSuccess && (
+                        <div className="bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded-md relative mb-3 flex items-center text-xs">
+                            <CheckCircleOutlined className="mr-2 text-base" />
+                            <span className="font-semibold">Pembayaran berhasil diterima!</span>
+                        </div>
+                    )}
+                    {/* Info Header */}
+                    <div className="text-gray-600 mb-3 space-y-0.5">
+                        <p><strong>Customer:</strong> {customerName || 'Guest'}</p>
+                        <p><strong>Tipe:</strong> {currentOrderType === 'dinein' ? 'Dine In' : currentOrderType === 'takeaway' ? 'Take Away' : 'Pick Up'}{room ? ` (${room})` : ''}</p>
                         <p><strong>Order #:</strong> {currentOrderNumber}</p>
                         <p><strong>Kasir:</strong> {cashierName}</p>
-                        <p><strong>Tanggal:</strong> {currentDate.format("DD MMMM YYYY h:mm A")}</p>
-                        <p><strong>Metode Bayar:</strong> {selectedPaymentMethod === 'cash' ? 'Cash' : selectedPaymentMethod === 'qris' ? 'QRIS' : '-'}</p>
+                        <p><strong>Tanggal:</strong> {currentDate.format("DD/MM/YY HH:mm")}</p> {/* Format lebih singkat */}
+                        <p><strong>Bayar:</strong> {selectedPaymentMethod === 'cash' ? 'Tunai' : selectedPaymentMethod === 'qris' ? 'QRIS' : '-'}</p>
                     </div>
-                    <div className="border-t border-b border-gray-200 py-4 mb-4">
-                        {selectedItems.map((item) => (<div key={`${item.id}-${item.note || ''}`} className="flex justify-between items-center mb-2"><div><p className="font-semibold text-gray-800">{item.name} x{item.qty}</p>{item.note && <p className="text-xs text-gray-500 italic">Catatan: {item.note}</p>}</div><span>{formatRupiah(item.price * item.qty)}</span></div>))}
+                    {/* Rincian Item (Scrollable) */}
+                    <div className="border-t border-b border-gray-200 py-2 my-2 max-h-40 overflow-y-auto custom-scrollbar">
+                        {selectedItems.map((item) => (
+                            <div key={`${item.id}-${item.note || 'no-note'}`} className="flex justify-between items-start mb-1.5">
+                                <div className="mr-2">
+                                    <p className="font-medium text-gray-800 leading-tight">{item.name} <span className="font-normal text-gray-500">x{item.qty}</span></p>
+                                    {item.note && <p className="text-gray-500 italic">({item.note})</p>}
+                                </div>
+                                <span className="font-medium whitespace-nowrap">{formatRupiah(item.price * item.qty)}</span>
+                            </div>
+                        ))}
                     </div>
-                    <div className="mb-4">
-                        <div className="flex justify-between text-sm mb-1"><span>Subtotal</span><span>{formatRupiah(subtotal)}</span></div>
-                        {taxPercentage > 0 && (<div className="flex justify-between text-sm mb-1"><span>Pajak ({taxPercentage * 100}%)</span><span>{formatRupiah(totalTax)}</span></div>)}
-                        <div className="flex justify-between text-sm mb-1"><span>Diskon ({discountPercentage}%)</span><span>-{formatRupiah(totalDiscount)}</span></div>
-                        <div className="flex justify-between text-base font-bold text-gray-800 mt-2"><span>Total</span><span>{formatRupiah(totalAmount)}</span></div>
-                        {selectedPaymentMethod === 'cash' && (<><div className="flex justify-between text-sm mt-2"><span>Tunai</span><span>{formatRupiah(cashInput)}</span></div><div className="flex justify-between text-base font-bold text-green-600 mt-1"><span>Kembalian</span><span>{formatRupiah(changeAmount)}</span></div></>)}
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 mt-4">
-                        <Button type="primary" size="large" block onClick={handleStrukConfirmPayment}>Simpan & Cetak</Button>
-                        {!paymentSuccess && (<Button size="large" block onClick={handleStrukCancel}>Batal</Button>)}
+                    {/* Rincian Harga Akhir */}
+                    <div className="mb-1 space-y-0.5">
+                        {/* Subtotal */}
+                        <div className="flex justify-between">
+                            <span>Subtotal</span>
+                            <span>{formatRupiah(subtotal)}</span>
+                        </div>
+                        {/* Diskon */}
+                        {discountPercentage > 0 && (
+                            <div className="flex justify-between text-red-600">
+                                <span>Diskon ({discountPercentage}%)</span>
+                                <span>-{formatRupiah(totalDiscountNominal)}</span>
+                            </div>
+                        )}
+
+                        {/* --- PERUBAHAN PAJAK DI SINI --- */}
+                        {/* Tampilkan pajak jika ada subtotal dan tarif pajak > 0 */}
+                        {subtotal > 0 && taxRateFnbPercentFromAPI > 0 && (
+                            <div className="flex justify-between">
+                                {/* Gunakan state dari API untuk persentase */}
+                                <span>Pajak F&B ({taxRateFnbPercentFromAPI}%)</span>
+                                {/* Gunakan nominal yang sudah dihitung */}
+                                <span>{formatRupiah(totalTaxNominal)}</span>
+                            </div>
+                        )}
+                        {/* --- AKHIR PERUBAHAN PAJAK --- */}
+
+                        {/* Total */}
+                        <div className="flex justify-between text-sm font-bold text-gray-800 pt-1.5 border-t border-dashed mt-1.5">
+                            <span>Total</span>
+                            <span>{formatRupiah(totalAmount)}</span>
+                        </div>
+                        {/* Tunai & Kembalian (jika cash) */}
+                        {selectedPaymentMethod === 'cash' && (
+                            <>
+                                <div className="flex justify-between pt-1">
+                                    <span>Tunai</span>
+                                    <span>{formatRupiah(cashInput)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold text-green-600">
+                                    <span>Kembalian</span>
+                                    <span>{formatRupiah(changeAmount)}</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </Modal>

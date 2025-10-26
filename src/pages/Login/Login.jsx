@@ -17,7 +17,7 @@ const Login = () => {
       const role = userProfile.roles?.toLowerCase(); // normalisasi role
 
       if (role === "admin_dago") {
-        navigate("/dashboardadmin", { replace: true });
+        navigate("/virtualofficeadmin", { replace: true });
       } else if (role === "kasir") {
         navigate("/transaksikasir", { replace: true });
       } else if (role === "owner") {

@@ -387,46 +387,7 @@ const HutangAdmin = () => {
 
                 {/* Bagian yang Anda minta TIDAK KEPOTONG: Form Input dan Tabel Rekap */}
                 <Row gutter={[16, 16]}>
-                    {/* Form Input Pendapatan Tenant (Ambil 8 kolom dari 24) */}
-                    <Col xs={24} lg={8}>
-                        <Card title="Input Pendapatan Tenant">
-                            <Form form={form} layout="vertical" onFinish={handleAdd} initialValues={{ name: "HomeBro", totalSales: 0, debt: 0 }}>
-                                <Form.Item name="name" label="Pilih Tenant / Nama" rules={[{ required: true, message: "Pilih atau masukkan nama tenant" }]}>
-                                    <Select showSearch placeholder="Pilih tenant atau ketik nama">
-                                        <Option value="HomeBro">HomeBro</Option>
-                                        <Option value="Dapoer M.S">Dapoer M.S</Option>
-                                        <Option value="Tenant Baru">Tenant Baru</Option>
-                                    </Select>
-                                </Form.Item>
-
-                                <Form.Item name="totalSales" label="Total Penjualan (Rp)" rules={[{ required: true, message: "Masukkan total penjualan" }]}>
-                                    <InputNumber style={{ width: "100%" }} min={0} formatter={formatNumberInput} parser={parseNumberInput} placeholder="Contoh: 2500000" />
-                                </Form.Item>
-
-                                <Form.Item name="debt" label="Sisa Utang Bulan Lalu (Opsional)" rules={[{ type: "number", min: 0 }]}>
-                                    <InputNumber style={{ width: "100%" }} min={0} formatter={formatNumberInput} parser={parseNumberInput} placeholder="Contoh: 150000" />
-                                </Form.Item>
-
-                                <Form.Item>
-                                    <Button type="primary" block htmlType="submit">
-                                        Tambah / Simpan Data (Dummy)
-                                    </Button>
-                                </Form.Item>
-                            </Form>
-
-                            <Divider />
-
-                            <div style={{ fontSize: 13, color: "#6b7280" }}>
-                                **Info Skema Bagi Hasil:**
-                                <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                                    <li>Pembagian: **Tenant 70%** dan **Owner 30%**.</li>
-                                    <li>Pembayaran Tenant (70%) dipotong utang terlebih dahulu.</li>
-                                    <li>**Jadwal Pembayaran Net Tenant Share:** 30% pada tanggal 1 dan 70% pada tanggal 16.</li>
-                                </ul>
-                            </div>
-                        </Card>
-                    </Col>
-
+                    
                     {/* Table Rekap Pembayaran (Ambil 16 kolom dari 24) */}
                     <Col xs={24} lg={16}>
                         <Card title={`Rekap Pembayaran Tenant - ${period.format("MMMM YYYY")}`} bodyStyle={{ padding: 0 }}>

@@ -174,7 +174,7 @@ const AuthProvider = ({ children }) => {
             // MODIFIKASI: Navigasi sesuai role, tambahkan "admin_tenant"
             switch (profile.roles) {
                 case "admin":
-                    navigate("/dashboardadmin", { replace: true });
+                    navigate("/virtualofficeadmin", { replace: true });
                     break;
                 case "kasir":
                     navigate("/transaksikasir", { replace: true });

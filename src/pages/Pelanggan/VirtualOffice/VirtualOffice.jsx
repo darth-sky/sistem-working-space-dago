@@ -12,7 +12,7 @@ import {
   Tag,
   Table,
 } from "antd";
-import { CheckOutlined, CloseOutlined, StarFilled } from "@ant-design/icons";
+import { CheckOutlined, CloseOutlined } from "@ant-design/icons";
 import { getPaketVO } from "../../../services/service";
 
 const { Title, Text } = Typography;
@@ -73,36 +73,59 @@ const VirtualOffice = () => {
   }
 
   return (
-    <div style={{ padding: "40px 24px", maxWidth: "1200px", margin: "0 auto" }}>
-      <Title level={2} style={{ textAlign: "center", marginBottom: "16px" }}>
-        Pilih Paket Virtual Office
+    <div
+      style={{
+        padding: "40px 24px",
+        maxWidth: "1200px",
+        margin: "0 auto",
+        fontFamily: "'Inter', 'Segoe UI', sans-serif",
+      }}
+    >
+      {/* Header */}
+      <Title
+        level={2}
+        style={{
+          textAlign: "center",
+          marginBottom: "16px",
+          fontWeight: 700,
+          color: "#1f1f1f",
+          fontFamily: "'Inter', 'Segoe UI', sans-serif",
+        }}
+      >
+        Pilih Paket Virtual Office 
       </Title>
+
       <Text
         type="secondary"
-        style={{ display: "block", textAlign: "center", marginBottom: "40px" }}
+        style={{
+          display: "block",
+          textAlign: "center",
+          marginBottom: "40px",
+          fontSize: 15,
+          color: "#595959",
+          fontFamily: "'Inter', 'Segoe UI', sans-serif",
+        }}
       >
-        Temukan paket membership yang sesuai dengan kebutuhan dan anggaran Anda.
-        Nikmati layanan premium dengan berbagai keuntungan yang bisa mendukung
-        aktivitas bisnis Anda.
+        Temukan paket virtual office yang sesuai dengan kebutuhan dan anggaran
+        Anda. Nikmati layanan premium dengan berbagai keuntungan untuk
+        mendukung produktivitas bisnis Anda.
       </Text>
 
-
+      {/* Paket */}
       <Row gutter={[32, 32]} justify="center">
-        {paketVO.map((paket, index) => {
+        {paketVO.map((paket) => {
           const generalBenefits = paket.deskripsi_layanan
-            ? paket.deskripsi_layanan.split(/\r?\n/) // Pisahkan string berdasarkan baris baru
-              .map(line => line.trim()) // Hapus spasi ekstra
-              .filter(line => line) // Hapus baris kosong
-              .map(benefitText => ({
-                key: benefitText.toLowerCase().replace(/\s/g, '-'), // Buat key unik
-                benefit: benefitText,
-                value: <CheckOutlined style={{ color: "green" }} />,
-              }))
+            ? paket.deskripsi_layanan
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter((line) => line)
+                .map((benefitText) => ({
+                  key: benefitText.toLowerCase().replace(/\s/g, "-"),
+                  benefit: benefitText,
+                  value: <CheckOutlined style={{ color: "green" }} />,
+                }))
             : [];
 
-
-          // bikin data tabel untuk setiap paket
-          // 2. Susun semua data untuk tabel secara dinamis
           const tableData = [
             {
               key: "harga",
@@ -128,7 +151,6 @@ const VirtualOffice = () => {
                 ? `${paket.benefit_jam_working_space_per_bulan} jam/bulan`
                 : <CloseOutlined style={{ color: "red" }} />,
             },
-            // Gabungkan dengan benefit umum yang sudah diproses
             ...generalBenefits,
           ];
 
@@ -138,6 +160,17 @@ const VirtualOffice = () => {
               dataIndex: "benefit",
               key: "benefit",
               width: "60%",
+              render: (text) => (
+                <span
+                  style={{
+                    fontFamily: "'Inter', 'Segoe UI', sans-serif",
+                    fontSize: 14,
+                    color: "#262626",
+                  }}
+                >
+                  {text}
+                </span>
+              ),
             },
             {
               title: paket.nama_paket,
@@ -161,15 +194,24 @@ const VirtualOffice = () => {
               >
                 {/* Judul + Harga */}
                 <div style={{ textAlign: "center", marginBottom: "20px" }}>
-                  <Title level={3} style={{ marginBottom: "8px" }}>
+                  <Title
+                    level={3}
+                    style={{
+                      marginBottom: "8px",
+                      fontWeight: 700,
+                      fontFamily: "'Inter', 'Segoe UI', sans-serif",
+                      color: "#1f1f1f",
+                    }}
+                  >
                     {paket.nama_paket}
                   </Title>
                   <Tag
                     color="blue"
                     style={{
-                      fontSize: "16px",
+                      fontSize: "15px",
                       padding: "6px 14px",
                       borderRadius: "24px",
+                      fontFamily: "'Inter', 'Segoe UI', sans-serif",
                     }}
                   >
                     Mulai dari Rp {paket.harga.toLocaleString("id-ID")}
@@ -183,7 +225,10 @@ const VirtualOffice = () => {
                   pagination={false}
                   size="middle"
                   bordered
-                  style={{ marginTop: "20px" }}
+                  style={{
+                    marginTop: "20px",
+                    fontFamily: "'Inter', 'Segoe UI', sans-serif",
+                  }}
                 />
 
                 {/* Tombol */}
@@ -199,10 +244,11 @@ const VirtualOffice = () => {
                     style={{
                       borderRadius: "40px",
                       width: "80%",
-                      background: "linear-gradient(to right, #40a9ff, #69c0ff)",
+                      background: "linear-gradient(to right, #1890ff, #40a9ff)",
                       border: "none",
                       fontWeight: "600",
                       padding: "10px 0",
+                      fontFamily: "'Inter', 'Segoe UI', sans-serif",
                     }}
                   >
                     Pilih Paket

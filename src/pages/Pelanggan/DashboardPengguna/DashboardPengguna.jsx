@@ -2,7 +2,6 @@
 import React, { useState, useContext, useEffect } from "react";
 import {
   Home,
-  LogIn,
   Menu,
   X,
   Calendar,
@@ -11,12 +10,13 @@ import {
   Users,
   Diamond,
   History,
-  LogOut
+  LogOut,
 } from "lucide-react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import logo from "../../../assets/images/logo.png";
 import { AuthContext } from "../../../providers/AuthProvider";
 import { MdOutlineDiscount, MdOutlineMeetingRoom } from "react-icons/md";
+import { HiOutlineBuildingOffice2 } from "react-icons/hi2";
 
 const DashboardPengguna = ({ children }) => {
   const navigate = useNavigate();
@@ -38,41 +38,88 @@ const DashboardPengguna = ({ children }) => {
   };
 
   const menuItems = [
-    { key: "informasi-ruangan", label: "Pesan Ruangan", icon: <Diamond size={18} />, path: "/informasi-ruangan" },
-    { key: "membership", label: "Membership", icon: <Users size={18} />, path: "/membership" },
-    { key: "virtual-office", label: "Virtual Office", icon: <Building size={18} />, path: "/virtual-office" },
-    { key: "cek-kredit-membership", label: "Cek Kredit Membership", icon: <CreditCard size={18} />, path: "/cek-kredit-membership" },
-    { key: "cek-masa-vo", label: "Cek Masa VO", icon: <Calendar size={18} />, path: "/cek-masa-vo" },
-    { key: "event-spaces", label: "Event Spaces", icon: <MdOutlineMeetingRoom size={18} />, path: "/event-spaces" },
-    { key: "promo-pelanggan", label: "Promo", icon: <MdOutlineDiscount size={18} />, path: "/promo-pelanggan" },
-    { key: "riwayat-transaksi", label: "Riwayat Transaksi", icon: <History size={18} />, path: "/riwayat-transaksi" },
+    {
+      key: "informasi-ruangan",
+      label: "Pesan Ruangan",
+      icon: <Diamond size={18} />,
+      path: "/informasi-ruangan",
+    },
+    {
+      key: "membership",
+      label: "Membership",
+      icon: <Users size={18} />,
+      path: "/membership",
+    },
+    {
+      key: "virtual-office",
+      label: "Virtual Office",
+      icon: <Building size={18} />,
+      path: "/virtual-office",
+    },
+    {
+      key: "cek-kredit-membership",
+      label: "Cek Kredit Membership",
+      icon: <CreditCard size={18} />,
+      path: "/cek-kredit-membership",
+    },
+    {
+      key: "cek-masa-vo",
+      label: "Cek Masa VO",
+      icon: <Calendar size={18} />,
+      path: "/cek-masa-vo",
+    },
+    {
+      key: "event-spaces",
+      label: "Event Spaces",
+      icon: <MdOutlineMeetingRoom size={18} />,
+      path: "/event-spaces",
+    },
+    {
+      key: "promo-pelanggan",
+      label: "Promo",
+      icon: <MdOutlineDiscount size={18} />,
+      path: "/promo-pelanggan",
+    },
+    {
+      key: "private-office",
+      label: "Private Office",
+      icon: <HiOutlineBuildingOffice2 size={18} />,
+      path: "/private-office",
+    },
+    {
+      key: "riwayat-transaksi",
+      label: "Riwayat Transaksi",
+      icon: <History size={18} />,
+      path: "/riwayat-transaksi",
+    },
   ];
 
   const isActive = (path) => location.pathname?.startsWith(`${basePath}${path}`);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* === Overlay hitam, muncul di semua layar === */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
       )}
 
+      {/* === Sidebar === */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 w-64 transform transition-transform duration-300 flex flex-col
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} 
-          md:translate-x-0`}
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        {/* === PERUBAHAN 1: Diberi tinggi tetap h-20 agar sama dengan header utama === */}
+        {/* Header Sidebar */}
         <div className="flex items-center justify-between h-20 px-4 lg:px-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <img src={logo} alt="Logo" className="h-8 object-contain" />
             <span className="font-semibold text-gray-700">Dago Space</span>
           </div>
           <button
-            className="p-1 rounded-md md:hidden hover:bg-gray-100"
+            className="p-1 rounded-md hover:bg-gray-100"
             onClick={() => setSidebarOpen(false)}
             aria-label="Tutup menu"
           >
@@ -80,6 +127,7 @@ const DashboardPengguna = ({ children }) => {
           </button>
         </div>
 
+        {/* Menu Sidebar */}
         <nav className="flex-grow p-4 space-y-2 overflow-y-auto">
           {menuItems.map((item) => (
             <button
@@ -89,12 +137,19 @@ const DashboardPengguna = ({ children }) => {
                 setSidebarOpen(false);
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-left
-                ${isActive(item.path)
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
+                ${
+                  isActive(item.path)
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                 }`}
             >
-              <span className={isActive(item.path) ? "text-white" : "text-gray-500"}>{item.icon}</span>
+              <span
+                className={
+                  isActive(item.path) ? "text-white" : "text-gray-500"
+                }
+              >
+                {item.icon}
+              </span>
               <span className="font-medium text-sm">{item.label}</span>
             </button>
           ))}
@@ -112,12 +167,12 @@ const DashboardPengguna = ({ children }) => {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col md:ml-64">
-        {/* === PERUBAHAN 2: Diberi tinggi tetap h-20 agar sama dengan header sidebar === */}
+      {/* === Konten Utama === */}
+      <div className="flex-1 flex flex-col">
         <header className="flex items-center justify-between h-20 px-4 lg:px-6 bg-white border-b border-gray-200 sticky top-0 z-20">
           <div className="flex items-center gap-2">
             <button
-              className="p-2 rounded-full md:hidden hover:bg-gray-100"
+              className="p-2 rounded-full hover:bg-gray-100"
               onClick={() => setSidebarOpen(true)}
               aria-label="Buka menu"
             >

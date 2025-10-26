@@ -35,17 +35,6 @@ const DashboardWS = () => {
   const [workspaces, setWorkspaces] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // // useEffect untuk redirect berdasarkan role (tidak berubah)
-  // useEffect(() => {
-  //   if (!userProfile) return;
-  //   if (userProfile.roles === "admin") {
-  //     navigate("/dashboardadmin", { replace: true });
-  //   } else if (userProfile.roles === "kasir") {
-  //     navigate("/mengelola-orderan_fb", { replace: true });
-  //   } else if (userProfile.roles === "user") {
-  //     navigate("/dashboard-pengguna", { replace: true });
-  //   }
-  // }, [userProfile, navigate]);
 
   // useEffect untuk mengambil data working space dari API
   useEffect(() => {

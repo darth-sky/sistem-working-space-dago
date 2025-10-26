@@ -1,15 +1,16 @@
 import React, { useContext, useEffect, useState } from "react";
 import { Menu, X } from "lucide-react"; // ✅ icon buka/tutup sidebar
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, Outlet } from "react-router-dom";
 import { AuthContext } from "../../../providers/AuthProvider";
 import { BsBox2, BsBox2Fill, BsCart, BsCart3, BsCartFill, BsFileBarGraph, BsGraphUpArrow } from "react-icons/bs";
-import { MdChair, MdHistory, MdOutlineChair, MdOutlineHistory } from "react-icons/md";
+import { MdChair, MdHistory, MdMoney, MdOutlineChair, MdOutlineHistory } from "react-icons/md";
 import { FaDatabase } from "react-icons/fa";
 import { GrCart } from "react-icons/gr";
 import { FaHouse } from "react-icons/fa6";
 import { RiHomeOfficeLine } from "react-icons/ri";
 import { IoSettingsOutline } from "react-icons/io5";
 import { SlLogout } from "react-icons/sl";
+import GlobalRentalMonitor from "../../../components/GlobalRentalMonitor";
 
 
 // Komponen DashboardContent (biarkan sama)
@@ -48,6 +49,7 @@ const SidebarKasir = ({ children }) => {
         { name: "Product", icon: <BsBox2 />, path: "/productkasir" },
         { name: "History", icon: <MdOutlineHistory />, path: "/historykasir" },
         { name: "Space", icon: <MdOutlineChair />, path: "/spacekasir" },
+        { name: "Laporan Pembayaran", icon: <MdMoney />, path: "/laporanpembayarankasir" },
         { name: "Settings", icon: <IoSettingsOutline />, path: "/settingskasir" },
         {
             name: "Logout",
@@ -183,9 +185,10 @@ const SidebarKasir = ({ children }) => {
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto">
-                    {children}
-                </div>
+                <main className="flex-1 overflow-y-auto">
+                    <Outlet />
+                </main>
+                <GlobalRentalMonitor />
             </div>
         </div>
     );

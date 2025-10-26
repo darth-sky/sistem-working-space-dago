@@ -1,17 +1,21 @@
+// src/components/RentalTimer.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 
-const RentalTimer = ({ startTime, endTime }) => {
-  // 💎 1. Buat 'ref' untuk menyimpan objek audio
-  const notificationSound = useRef(null);
+// 💎 1. Tambahkan prop 'onNotify' dengan nilai default fungsi kosong
+const RentalTimer = ({ startTime, endTime, visualOnly = false, onNotify = () => {} }) => {
   
-  // 💎 2. State untuk melacak apakah notifikasi sudah diputar untuk timer ini
+  const notificationSound = useRef(null);
   const [hasPlayedNotification, setHasPlayedNotification] = useState(false);
 
-  // 💎 3. Inisialisasi audio saat komponen pertama kali dimuat
   useEffect(() => {
-    notificationSound.current = new Audio("../../public/sounds/notification.mp3");
-  }, []);
+    if (visualOnly) return; 
 
+    // 💡 INGAT: Pastikan path ini benar (dari root folder 'public')
+    notificationSound.current = new Audio("/sounds/notification.mp3");
+  }, [visualOnly]); 
+
+  // --- Fungsi calculateTimeLeft biarkan sama ---
   const calculateTimeLeft = () => {
     const now = +new Date();
     const start = +new Date(startTime);
@@ -40,40 +44,43 @@ const RentalTimer = ({ startTime, endTime }) => {
     }
     return timeLeft;
   };
+  // ---------------------------------------------
 
   const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
   useEffect(() => {
-    // Reset status notifikasi setiap kali props (sewa) berubah
-    setHasPlayedNotification(false);
-
+    if (!visualOnly) {
+      setHasPlayedNotification(false);
+    }
     const timer = setInterval(() => {
       setTimeLeft(calculateTimeLeft());
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [startTime, endTime]);
+  }, [startTime, endTime, visualOnly]); 
 
-  // 💎 4. useEffect baru yang khusus menangani logika notifikasi
+  // 💎 2. Modifikasi useEffect untuk notifikasi
   useEffect(() => {
-    // Kondisi:
-    // 1. Notifikasi belum pernah diputar (hasPlayedNotification === false)
-    // 2. Timer sedang aktif
-    // 3. Sisa waktu kurang dari atau sama dengan 15 menit (900 detik)
+    if (visualOnly) return; // Skip jika hanya visual
+
     if (
       !hasPlayedNotification &&
       timeLeft.status === 'ACTIVE' &&
-      timeLeft.totalSeconds <= 900 &&
+      timeLeft.totalSeconds <= 900 && // 15 menit
       timeLeft.totalSeconds > 0
     ) {
-      // Putar suara
+      // 1. Putar suara (seperti sebelumnya)
       notificationSound.current.play().catch(e => console.error("Gagal memutar suara:", e));
-      // Set status menjadi sudah diputar agar tidak berbunyi lagi
+      
+      // 2. Panggil callback 'onNotify' (untuk memicu pop-up)
+      onNotify(); 
+      
+      // 3. Tandai sudah notifikasi
       setHasPlayedNotification(true);
     }
-  }, [timeLeft, hasPlayedNotification]); // Dijalankan setiap kali 'timeLeft' berubah
+  }, [timeLeft, hasPlayedNotification, visualOnly, onNotify]); // 💎 3. Tambahkan 'onNotify' ke dependencies
 
-  // Sisa kode render tidak perlu diubah
+  // --- Sisa kode render (visual) tidak perlu diubah ---
   const getTimeLevelAndColor = () => {
     if (timeLeft.status === 'UPCOMING') return { color: 'bg-orange-200 text-black' };
     if (timeLeft.status === 'FINISHED' || timeLeft.totalSeconds <= 0) return { color: 'bg-gray-200 text-black' };

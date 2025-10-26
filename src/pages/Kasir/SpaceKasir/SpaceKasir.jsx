@@ -251,6 +251,7 @@ const SpaceKasir = () => {
                       <RentalTimer
                         startTime={rental.waktu_mulai}
                         endTime={rental.waktu_selesai}
+                        visualOnly={true}
                       />
                     )}
                   </div>

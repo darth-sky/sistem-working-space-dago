@@ -60,6 +60,8 @@ import BuatOrderKasir from "./pages/Kasir/BuatOrderKasir/BuatOrderKasir";
 import CostBulanan from "./pages/Admin/CostBulanan/CostBulanan";
 import VirtualOfficeApproval from "./pages/Admin/VirtualOfficeApproval/VirtualOfficeApproval";
 import HutangAdmin from "./pages/Admin/HutangAdmin/HutangAdmin";
+import LaporanPembayaran from "./pages/Kasir/LaporanPembayaran/LaporanPembayaran";
+import PrivateOffice from "./pages/Pelanggan/PrivateOffice/PrivateOffice";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -184,7 +186,7 @@ const App = () => {
         <Route path="/eventspaces" element={<EventSpaces />} />
 
         {/* ADMIN */}
-        <Route
+        {/* <Route
           path="/dashboardadmin"
           element={
             <PrivateRoute>
@@ -193,7 +195,7 @@ const App = () => {
               </SidebarAdmin>
             </PrivateRoute>
           }
-        />
+        /> */}
 
         <Route
           path="/virtualofficeadmin"
@@ -312,6 +314,29 @@ const App = () => {
         />
 
         {/* Kasir */}
+
+        <Route
+          element={
+            <PrivateRoute allowedRoles={['kasir']}>
+              <SidebarKasir />
+            </PrivateRoute>
+          }
+        >
+          {/* Semua rute "anak" di bawah ini sekarang otomatis aman.
+      Mereka hanya bisa diakses jika:
+      1. User sudah login.
+      2. User memiliki role 'kasir'.
+    */}
+          <Route path="/transaksikasir" element={<TransaksiKasir />} />
+          <Route path="/merchantkasir" element={<MerchantKasir />} />
+          <Route path="/productkasir" element={<ProductKasir />} />
+          <Route path="/historykasir" element={<HistoryKasir />} />
+          <Route path="/spacekasir" element={<SpaceKasir />} />
+          <Route path="/laporanpembayarankasir" element={<LaporanPembayaran />} />
+          <Route path="/settingskasir" element={<SettingsKasir />} />
+          <Route path="/buatorderkasir" element={<BuatOrderKasir />} />
+          <Route path="/orderkasir" element={<OrderKasir />} />
+        </Route>
 
         <Route
           path="/orderkasir"
@@ -449,6 +474,14 @@ const App = () => {
           element={
             <DashboardPengguna>
               <CekMasaVO />
+            </DashboardPengguna>
+          }
+        />
+        <Route
+          path="/private-office"
+          element={
+            <DashboardPengguna>
+              <PrivateOffice />
             </DashboardPengguna>
           }
         />

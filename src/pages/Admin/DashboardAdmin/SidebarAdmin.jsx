@@ -27,7 +27,7 @@ import { SlLogout } from "react-icons/sl";
 // Komponen DashboardContent (biarkan sama)
 
 const SidebarAdmin = ({ children }) => {
-  const [selectedMenu, setSelectedMenu] = useState("Dashboard");
+  const [selectedMenu, setSelectedMenu] = useState("Virtual Office");
   const [showBilling, setShowBilling] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ const SidebarAdmin = ({ children }) => {
   }, [userProfile]);
 
   const menuItems = [
-    { name: "Dashboard", icon: <BsGraphUpArrow />, path: "/dashboardadmin" },
+    // { name: "Dashboard", icon: <BsGraphUpArrow />, path: "/dashboardadmin" },
     { name: "Virtual Office", icon: <MdChair />, path: "/virtualofficeadmin" },
     { name: "Event Spaces", icon: <RiHomeOfficeLine />, path: "/eventspacesadmin" },
     { name: "Transaksi", icon: <BsCart3 />, path: "/transaksiadmin" },

@@ -24,6 +24,8 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getRiwayatTransaksi } from "../../../services/service";
+import utc from "dayjs/plugin/utc";
+dayjs.extend(utc);
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -69,8 +71,8 @@ const RiwayatTransaksi = () => {
               tanggal: trx.tanggal_transaksi,
               total: trx.total_harga_final,
               status: trx.status_pembayaran === "Lunas" ? "Sukses" :
-                      trx.status_pembayaran === "Belum Lunas" ? "Pending" : "Gagal",
-              
+                trx.status_pembayaran === "Belum Lunas" ? "Pending" : "Gagal",
+
               // Menyimpan detail terstruktur untuk digunakan di dalam modal
               details: {
                 bookings: trx.bookings || [],
@@ -220,15 +222,15 @@ const RiwayatTransaksi = () => {
                   }
                   description={
                     <>
-                      <Text 
-                        type="secondary" 
-                        ellipsis 
+                      <Text
+                        type="secondary"
+                        ellipsis
                         style={{ fontSize: "14px", display: 'block', marginTop: '8px' }}
                       >
                         {item.items.join(", ")}
                       </Text>
-                      <Text 
-                        strong 
+                      <Text
+                        strong
                         style={{ fontSize: "15px", color: "#1890ff", display: 'block', marginTop: '4px' }}
                       >
                         <DollarCircleOutlined style={{ marginRight: "4px" }} />
@@ -261,13 +263,13 @@ const RiwayatTransaksi = () => {
           <Card bordered={false} style={{ background: "transparent", padding: 0 }} bodyStyle={{ padding: 0 }}>
             <Row justify="space-between"><Col><Text strong>ID Transaksi:</Text></Col><Col><Text>#{selectedTransaction.id}</Text></Col></Row>
             <Divider style={{ margin: "12px 0" }} />
-            <Row justify="space-between"><Col><Text strong>Tgl. Transaksi:</Text></Col><Col><Text>{dayjs(selectedTransaction.tanggal).format("DD MMM YYYY, HH:mm")}</Text></Col></Row>
+            <Row justify="space-between"><Col><Text strong>Tgl. Transaksi:</Text></Col><Col><Text>{dayjs(selectedTransaction.tanggal).utc().format("DD MMM YYYY, HH:mm")}</Text></Col></Row>
             <Divider style={{ margin: "12px 0" }} />
             <Row justify="space-between"><Col><Text strong>Total:</Text></Col><Col><Text>Rp {selectedTransaction.total.toLocaleString("id-ID")}</Text></Col></Row>
             <Divider style={{ margin: "12px 0" }} />
             <Row justify="space-between" align="middle"><Col><Text strong>Status:</Text></Col><Col>{getStatusTag(selectedTransaction.status)}</Col></Row>
             <Divider style={{ margin: "12px 0" }} />
-            
+
             <Title level={5} style={{ marginBottom: "16px" }}>Detail Item</Title>
 
             {/* Bagian Booking Ruangan */}
@@ -279,15 +281,15 @@ const RiwayatTransaksi = () => {
                   dataSource={selectedTransaction.details.bookings}
                   renderItem={(item, index) => (
                     <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.bookings.length - 1 ? "none" : "1px solid #f0f0f0" }}>
-                       <List.Item.Meta
-                          title={<Text>{item.nama_ruangan}</Text>}
-                          description={
-                            <Text type="secondary">
-                              <CalendarOutlined style={{ marginRight: '6px' }} />
-                              {dayjs(item.waktu_mulai).format('DD MMM YYYY, HH:mm')} - {dayjs(item.waktu_selesai).format('HH:mm')}
-                            </Text>
-                          }
-                       />
+                      <List.Item.Meta
+                        title={<Text>{item.nama_ruangan}</Text>}
+                        description={
+                          <Text type="secondary">
+                            <CalendarOutlined style={{ marginRight: '6px' }} />
+                            {dayjs(item.waktu_mulai).format('DD MMM YYYY, HH:mm')} - {dayjs(item.waktu_selesai).format('HH:mm')}
+                          </Text>
+                        }
+                      />
                     </List.Item>
                   )}
                 />
@@ -298,28 +300,76 @@ const RiwayatTransaksi = () => {
             {selectedTransaction.details.memberships.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
                 <Text strong style={{ display: 'block', marginBottom: '8px' }}>Paket Membership</Text>
-                 <List
+                <List
                   itemLayout="horizontal"
                   dataSource={selectedTransaction.details.memberships}
                   renderItem={(item, index) => (
-                     <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.memberships.length - 1 ? "none" : "1px solid #f0f0f0" }}>
-                       <List.Item.Meta
-                          title={<Text>{item.nama_paket}</Text>}
-                          description={
-                            <Text type="secondary">
-                              <CalendarOutlined style={{ marginRight: '6px' }} />
-                               Aktif: {dayjs(item.tanggal_mulai).format('DD MMM YYYY')} - {dayjs(item.tanggal_berakhir).format('DD MMM YYYY')}
-                            </Text>
-                          }
-                       />
+                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.memberships.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                      <List.Item.Meta
+                        title={<Text>{item.nama_paket}</Text>}
+                        description={
+                          <Text type="secondary">
+                            <CalendarOutlined style={{ marginRight: '6px' }} />
+                            Aktif: {dayjs(item.tanggal_mulai).format('DD MMM YYYY')} - {dayjs(item.tanggal_berakhir).format('DD MMM YYYY')}
+                          </Text>
+                        }
+                      />
                     </List.Item>
                   )}
                 />
               </div>
             )}
 
-            {/* Anda bisa menambahkan bagian untuk virtual_offices dan events di sini dengan pola yang sama */}
-            
+            {/* Bagian Virtual Office */}
+            {selectedTransaction.details.virtual_offices.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Paket Virtual Office</Text>
+                <List
+                  itemLayout="horizontal"
+                  dataSource={selectedTransaction.details.virtual_offices}
+                  renderItem={(item, index) => (
+                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.virtual_offices.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                      <List.Item.Meta
+                        title={<Text>{item.nama_paket} ({item.nama_perusahaan})</Text>}
+                        description={
+                          <Text type="secondary">
+                            <CalendarOutlined style={{ marginRight: '6px' }} />
+                            Aktif: {dayjs(item.tanggal_mulai).format('DD MMM YYYY')} - {dayjs(item.tanggal_berakhir).format('DD MMM YYYY')}
+                          </Text>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+
+            {/* Bagian Event Spaces */}
+            {/* Bagian Event Spaces */}
+            {selectedTransaction.details.events.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Booking Event</Text>
+                <List
+                  itemLayout="horizontal"
+                  dataSource={selectedTransaction.details.events}
+                  renderItem={(item, index) => (
+                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.events.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                      <List.Item.Meta
+                        title={<Text>{item.nama_event || "Booking Event"}</Text>}
+                        description={
+                          <Text type="secondary">
+                            <CalendarOutlined style={{ marginRight: '6px' }} />
+                            {/* --- PERUBAHAN DI SINI --- */}
+                            {item.nama_space} | {dayjs(item.waktu_mulai).format('DD MMM YYYY, HH:mm')} - {dayjs(item.waktu_selesai).format('HH:mm')}
+                          </Text>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              </div>
+            )}
+
           </Card>
         )}
       </Modal>

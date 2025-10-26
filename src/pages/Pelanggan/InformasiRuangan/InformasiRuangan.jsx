@@ -1,142 +1,24 @@
 import React, { useContext, useEffect, useState } from "react";
-import {
-  SearchOutlined,
-} from "@ant-design/icons";
-import {
-  Card,
-  Button,
-  Input,
-  Row,
-  Col,
-  Typography,
-  Space,
-  Tabs,
-  Tag,
-  Divider,
-  Tooltip,
-} from "antd";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../../providers/AuthProvider";
-import { formatRupiahPerJam, formatRupiah } from "../../../utils/formatRupiah";
+import { formatRupiah } from "../../../utils/formatRupiah";
 import { getAllRuangan } from "../../../services/service";
-// Menggunakan icon yang lebih sederhana untuk info header agar lebih ringkas
-import { Calendar, Clock, Monitor, CheckCircle, Wifi, Coffee, Snowflake, XCircle } from "lucide-react"; 
+import {
+  Calendar,
+  Clock,
+  Monitor,
+  CheckCircle,
+  Wifi,
+  Coffee,
+  Snowflake,
+  XCircle,
+} from "lucide-react";
 import { CgUser } from "react-icons/cg";
 import { MdDesk, MdMeetingRoom } from "react-icons/md";
 
+const baseUrl = import.meta.env.VITE_BASE_URL || "";
 
-const baseUrl = import.meta.env.VITE_BASE_URL;
-const { Title, Text } = Typography;
-const { Search } = Input;
-
-// === KOMPONEN JADWAL HARI INI ===
-const JadwalHariIni = ({ jadwalTerisi, isMobile }) => {
-  const jamOperasional = Array.from({ length: 14 }, (_, i) => 8 + i); // 8, 9, ..., 21
-  const currentHour = new Date().getHours();
-  const terisi = jadwalTerisi || []; 
-
-  return (
-    <div style={{ marginTop: isMobile ? '8px' : '10px', marginBottom: isMobile ? '8px' : '10px' }}>
-      <Text type="secondary" style={{ fontSize: isMobile ? 10 : 12, display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
-        Jam Tersedia Hari Ini:
-      </Text>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-        {jamOperasional.map(jam => {
-          const isBooked = terisi.includes(jam);
-          const isPast = jam < currentHour;
-          
-          const timeText = `${String(jam).padStart(2, '0')}`;
-
-          const isUnavailable = isBooked || isPast;
-          
-          const statusClass = isUnavailable
-            ? "bg-gray-200 text-gray-500" // Hanya abu-abu
-            : "bg-green-100 text-green-700 font-bold"; 
-
-          let tooltipTitle = `${timeText}:00 - ${String(jam + 1).padStart(2, '0')}:00`;
-          if (isBooked) {
-            tooltipTitle += ' (Terisi)';
-          } else if (isPast) {
-            tooltipTitle += ' (Telah Lewat)';
-          } else {
-            tooltipTitle += ' (Tersedia)';
-          }
-
-          return (
-            <Tooltip key={jam} title={tooltipTitle}>
-              <div
-                className={`py-1 px-2 text-xs rounded ${statusClass}`}
-                style={{ minWidth: '30px', cursor: 'default' }}
-              >
-                {timeText}
-              </div>
-            </Tooltip>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-
-// === KOMPONEN FITUR UTAMA (MAIN ICONS) ===
-const MainFeatures = ({ features, isMobile }) => {
-  const iconSize = isMobile ? 18 : 22;
-  const labelSize = isMobile ? 9 : 11;
-  const mainFeatureIcons = [
-    { key: "internet", icon: <Wifi size={iconSize} color="#1890ff" />, label: "Internet" },
-    { key: "air minum", icon: <Coffee size={iconSize} color="#ffaa00" />, label: "Refill Water" },
-    { key: "ac", icon: <Snowflake size={iconSize} color="#00aaff" />, label: "AC" },
-    { key: "rokok", icon: <XCircle size={iconSize} color="#ff4d4f" />, label: "No Smoking", isNegative: true }, 
-  ];
-
-  const featuresLower = features?.toLowerCase() || "";
-  
-  return (
-    <div 
-      style={{ 
-        display: 'flex', 
-        justifyContent: 'space-around', 
-        padding: isMobile ? '8px 0' : '8px 0', 
-        gap: '4px',
-        margin: isMobile ? '8px 0' : '12px 0', 
-        borderTop: '1px solid #f0f0f0',
-        borderBottom: '1px solid #f0f0f0',
-      }}
-    >
-      {mainFeatureIcons.map(f => {
-        let opacityValue = 1; 
-
-        if (f.isNegative) {
-            // Khusus No Smoking: Buram jika boleh merokok (fitur mengandung 'rokok')
-            const isSmokingAllowed = featuresLower.includes('rokok');
-            opacityValue = isSmokingAllowed ? 0.4 : 1; 
-        }
-
-        return (
-          <div 
-            key={f.key} 
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              gap: '4px',
-              opacity: opacityValue, // Menggunakan logika opacity yang direvisi
-              flexBasis: '25%',
-            }}
-          >
-            {f.icon}
-            <Text type="secondary" style={{ fontSize: labelSize, textAlign: 'center' }}>
-              {f.label}
-            </Text>
-          </div>
-        )
-      })}
-    </div>
-  );
-}
-
-// Hook sederhana untuk deteksi ukuran layar
+// Hook deteksi ukuran layar
 const useWindowSize = () => {
   const [size, setSize] = useState([window.innerWidth, window.innerHeight]);
   useEffect(() => {
@@ -147,12 +29,125 @@ const useWindowSize = () => {
   return size;
 };
 
+// === Komponen Jadwal ===
+const JadwalHariIni = ({ jadwalTerisi = [], isMobile }) => {
+  const jamOperasional = Array.from({ length: 14 }, (_, i) => 8 + i);
+  const currentHour = new Date().getHours();
+
+  return (
+    <div className={`${isMobile ? "mt-2 mb-2" : "mt-2 mb-2"}`}>
+      <p
+        className={`text-${
+          isMobile ? "xs" : "sm"
+        } text-gray-500 font-bold mb-2`}
+        style={{ fontSize: isMobile ? 10 : 12 }}
+      >
+        Jam Tersedia Hari Ini:
+      </p>
+
+      <div className="flex flex-wrap gap-1">
+        {jamOperasional.map((jam) => {
+          const isBooked = jadwalTerisi.includes(jam);
+          const isPast = jam < currentHour;
+          const isUnavailable = isBooked || isPast;
+          const timeText = String(jam).padStart(2, "0");
+
+          const titleSuffix = isBooked
+            ? " (Terisi)"
+            : isPast
+            ? " (Telah Lewat)"
+            : " (Tersedia)";
+          const tooltipTitle = `${timeText}:00 - ${String(jam + 1).padStart(
+            2,
+            "0"
+          )}:00${titleSuffix}`;
+
+          const boxClasses = isUnavailable
+            ? "bg-gray-200 text-gray-500"
+            : "bg-green-100 text-green-700 font-semibold";
+
+          return (
+            <div
+              key={jam}
+              title={tooltipTitle}
+              className={`${boxClasses} py-1 px-2 rounded text-xs`}
+              style={{ minWidth: 30, textAlign: "center" }}
+            >
+              {timeText}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// === Komponen Fitur Utama ===
+const MainFeatures = ({ features, isMobile }) => {
+  const iconSize = isMobile ? 18 : 22;
+  const labelSize = isMobile ? 9 : 11;
+  const mainFeatureIcons = [
+    {
+      key: "internet",
+      icon: <Wifi size={iconSize} />,
+      label: "Internet",
+    },
+    {
+      key: "air minum",
+      icon: <Coffee size={iconSize} />,
+      label: "Refill Water",
+    },
+    {
+      key: "ac",
+      icon: <Snowflake size={iconSize} />,
+      label: "AC",
+    },
+    {
+      key: "rokok",
+      icon: <XCircle size={iconSize} />,
+      label: "No Smoking",
+      isNegative: true,
+    },
+  ];
+
+  const featuresLower = (features || "").toLowerCase();
+
+  return (
+    <div className="flex justify-around py-2 gap-1 my-2 border-t border-b border-gray-200">
+      {mainFeatureIcons.map((f) => {
+        let opacityValue = 1;
+        if (f.isNegative) {
+          const isSmokingAllowed = featuresLower.includes("rokok");
+          opacityValue = isSmokingAllowed ? 0.4 : 1;
+        }
+
+        return (
+          <div
+            key={f.key}
+            className="flex flex-col items-center gap-1 flex-1"
+            style={{ opacity: opacityValue }}
+          >
+            {f.icon}
+            <span
+              className="text-gray-500 text-center"
+              style={{ fontSize: labelSize }}
+            >
+              {f.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// === Komponen Utama ===
 const InformasiRuangan = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTabKey, setActiveTabKey] = useState("");
+  const [rooms, setRooms] = useState([]);
   const navigate = useNavigate();
   const { userProfile } = useContext(AuthContext);
-  const [rooms, setRooms] = useState([]);
 
   const [width] = useWindowSize();
   const isMobile = width < 768;
@@ -163,30 +158,55 @@ const InformasiRuangan = () => {
     } else if (userProfile?.roles === "kasir") {
       navigate("/mengelola-orderan_fb");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile, navigate]);
 
-  const fetchRuangan = async () => {
-    try {
-      const result = await getAllRuangan();
-      const availableRooms = result.datas || [];
-      setRooms(availableRooms);
-
-      if (availableRooms.length > 0) {
-        const firstCategory = Object.keys(groupByCategory(availableRooms))[0];
-        setActiveTabKey(firstCategory);
-      }
-    } catch (error) {
-      console. error(error);
-    }
-  };
-
   useEffect(() => {
+    const fetchRuangan = async () => {
+      try {
+        const result = await getAllRuangan();
+        const availableRooms = result.datas || [];
+        setRooms(availableRooms);
+
+        if (availableRooms.length > 0) {
+          const firstCategory = Object.keys(groupByCategory(availableRooms))[0];
+          setActiveTabKey(firstCategory);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data ruangan:", error);
+      }
+    };
+
     fetchRuangan();
   }, []);
 
+  const groupByCategory = (roomsList) => {
+    return roomsList.reduce((groups, room) => {
+      let kategori = room.nama_kategori?.toLowerCase() || "lainnya";
+
+      // Gabungkan semua kategori yang mengandung kata "meeting" atau "room" ke satu kategori
+      if (kategori.includes("meeting") || kategori.includes("room")) {
+        kategori = "Meeting Room";
+      } else if (kategori.includes("monitor")) {
+        kategori = "Monitor";
+      } else if (kategori.includes("lesehan")) {
+        kategori = "Lesehan";
+      } else if (kategori.includes("open space")) {
+        kategori = "Open Space";
+      } else {
+        // Kapitalisasi huruf pertama agar rapi
+        kategori = kategori.charAt(0).toUpperCase() + kategori.slice(1);
+      }
+
+      if (!groups[kategori]) groups[kategori] = [];
+      groups[kategori].push(room);
+      return groups;
+    }, {});
+  };
+
   const getCategoryIcon = (kategori) => {
     const iconSize = isMobile ? 18 : 16;
-    const lower = kategori?.toLowerCase() || "";
+    const lower = (kategori || "").toLowerCase();
 
     if (lower.includes("monitor")) return <Monitor size={iconSize} />;
     if (lower.includes("lesehan")) return <CgUser size={iconSize} />;
@@ -196,273 +216,247 @@ const InformasiRuangan = () => {
     return null;
   };
 
-  const getCategoryColor = () => "#1890ff";
-
-  const groupByCategory = (rooms) => {
-    return rooms.reduce((groups, room) => {
-      const kategori = room.nama_kategori || "Lainnya";
-      if (!groups[kategori]) groups[kategori] = [];
-      groups[kategori].push(room);
-      return groups;
-    }, {});
-  };
-
   const getAllRoomFeatures = (featureString) => {
     if (!featureString) return [];
-    // Batasi maksimum 6 fitur yang akan ditampilkan di checklist
-    return featureString.split(/\r?\n|,/).map((f) => f.trim()).filter(Boolean);
+    return featureString
+      .split(/\r?\n|,/)
+      .map((f) => f.trim())
+      .filter(Boolean);
   };
 
   const groupedRooms = groupByCategory(rooms);
+  const categories = Object.keys(groupedRooms);
+  const getCategoryColor = () => "#1890ff";
 
   return (
-    <div style={{ minHeight: "100vh" }}>
-      <div style={{ padding: isMobile ? "16px" : "24px", maxWidth: "1200px", margin: "0 auto" }}>
-        <div style={{ marginBottom: "24px", textAlign: isMobile ? 'center' : 'left' }}>
-          <Title level={isMobile ? 3 : 2}>Pilih Ruangan</Title>
-          <Text type="secondary">
+    <div
+      className={`min-h-screen ${
+        isMobile ? "overflow-y-auto overscroll-contain" : "overflow-y-visible"
+      }`}
+      style={{ backgroundColor: "transparent" }}
+    >
+      <div
+        className={`px-${isMobile ? "4" : "6"} py-6 max-w-6xl mx-auto`}
+        style={{
+          paddingTop: isMobile ? 16 : 24,
+          paddingBottom: isMobile ? 80 : 24, // tambah padding bawah biar tidak ketutup
+        }}
+      >
+        <div
+          className={`mb-6 ${isMobile ? "text-center" : "text-left"}`}
+          style={{ marginBottom: 24 }}
+        >
+          <h2 className={`font-bold ${isMobile ? "text-2xl" : "text-3xl"}`}>
+            Pilih Ruangan Anda
+          </h2>
+          <p className="text-gray-500">
             Temukan ruang kerja yang sempurna untuk produktivitas Anda.
-          </Text>
+          </p>
         </div>
 
-        <div style={{ marginBottom: "24px" }}>
-          <Search
-            placeholder={`Cari nama ruangan...`}
-            allowClear
-            size="large"
-            onSearch={(value) => setSearchTerm(value)}
+        {/* Search */}
+        <div className="mb-6 w-full">
+          <input
+            type="text"
+            placeholder="Cari nama ruangan..."
+            value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
 
-        <Tabs
-          activeKey={activeTabKey}
-          onChange={(key) => {
-            setActiveTabKey(key);
-            setSearchTerm("");
-          }}
-          size={isMobile ? "default" : "large"}
-          type="line"
-          items={Object.entries(groupedRooms).map(([kategori, list]) => ({
-            key: kategori,
-            label: (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: isMobile ? "auto" : "100px",
-                  height: "40px",
-                  padding: isMobile ? "0 6px" : "0 12px",
-                  gap: 6,
-                }}
-              >
-                {getCategoryIcon(kategori)}
-                <span
-                  style={{
-                    fontSize: isMobile ? 12 : 14,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {isMobile
-                    ? `${kategori.split(" ")[0]} (${list.length})` 
-                    : `${kategori} (${list.length})`}
-                </span>
+        {/* Tabs */}
+        <div className="mb-6 flex justify-center">
+          <div className="flex flex-wrap justify-center gap-2 bg-gray-100 p-1.5 rounded-full">
+            {categories.length === 0 ? (
+              <div className="px-4 py-2 text-sm text-gray-600">
+                Tidak ada kategori
               </div>
-            ),
+            ) : (
+              categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setActiveTabKey(cat);
+                    setSearchTerm("");
+                  }}
+                  className={`whitespace-nowrap px-4 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                    activeTabKey === cat
+                      ? "bg-blue-600 text-white shadow"
+                      : "text-gray-600 hover:text-blue-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <span className="flex items-center justify-center gap-2 text-center">
+                    {getCategoryIcon(cat)}
+                    <span>
+                      {isMobile
+                        ? `${cat.split(" ")[0]} (${groupedRooms[cat].length})`
+                        : `${cat} (${groupedRooms[cat].length})`}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
 
-            children: (
-              <Row gutter={[0, isMobile ? 16 : 24]} style={{ marginTop: 16 }}>
-                {list
-                  .filter((room) => room.nama_ruangan.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((room) => {
-                    const allFeaturesList = getAllRoomFeatures(room.fitur_ruangan);
-                    // Ambil 6 fitur teratas untuk ditampilkan di checklist (maksimum)
-                    const featuresList = allFeaturesList.slice(0, 6); 
-                    
-                    const minPrice = room.paket_harga && room.paket_harga.length > 0
-                      ? Math.min(...room.paket_harga.map(p => p.harga_paket))
+        {/* List ruang berdasarkan category aktif */}
+        <div>
+          {(!activeTabKey || !groupedRooms[activeTabKey]) &&
+            categories.length > 0 &&
+            // set first tab if not set yet
+            (() => {
+              setActiveTabKey(categories[0]);
+              return null;
+            })()}
+
+          {activeTabKey && groupedRooms[activeTabKey] && (
+            <div className="space-y-6">
+              {groupedRooms[activeTabKey]
+                .filter((room) =>
+                  room.nama_ruangan
+                    .toLowerCase()
+                    .includes(searchTerm.toLowerCase())
+                )
+                .map((room) => {
+                  const allFeaturesList = getAllRoomFeatures(
+                    room.fitur_ruangan
+                  );
+                  const featuresList = allFeaturesList.slice(0, 6);
+                  const minPrice =
+                    room.paket_harga?.length > 0
+                      ? Math.min(...room.paket_harga.map((p) => p.harga_paket))
                       : null;
-                    
-                    const jamOperasionalText = room.jam_operasional || "Senin - Sabtu | 08:00 - 22:00"; 
-                    const [hari, jam] = jamOperasionalText.split('|').map(s => s.trim());
-                    
-                    // Simulasi data jam terisi
-                    const jamTerisiSimulasi = room.nama_ruangan.includes("Meeting") ? [9, 10, 15] : [11, 14, 16]; 
+                  const jamOperasionalText =
+                    room.jam_operasional || "Senin - Sabtu | 08:00 - 22:00";
+                  const [hari, jam] = jamOperasionalText
+                    .split("|")
+                    .map((s) => s.trim());
 
-                    return (
-                      <Col span={24} key={room.id_ruangan}>
-                        <Card
-                          hoverable
-                          style={{
-                            borderRadius: 16,
-                            overflow: "hidden",
-                            border: "1px solid #f0f0f0",
-                            display: "flex", 
-                            flexDirection: isMobile ? "column" : "row", 
-                            minHeight: isMobile ? 'auto' : 240, 
-                          }}
-                          bodyStyle={{
-                            padding: "0", 
-                            flexGrow: 1,
-                          }}
+                  return (
+                    <div
+                      key={room.id_ruangan}
+                      className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden"
+                    >
+                      <div
+                        className={`flex flex-col md:flex-row ${
+                          isMobile ? "" : ""
+                        }`}
+                      >
+                        {/* IMAGE */}
+                        <div
+                          className={`w-full md:w-2/5 ${
+                            isMobile ? "h-48" : "h-auto"
+                          }`}
                         >
-                          <Row style={{ width: '100%', margin: 0, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-                            {/* KOLOM KIRI: FOTO */}
-                            <Col xs={24} md={9} style={{ padding: 0 }}> 
-                              <img
-                                alt={room.nama_ruangan}
-                                src={`${baseUrl}/static/${room.gambar_ruangan}`}
-                                style={{ 
-                                  height: isMobile ? 180 : '100%', 
-                                  width: "100%", 
-                                  objectFit: "cover",
-                                  borderRadius: isMobile 
-                                    ? '16px 16px 0 0' 
-                                    : '16px 0 0 16px' 
-                                }}
-                                onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/600x400/EEE/31343C?text=Image+Not+Found' }}
-                              />
-                            </Col>
+                          <img
+                            alt={room.nama_ruangan}
+                            src={`${baseUrl}/static/${room.gambar_ruangan}`}
+                            className="w-full h-full object-cover"
+                            style={{ height: isMobile ? 200 : "100%" }}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://placehold.co/600x400/EEE/31343C?text=Image+Not+Found";
+                            }}
+                          />
+                        </div>
 
-                            {/* KOLOM KANAN: DETAIL RUANGAN */}
-                            <Col xs={24} md={15} style={{ 
-                              padding: isMobile ? "12px" : "16px 20px", 
-                              display: 'flex', 
-                              flexDirection: 'column',
-                              justifyContent: 'space-between',
-                            }}>
-                              {/* Konten Atas: Nama, Kategori, Info Header, Main Icons, Fasilitas Detail, Jadwal */}
-                              <div>
-                                {/* Nama dan Kategori */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isMobile ? '4px' : '6px' }}>
-                                  <Title 
-                                    level={isMobile ? 5 : 4} 
-                                    style={{ 
-                                        marginTop: 0, 
-                                        marginBottom: 0, 
-                                        lineHeight: 1.2, 
-                                        fontSize: isMobile ? '16px' : '20px',
-                                        fontWeight: 'bold' // <--- DI-BOLD
-                                    }}
-                                  >
-                                    {room.nama_ruangan}
-                                  </Title>
-                                  <Tag color={getCategoryColor()} style={{ fontSize: isMobile ? 10 : 12, padding: isMobile ? '2px 6px' : '3px 8px' }}>
-                                    {kategori}
-                                  </Tag>
-                                </div>
+                        {/* DETAIL */}
+                        <div className="flex-1 p-4 md:p-6 flex flex-col justify-between">
+                          <div>
+                            <h3
+                              className={`font-bold ${
+                                isMobile ? "text-lg" : "text-xl"
+                              } mb-1`}
+                            >
+                              {room.nama_ruangan}
+                            </h3>
 
-                                {/* Info Header (Waktu, Kapasitas) */}
-                                <Space size={isMobile ? 4 : 8} style={{ color: '#595959', marginBottom: isMobile ? '6px' : '8px', flexWrap: 'wrap' }}>
-                                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 13, display: 'flex', alignItems: 'center' }}>
-                                    <Calendar size={13} style={{ marginRight: 4 }} /> {hari}
-                                  </Text> 
-                                  <Text>|</Text>
-                                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 13, display: 'flex', alignItems: 'center' }}>
-                                    <Clock size={13} style={{ marginRight: 4 }} /> {jam}
-                                  </Text>
-                                  <Text>|</Text>
-                                  <Text type="secondary" style={{ fontSize: isMobile ? 11 : 13, display: 'flex', alignItems: 'center' }}>
-                                    <CgUser size={13} style={{ marginRight: 4 }} /> <strong>{room.kapasitas}</strong> Total Kapasitas
-                                  </Text>
-                                </Space>
-                                
-                                {/* Main Features (Icons) */}
-                                <MainFeatures features={room.fitur_ruangan} isMobile={isMobile} />
+                            <div className="flex items-center flex-wrap text-sm text-gray-500 gap-3 mb-3">
+                              <span className="flex items-center gap-1">
+                                <Calendar size={14} /> {hari}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock size={14} /> {jam}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <CgUser size={14} />{" "}
+                                <strong>{room.kapasitas}</strong> Orang
+                              </span>
+                            </div>
 
-                                {/* Checklist Features (Fasilitas Detail) */}
-                                <div style={{ 
-                                    display: 'grid', 
-                                    gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', 
-                                    gap: isMobile ? '4px 10px' : '6px 12px', 
-                                    marginTop: isMobile ? '8px' : '10px',
-                                    marginBottom: isMobile ? '8px' : '10px',
-                                }}> 
-                                  {featuresList.map((feature, index) => ( 
-                                    <div key={index} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                      <CheckCircle size={isMobile ? 14 : 16} color="#52c41a" />
-                                      <span style={{ fontSize: isMobile ? 12 : 13 }}>{feature}</span> 
-                                    </div>
-                                  ))}
-                                </div>
-                                
-                                {/* JADWAL HARI INI DITARUH DI SINI */}
-                                <JadwalHariIni jadwalTerisi={room.jadwal_hari_ini || []} isMobile={isMobile} />
+                            <MainFeatures
+                              features={room.fitur_ruangan}
+                              isMobile={isMobile}
+                            />
 
-                              </div>
-                              
-                              {/* Konten Bawah: Harga dan Tombol (Horizontal) */}
-                              <div 
-                                style={{ 
-                                  paddingTop: isMobile ? "10px" : "12px", 
-                                  borderTop: "1px solid #f0f0f0", 
-                                  display: "flex", 
-                                  justifyContent: "space-between", 
-                                  alignItems: "center",
-                                  marginTop: isMobile ? '10px' : '12px', 
-                                }}
-                              >
-                                <div style={{ lineHeight: 1 }}>
-                                  <Text type="secondary" style={{ fontSize: isMobile ? 10 : 12, display: 'block', marginBottom: '2px', textTransform: 'uppercase' }}>
-                                    Start from
-                                  </Text>
-                                  <Text
-                                    strong
-                                    style={{ fontSize: isMobile ? 22 : 26, color: '#000' }} 
-                                  >
-                                    {minPrice !== null ? formatRupiah(minPrice) : 'Harga belum diatur'}
-                                  </Text>
-                                  <Text 
-                                    type="secondary" 
-                                    style={{ 
-                                        fontSize: isMobile ? 10 : 12, 
-                                        display: 'block', 
-                                        fontWeight: 'bold' // <--- DI-BOLD
-                                    }}
-                                  >
-                                  </Text>
-                                </div>
-
-                                <Button
-                                  type="primary"
-                                  size={isMobile ? "middle" : "large"} 
-                                  style={{
-                                    background: getCategoryColor(),
-                                    border: "none",
-                                    height: isMobile ? 38 : 46, 
-                                    width: isMobile ? '110px' : '140px',
-                                    fontSize: isMobile ? 13 : 15,
-                                    borderRadius: 8, 
-                                  }}
-                                  onClick={() =>
-                                    navigate(`/roomdetail/${room.id_ruangan}`, { state: room })
-                                  }
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                              {featuresList.map((feature, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center gap-2"
                                 >
-                                  Reserve Now
-                                </Button>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Card>
-                      </Col>
-                    );
-                  })}
-                {list.filter((room) => room.nama_ruangan.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                  <Col span={24}>
-                    <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                      <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
-                      <Title level={4} style={{ color: "#8c8c8c" }}>
-                        Tidak ada ruangan ditemukan
-                      </Title>
-                      <Text type="secondary">Coba kata kunci lain atau jelajahi kategori berbeda</Text>
+                                  <CheckCircle
+                                    size={16}
+                                    className="text-green-600"
+                                  />
+                                  <span className="text-sm text-gray-700">
+                                    {feature}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <JadwalHariIni
+                              jadwalTerisi={room.jadwal_hari_ini || []}
+                              isMobile={isMobile}
+                            />
+                          </div>
+
+                          <div className="pt-3 border-t border-gray-100 mt-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-xs uppercase text-gray-500">
+                                Mulai dari
+                              </p>
+                              <p
+                                className={`font-extrabold ${
+                                  isMobile ? "text-2xl" : "text-3xl"
+                                }`}
+                              >
+                                {minPrice !== null
+                                  ? formatRupiah(minPrice)
+                                  : "N/A"}
+                              </p>
+                            </div>
+
+                            <button
+                              onClick={() =>
+                                navigate(`/roomdetail/${room.id_ruangan}`, {
+                                  state: room,
+                                })
+                              }
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                              style={{ borderRadius: 8 }}
+                            >
+                              Pesan Sekarang
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </Col>
-                )}
-              </Row>
-            ),
-          }))}
-        />
+                  );
+                })}
+            </div>
+          )}
+
+          {/* Jika tidak ada kategori / data */}
+          {categories.length === 0 && (
+            <div className="text-center py-10 text-gray-500">
+              <p>Belum ada data ruangan tersedia.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react"; // 💎 1. Impor useCallback
 import {
   Button,
   Table,
@@ -10,13 +10,17 @@ import {
   message,
 } from "antd";
 import { PlusOutlined, UserOutlined } from "@ant-design/icons";
-import { getDataTransaksiKasir } from "../../../services/service.js";
+// 💎 2. Impor service baru Anda
+import {
+  getDataTransaksiKasir,
+  updatePaymentStatus,
+} from "../../../services/service.js";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 
 const { Option } = Select;
 
-// 💎 Card tampilan halus dan modern
+// 💎 3. Perbarui props OrderCard: Hapus 'transaksi' dan 'index'
 const OrderCard = ({ order, getStatusColor, getDisplayStatus, onClick }) => (
   <div
     className="flex items-center justify-between bg-white rounded-xl px-5 py-4 shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer"
@@ -34,6 +38,13 @@ const OrderCard = ({ order, getStatusColor, getDisplayStatus, onClick }) => (
           >
             {getDisplayStatus(order.status).toUpperCase()}
           </Tag>
+          {/* 💎 4. Dapatkan payment_status langsung dari 'order' */}
+          <Tag
+            color={order.payment_status === "Lunas" ? "green" : "red"}
+            className="font-medium rounded-md px-2 py-1 text-sm"
+          >
+            {order.payment_status.toUpperCase()}
+          </Tag>
           <Tag
             color="cyan"
             className="font-medium rounded-md px-2 py-1 text-sm bg-cyan-50 text-cyan-700 border-none"
@@ -48,6 +59,8 @@ const OrderCard = ({ order, getStatusColor, getDisplayStatus, onClick }) => (
 
 const TransaksiKasir = () => {
   const [orders, setOrders] = useState([]);
+  // 💎 5. Hapus state 'transaksi' yang duplikat
+  // const [transaksi, setTransaksi] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [orderType, setOrderType] = useState("Takeout");
@@ -59,52 +72,69 @@ const TransaksiKasir = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const navigate = useNavigate();
 
-  // 💎 1. Buat 'ref' untuk menyimpan objek audio dan melacak ID transaksi
+  // 💎 6. Tambahkan state loading untuk tombol update
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const notificationSound = useRef(null);
   const knownTransactionIds = useRef(new Set());
 
-  // 💎 2. Inisialisasi audio saat komponen pertama kali dimuat
+  // 💎 7. Inisialisasi audio (path lebih baik menggunakan root-relative)
   useEffect(() => {
-    notificationSound.current = new Audio("../../../../public/sounds/notification.mp3");
+    notificationSound.current = new Audio("/sounds/notification.mp3");
   }, []);
 
-  // 💎 3. Logika untuk mengambil data dan polling
-  useEffect(() => {
-    const fetchAndCheckOrders = async () => {
-      try {
-        const result = await getDataTransaksiKasir();
-        const fetchedOrders = result.datas.map((o) => ({
-          id: o.id,
-          name: o.customer || "Guest",
-          location: o.location || "-",
-          status: o.status_pesanan,
-          price: o.total,
-          items: o.items || [],
-          time: o.time,
-          type: o.type,
-          room: o.bookings && o.bookings.length > 0 ? o.bookings[0].room_name : null,
-        }));
+  // 💎 8. Pindahkan fungsi fetch data ke luar 'useEffect' dan bungkus dengan 'useCallback'
+  const fetchAndCheckOrders = useCallback(async () => {
+    try {
+      const result = await getDataTransaksiKasir();
+      const fetchedOrders = result.datas.map((o) => ({
+        id: o.id,
+        name: o.customer || "Guest",
+        location: o.location || "-",
+        status: o.status_pesanan,
+        price: o.total,
+        items: o.items || [],
+        time: o.time,
+        type: o.type,
+        room:
+          o.bookings && o.bookings.length > 0 ? o.bookings[0].room_name : null,
+        // 💎 9. Tambahkan status pembayaran ke state 'orders'
+        payment_status: o.payment_status,
+        payment_method: o.payment_method,
+      }));
 
-        // Cek apakah ada transaksi baru yang belum pernah dilihat
-        const hasNewOrder = fetchedOrders.some(order => !knownTransactionIds.current.has(order.id));
+      // Cek apakah ada transaksi baru yang belum pernah dilihat
+      const hasNewOrder = fetchedOrders.some(
+        (order) => !knownTransactionIds.current.has(order.id)
+      );
 
-        // Hanya putar suara jika ini bukan fetch pertama kali
-        if (hasNewOrder && knownTransactionIds.current.size > 0) {
-          notificationSound.current.play().catch(e => console.error("Audio play failed:", e));
-        }
-
-        // Perbarui daftar ID transaksi yang sudah diketahui
-        fetchedOrders.forEach(order => knownTransactionIds.current.add(order.id));
-
-        setOrders(fetchedOrders);
-
-      } catch (err) {
-        console.error("Polling error:", err);
-      } finally {
-        setLoading(false); // Matikan loading utama hanya sekali
+      // Hanya putar suara jika ini bukan fetch pertama kali
+      if (hasNewOrder && knownTransactionIds.current.size > 0) {
+        notificationSound.current
+          .play()
+          .catch((e) => console.error("Audio play failed:", e));
       }
-    };
 
+      // Perbarui daftar ID transaksi yang sudah diketahui
+      fetchedOrders.forEach((order) => knownTransactionIds.current.add(order.id));
+
+      setOrders(fetchedOrders);
+    } catch (err) {
+      console.error("Polling error:", err);
+      // Hanya tampilkan pesan error saat load awal, bukan saat polling
+      if (loading) {
+        message.error("Gagal memuat data transaksi");
+      }
+    } finally {
+      // Matikan loading utama hanya sekali (saat load awal)
+      if (loading) {
+        setLoading(false);
+      }
+    }
+  }, [loading]); // 💎 useCallback akan membuat fungsi baru jika 'loading' berubah
+
+  // 💎 10. Perbarui 'useEffect' polling untuk menggunakan 'fetchAndCheckOrders' dari useCallback
+  useEffect(() => {
     // Panggil sekali saat komponen dimuat
     fetchAndCheckOrders();
 
@@ -113,19 +143,10 @@ const TransaksiKasir = () => {
 
     // Hentikan interval saat komponen dibongkar (pindah halaman)
     return () => clearInterval(intervalId);
-  }, []); // Dependency array kosong agar hanya berjalan sekali untuk setup
+  }, [fetchAndCheckOrders]); // 💎 Daftarkan 'fetchAndCheckOrders' sebagai dependensi
 
   const cashierName = "Rossa";
 
-  // const statusMap = {
-  //   Baru: "WAITING",
-  //   Diproses: "IN_PROGRESS",
-  //   "Sebagian Diproses": "PARTIAL", // Nama baru untuk UI
-  //   Selesai: "FINISH",
-  //   Batal: "CANCELLED",
-  // };
-
-  // MODIFIKASI 2: Tambahkan warna untuk status 'PARTIAL'
   const getStatusColor = (status) => {
     const frontendStatus = status;
     switch (frontendStatus) {
@@ -145,51 +166,35 @@ const TransaksiKasir = () => {
   };
 
   const getDisplayStatus = (status) => {
-    return status
+    console.log(status);
+    return status;
   };
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  // 💎 11. HAPUS 'useEffect' dan 'fetchOrders' yang duplikat dan buggy
+  // useEffect(() => {
+  //   fetchOrders();
+  // }, []);
+  // const fetchOrders = async () => { ... };
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const result = await getDataTransaksiKasir();
-      const mappedOrders = result.datas.map((o) => ({
-        id: o.id,
-        name: o.customer || "Guest",
-        location: o.location || "-",
-        status: o.status_pesanan,
-        price: o.total,
-        items: o.items || [],
-        time: o.time,
-        type: o.type,
-        room:
-          o.bookings && o.bookings.length > 0 ? o.bookings[0].room_name : null,
-      }));
-      setOrders(mappedOrders);
-    } catch (err) {
-      console.error("Error fetching transaksi kasir:", err);
-      message.error("Gagal memuat data transaksi");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // 💎 12. HAPUS console.log yang tidak perlu
+  // console.log({transaksinya: transaksi});
 
   const filteredOrders = orders
     .filter((o) => o.type !== "Booking")
     .filter((order) => {
-      if (filterStatus !== "all" && order.status !== filterStatus) return false;
+      // ... (Logika filter Anda di sini tetap sama) ...
       if (filterStatus !== "all") {
-        if (filterStatus === 'Diproses') {
+        if (filterStatus === "Diproses") {
           // Jika filter 'In Progress', tampilkan 'Diproses' dan 'Sebagian Diproses'
-          if (order.status !== 'Diproses' && order.status !== 'Sebagian Diproses') return false;
+          if (
+            order.status !== "Diproses" &&
+            order.status !== "Sebagian Diproses"
+          )
+            return false;
         } else if (order.status !== filterStatus) {
           return false;
         }
       }
-
 
       if (filterType !== "all") {
         const typeMatch =
@@ -239,6 +244,7 @@ const TransaksiKasir = () => {
     .slice(0, 10);
 
   const handleCreateOrder = () => {
+    // ... (fungsi ini tetap sama)
     message.info("Fitur create order akan segera diimplementasikan");
     setCustomerName("");
     setRoom("");
@@ -254,10 +260,32 @@ const TransaksiKasir = () => {
     setSelectedOrder(null);
   };
 
+  // 💎 13. Tambahkan handler untuk menandai lunas
+  const handleMarkAsPaid = async () => {
+    if (!selectedOrder) return;
+
+    setIsUpdating(true);
+    try {
+      await updatePaymentStatus(selectedOrder.id);
+      message.success(
+        `Transaksi #${selectedOrder.id} telah ditandai Lunas.`
+      );
+      handleCloseDetail(); // Tutup modal
+      await fetchAndCheckOrders(); // Refresh data list
+    } catch (error) {
+      console.error("Error updating payment status:", error);
+      message.error("Gagal memperbarui status.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* LEFT */}
       <div className="flex-1 bg-white p-5 overflow-y-auto rounded-r-3xl shadow-inner">
+        {/* ... (Header, Search, Filter, Tombol Order Baru tetap sama) ... */}
+        {/* ... (Welcome, Search, Filters) ... */}
         <div className="flex justify-between items-center mb-4">
           <div>
             <h2 className="text-lg font-bold text-gray-800">Welcome</h2>
@@ -303,6 +331,7 @@ const TransaksiKasir = () => {
           </Button>
         </div>
 
+
         <div className="space-y-3">
           <h3 className="font-semibold mb-2 text-gray-700">
             Transaksi F&B ({filteredOrders.length})
@@ -314,6 +343,7 @@ const TransaksiKasir = () => {
               Tidak ada transaksi F&B yang cocok
             </div>
           ) : (
+            // 💎 14. Perbarui props & key untuk OrderCard
             filteredOrders.map((order) => (
               <OrderCard
                 key={order.id}
@@ -328,6 +358,7 @@ const TransaksiKasir = () => {
       </div>
 
       {/* RIGHT */}
+      {/* ... (Bagian Kanan / Ringkasan tetap sama) ... */}
       <div className="w-80 bg-gray-50 p-5 space-y-6">
         <div className="flex justify-between bg-white rounded-xl p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-600">
@@ -365,7 +396,8 @@ const TransaksiKasir = () => {
         </div>
       </div>
 
-      {/* DETAIL MODAL */}
+
+      {/* 💎 15. Perbarui Modal untuk menyertakan footer dan status pembayaran */}
       <Modal
         title={
           <span className="text-lg font-semibold text-gray-800">
@@ -374,16 +406,45 @@ const TransaksiKasir = () => {
         }
         open={!!selectedOrder}
         onCancel={handleCloseDetail}
-        footer={null}
         width={500}
         className="rounded-xl"
+        // Tambahkan footer kustom
+        footer={[
+          <Button key="back" onClick={handleCloseDetail}>
+            Tutup
+          </Button>,
+          // Tampilkan tombol ini HANYA jika status BUKAN 'Lunas'
+          selectedOrder?.payment_status !== "Lunas" && (
+            <Button
+              key="submit"
+              type="primary"
+              loading={isUpdating}
+              onClick={handleMarkAsPaid}
+              // Styling opsional agar tombolnya hijau
+              className="bg-green-600 hover:bg-green-700 border-green-600 text-white"
+            >
+              Tandai Lunas
+            </Button>
+          ),
+        ]}
       >
         {selectedOrder && (
           <div className="space-y-3 text-gray-700">
             <div className="flex justify-between">
-              <span>Status:</span>
+              <span>Status Pesanan:</span>
               <Tag color={getStatusColor(selectedOrder.status)}>
                 {getDisplayStatus(selectedOrder.status)}
+              </Tag>
+            </div>
+            {/* Tambahkan tampilan Status Pembayaran */}
+            <div className="flex justify-between">
+              <span>Status Bayar:</span>
+              <Tag
+                color={
+                  selectedOrder.payment_status === "Lunas" ? "green" : "red"
+                }
+              >
+                {selectedOrder.payment_status.toUpperCase()}
               </Tag>
             </div>
             <div className="flex justify-between">

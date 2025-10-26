@@ -56,16 +56,16 @@ const PaymentInfoModal = ({ visible, onClose, transactionId, harga, onPaymentSuc
         >
             <Space direction="vertical" style={{ width: '100%' }} size="large">
                 <Paragraph>
-                    Silakan lakukan pembayaran sejumlah <Text strong style={{ color: '#d46b08', fontSize: 16 }}>Rp {new Intl.NumberFormat('id-ID').format(harga)}</Text> menggunakan salah satu metode di bawah ini:
+                    Silakan lakukan pembayaran sejumlah <Text strong style={{ color: '#d46b08', fontSize: 16 }}>Rp {new Intl.NumberFormat('id-ID').format(harga)}</Text>
                 </Paragraph>
 
                 {/* Opsi 1: QRIS */}
                 <Card size="small">
                     <Space align="center">
-                         <QrcodeOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
-                         <Text strong>Scan QRIS</Text>
+                        <QrcodeOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
+                        <Text strong>Scan QRIS</Text>
                     </Space>
-                    <Divider style={{margin: '12px 0'}} />
+                    <Divider style={{ margin: '12px 0' }} />
                     <div style={{ textAlign: 'center' }}>
                         {/* --- GANTI DENGAN PATH QR CODE ANDA --- */}
                         <Image
@@ -123,7 +123,7 @@ const CekMasaVO = () => {
             }
         } catch (err) {
             // Error dari fetch (network, 500, atau parse error)
-             if (err.message && (err.message.includes("404") || err.message.toLowerCase().includes("tidak ditemukan"))) {
+            if (err.message && (err.message.includes("404") || err.message.toLowerCase().includes("tidak ditemukan"))) {
                 setError("Anda belum memiliki langganan Virtual Office.");
             } else {
                 setError(err.message || "Terjadi kesalahan saat memuat data.");
@@ -217,38 +217,53 @@ const CekMasaVO = () => {
     }
 
     // 4. Menunggu Pembayaran
+    // 4. Menunggu Pembayaran
     if (data.status_client_vo === 'Menunggu Pembayaran') {
         return (
             <div style={containerStyle}>
                 <Card style={{ maxWidth: 800, margin: "24px auto" }}>
+
+                    {/* --- PERUBAHAN DI SINI --- */}
+
+                    {/* 1. Alert HANYA untuk pesan */}
                     <Alert
                         type="success"
                         showIcon
                         message={<Title level={4} style={{ margin: 0 }}>Pendaftaran Disetujui!</Title>}
                         description={
-                            <div>
-                                <Text>Permintaan Anda untuk paket <Text strong>"{data.nama_paket}"</Text> telah disetujui. Silakan selesaikan pembayaran untuk mengaktifkan layanan.</Text>
-                                <Divider style={{ margin: "16px 0" }} />
-                                <Row justify="space-between" align="middle" gutter={[16, 16]}>
-                                    <Col xs={24} sm={12}>
-                                        <Text strong>Total Tagihan:</Text>
-                                        <Title level={5} style={{ margin: 0 }}>Rp {new Intl.NumberFormat('id-ID').format(data.harga)}</Title>
-                                    </Col>
-                                    <Col xs={24} sm={12} style={{ textAlign: screens.xs ? 'center' : 'right' }}>
-                                        <Button
-                                            type="primary"
-                                            size="large"
-                                            onClick={handleShowPaymentInfo}
-                                            block={screens.xs}
-                                            icon={<BankOutlined />}
-                                        >
-                                            Lihat Instruksi Pembayaran
-                                        </Button>
-                                    </Col>
-                                </Row>
-                            </div>
+                            <Text>
+                                Permintaan Anda untuk paket <Text strong>"{data.nama_paket}"</Text> telah disetujui.
+                                Silakan selesaikan pembayaran untuk mengaktifkan layanan.
+                            </Text>
                         }
+                        style={{ marginBottom: 24 }} // Beri jarak ke elemen di bawahnya
                     />
+
+                    {/* 2. Pindahkan Row agar menjadi child dari Card, BUKAN dari Alert */}
+                    <Row justify="space-between" align="middle" gutter={[16, 16]}>
+                        <Col xs={24} sm={12}>
+                            <Text strong>Total Tagihan:</Text>
+                            <Title level={5} style={{ margin: 0 }}>
+                                Rp {new Intl.NumberFormat('id-ID').format(data.harga)}
+                            </Title>
+                        </Col>
+
+                        {/* Logika responsive Anda sudah benar, 
+                  hanya perlu dipindahkan ke sini */}
+                        <Col xs={24} sm={12} style={{ textAlign: screens.xs ? 'center' : 'right' }}>
+                            <Button
+                                type="primary"
+                                size="large"
+                                onClick={handleShowPaymentInfo}
+                                block={screens.xs}
+                                icon={<BankOutlined />}
+                            >
+                                Lihat Instruksi Pembayaran
+                            </Button>
+                        </Col>
+                    </Row>
+                    {/* --- AKHIR PERUBAHAN --- */}
+
                 </Card>
 
                 <PaymentInfoModal
@@ -268,16 +283,16 @@ const CekMasaVO = () => {
     // --- 5. Kasus: Langganan Aktif atau Kadaluarsa ---
     // Pastikan tanggal_mulai dan tanggal_berakhir ada
     if (!data.tanggal_mulai || !data.tanggal_berakhir) {
-         return (
-             <div style={containerStyle}>
-                 <Alert
+        return (
+            <div style={containerStyle}>
+                <Alert
                     message="Data Tidak Lengkap"
                     description="Tanggal mulai atau berakhir langganan tidak valid. Hubungi admin."
                     type="warning"
                     showIcon
-                 />
-             </div>
-         );
+                />
+            </div>
+        );
     }
 
     const formatDate = (dateString) => dayjs(dateString).format("DD MMMM YYYY");

@@ -276,7 +276,7 @@ const BagiHasil = () => {
     { title: "Total Pendapatan", dataIndex: "total", key: "total", render: (amount) => <span className="font-semibold text-gray-800">{formatRupiah(amount)}</span>, align: "right", },
     { title: "Hak Tenant (70%)", dataIndex: "tenantShare", key: "tenantShare", render: (amount) => <span className="font-semibold text-green-600">{formatRupiah(amount)}</span>, align: "right", },
     { title: "Hak Owner", dataIndex: "ownerShare", key: "ownerShare", render: (amount) => <span className="font-semibold text-purple-600">{formatRupiah(amount)}</span>, align: "right", },
-    { title: "Aksi", key: "aksi", width: 120, fixed: "right", render: (_, record) => ( !record.isInternal && (<Button type="primary" icon={<DownloadOutlined />} onClick={() => downloadReport(record)} size="small">Unduh Rincian</Button>) ), align: "center", },
+    // { title: "Aksi", key: "aksi", width: 120, fixed: "right", render: (_, record) => ( !record.isInternal && (<Button type="primary" icon={<DownloadOutlined />} onClick={() => downloadReport(record)} size="small">Unduh Rincian</Button>) ), align: "center", },
   ];
 
   return (

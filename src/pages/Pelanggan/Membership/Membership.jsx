@@ -1,10 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  SearchOutlined,
-  CoffeeOutlined,
-  SafetyOutlined,
-  UserOutlined,
-} from "@ant-design/icons";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   Button,
@@ -19,22 +13,26 @@ import {
   Divider,
 } from "antd";
 import { useNavigate } from "react-router-dom";
+import { Monitor, Coffee, DoorOpen } from "lucide-react";
 import { getAllMemberships } from "../../../services/service";
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-// Icons for membership categories
+// Ikon kategori
 const categoryIcons = {
-  "Open Space": <CoffeeOutlined />,
-  "Space Monitor": <SafetyOutlined />,
-  "Room Meeting": <UserOutlined />,
+  "Space Monitor": <Monitor className="w-5 h-5" />,
+  "Open Space": <Coffee className="w-5 h-5" />,
+  "Room Meeting Besar": <DoorOpen className="w-5 h-5" />,
+  "Room Meeting Kecil": <DoorOpen className="w-5 h-5" />,
 };
 
-// Horizontal Card (Kredit Biru, Tanpa Checklist, Garis Gelap)
+// Komponen Kartu Paket
 const HorizontalPackageCard = ({ item, navigate, categoryIcon }) => {
-  // 1. Menampilkan kuota dengan teks "Credits" dan warna biru
-  const creditValue = item.quota.replace(" credit", "").replace(" credits", "").trim();
+  const creditValue = item.quota
+    .replace(" credit", "")
+    .replace(" credits", "")
+    .trim();
   const creditText = `${creditValue} Credits`;
 
   return (
@@ -50,25 +48,20 @@ const HorizontalPackageCard = ({ item, navigate, categoryIcon }) => {
       bodyStyle={{ padding: "24px" }}
     >
       <Row gutter={[24, 16]} align="middle">
-        {/* Kiri: Nama Paket dan Fitur */}
         <Col xs={24} md={16}>
           <div style={{ paddingRight: "16px" }}>
             <Space style={{ marginBottom: 8 }}>
-              {/* Judul Diperbesar */}
-              <Title level={3} style={{ margin: 0, lineHeight: 1.2, fontWeight: 700 }}>
+              <Title
+                level={3}
+                style={{ margin: 0, lineHeight: 1.2, fontWeight: 700 }}
+              >
                 {item.name}
               </Title>
-              <Tag
-                color="blue"
-                style={{ fontWeight: 600 }}
-              >
-                {categoryIcon} {creditText} {/* Kredit Biru & Teks */}
+              <Tag color="blue" style={{ fontWeight: 600 }}>
+                {categoryIcon} {creditText}
               </Tag>
             </Space>
-
-            {/* Garis pemisah horizontal (itemin/gelap) */}
-            <Divider style={{ margin: '12px 0', borderColor: '#d9d9d9' }} />
-
+            <Divider style={{ margin: "12px 0", borderColor: "#d9d9d9" }} />
             <Row gutter={[16, 8]}>
               {item.features.slice(0, 6).map((feature, idx) => (
                 <Col
@@ -77,8 +70,8 @@ const HorizontalPackageCard = ({ item, navigate, categoryIcon }) => {
                   key={idx}
                   style={{ display: "flex", alignItems: "flex-start" }}
                 >
-                  <Text style={{ fontSize: 13, flex: 1, color: '#595959' }}>
-                    {feature} {/* Tanpa Checklist, menggunakan bullet point */}
+                  <Text style={{ fontSize: 13, flex: 1, color: "#595959" }}>
+                    • {feature}
                   </Text>
                 </Col>
               ))}
@@ -92,20 +85,24 @@ const HorizontalPackageCard = ({ item, navigate, categoryIcon }) => {
           md={8}
           style={{
             textAlign: "center",
-            // Garis pembatas vertikal (itemin/gelap)
-            borderLeft: '1px solid #d9d9d9',
-            paddingLeft: '24px',
+            borderLeft: "1px solid #d9d9d9",
+            paddingLeft: "24px",
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
           }}
         >
           <div style={{ paddingLeft: "16px" }}>
-            <Text type="secondary" style={{ fontSize: 14, display: "block", marginBottom: 4 }}>
+            <Text
+              type="secondary"
+              style={{ fontSize: 14, display: "block", marginBottom: 4 }}
+            >
               Mulai Dari
             </Text>
-            {/* Harga Biru */}
-            <Title level={2} style={{ margin: 0, fontWeight: 700, color: "#1890ff" }}>
+            <Title
+              level={2}
+              style={{ margin: 0, fontWeight: 700, color: "#1890ff" }}
+            >
               {item.price}
             </Title>
             <Text
@@ -133,10 +130,10 @@ const Membership = () => {
   const [memberships, setMemberships] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("Space Monitor");
+  const [activeTab, setActiveTab] = useState("");
   const navigate = useNavigate();
-  const sectionRefs = useRef({});
 
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -147,7 +144,9 @@ const Membership = () => {
             if (!acc[item.nama_kategori]) {
               acc[item.nama_kategori] = {
                 title: item.nama_kategori,
-                icon: categoryIcons[item.nama_kategori] || <CoffeeOutlined />,
+                icon: categoryIcons[item.nama_kategori] || (
+                  <Coffee className="w-5 h-5" />
+                ),
                 data: [],
               };
             }
@@ -157,20 +156,17 @@ const Membership = () => {
               price: `Rp ${item.harga.toLocaleString("id-ID")}`,
               period: `/ ${item.durasi} hari`,
               quota: `${item.kuota} credit`,
-              image:
-                "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&q=80",
               features: item.fitur_membership
-                ? item.fitur_membership.split(/\r?\n/).filter((f) => f.trim() !== "")
+                ? item.fitur_membership
+                    .split(/\r?\n/)
+                    .filter((f) => f.trim() !== "")
                 : ["Fitur standar belum tersedia"],
             });
             return acc;
           }, {});
-          setMemberships(Object.values(grouped));
-
-          const firstCategory = Object.keys(grouped)[0];
-          if (firstCategory) {
-            setActiveTab(firstCategory);
-          }
+          const values = Object.values(grouped);
+          setMemberships(values);
+          if (values.length > 0) setActiveTab(values[0].title);
         } else {
           setError(result.error || "Gagal memuat data");
         }
@@ -183,32 +179,29 @@ const Membership = () => {
     fetchData();
   }, []);
 
-  // Logika Filter: Hanya kategori dengan data yang lolos filter pencarian yang akan ditampilkan.
-  const filteredMemberships = memberships
-    .map((section) => ({
-      ...section,
-      data: section.data.filter((item) =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    }))
-    .filter((section) => section.data.length > 0); // <-- MENYARING KATEGORI KOSONG (SESUAI PERMINTAAN)
+  // Filter pencarian
+  const filteredMemberships = memberships.map((section) => ({
+    ...section,
+    data: section.data.filter((item) =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+  }));
 
-  const scrollToCategory = (category) => {
-    setActiveTab(category);
-    if (sectionRefs.current[category]) {
-      sectionRefs.current[category].scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
+  // Ambil data kategori aktif
+  const activeCategoryData = filteredMemberships.find(
+    (section) => section.title === activeTab
+  );
 
   return (
     <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: "24px" }}>
         <Title level={2} style={{ marginBottom: 8 }}>
-          Pilih Paket Membership Anda
+          Pilih Paket Membership Anda 
         </Title>
-        <Text type="secondary" style={{ fontSize: 14, lineHeight: 1.5 }}>
-          Dapatkan akses eksklusif dan fasilitas lengkap untuk produktivitas maksimal di Dago.
+        <Text type="secondary" style={{ fontSize: 14 }}>
+          Dapatkan akses eksklusif dan fasilitas lengkap untuk produktivitas
+          maksimal di Dago.
         </Text>
       </div>
 
@@ -217,100 +210,104 @@ const Membership = () => {
         <Search
           placeholder="Cari paket membership..."
           allowClear
-          prefix={<SearchOutlined />}
           onSearch={(value) => setSearchTerm(value)}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ width: "100%" }}
         />
       </div>
 
-      {/* Tabs Kategori */}
-      <div
-        style={{
-          display: "flex",
-          gap: "40px",
-          borderBottom: "1px solid #d9d9d9", // Garis Tabs Itemin
-          marginBottom: "32px",
-          overflowX: 'auto',
-          paddingBottom: '2px',
-        }}
-      >
-        {filteredMemberships.map((section) => (
-          <div
-            key={section.title}
-            onClick={() => scrollToCategory(section.title)}
-            style={{
-              cursor: "pointer",
-              paddingBottom: "12px",
-              borderBottom: activeTab === section.title ? "2px solid #1890ff" : "2px solid transparent",
-              color: activeTab === section.title ? "#1890ff" : "#333",
-              fontWeight: activeTab === section.title ? 600 : 400,
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              transition: "all 0.3s ease",
-              flexShrink: 0,
-            }}
-          >
-            <span style={{ fontSize: "18px" }}>{section.icon}</span>
-            {section.title} ({section.data.length})
-          </div>
-        ))}
+      {/* Kategori Responsif */}
+      <div className="mb-8 w-full bg-gray-100 rounded-full py-3 px-4">
+        {/* Desktop */}
+        <div className="hidden sm:flex justify-center gap-3 overflow-x-auto min-w-max items-center scrollbar-hide">
+          {filteredMemberships.map((section) => (
+            <button
+              key={section.title}
+              onClick={() => setActiveTab(section.title)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 font-medium whitespace-nowrap ${
+                activeTab === section.title
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-transparent text-gray-700 hover:text-blue-600"
+              }`}
+            >
+              {section.icon}
+              <span>{section.title}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile Grid */}
+        <div className="grid grid-cols-2 gap-2 sm:hidden place-items-center">
+          {filteredMemberships.map((section) => (
+            <button
+              key={section.title}
+              onClick={() => setActiveTab(section.title)}
+              className={`flex items-center justify-center gap-2 w-full px-3 py-2 rounded-full transition-all duration-300 text-sm ${
+                activeTab === section.title
+                  ? "bg-blue-600 text-white shadow"
+                  : "bg-white text-gray-700 hover:text-blue-600"
+              }`}
+            >
+              {section.icon}
+              <span>{section.title}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Loading & Error */}
-      {loading && <Spin tip="Memuat data membership..." style={{ display: 'block', margin: '50px 0', textAlign: 'center' }} />}
-      {error && <Alert type="error" message="Gagal Memuat Data" description={error} showIcon style={{ marginBottom: 24 }} />}
-
-      {!loading && !error && filteredMemberships.length > 0 && (
-        <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          {/* Hanya iterasi kategori yang memiliki paket */}
-          {filteredMemberships.map((section, idx) => (
-            <div
-              key={idx}
-              ref={(el) => (sectionRefs.current[section.title] = el)}
-            >
-              <div style={{ marginBottom: "24px" }}>
-                <Title level={3} style={{ display: "flex", alignItems: "center" }}>
-                  <span style={{ marginRight: "8px", fontSize: "28px", color: "#1890ff" }}>
-                    {section.icon}
-                  </span>
-                  {section.title}
-                </Title>
-              </div>
-
-              <div style={{ marginBottom: "40px" }}>
-                {section.data.map((item, i) => (
-                  <HorizontalPackageCard
-                    key={i}
-                    item={item}
-                    navigate={navigate}
-                    categoryIcon={section.icon}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </Space>
+      {loading && (
+        <Spin
+          tip="Memuat data membership..."
+          style={{ display: "block", margin: "50px 0", textAlign: "center" }}
+        />
       )}
-
-      {/* Handle kasus tidak ada data sama sekali */}
-      {!loading && !error && filteredMemberships.length === 0 && searchTerm && (
+      {error && (
         <Alert
-          message="Tidak Ditemukan"
-          description={`Tidak ada paket membership yang cocok dengan kata kunci "${searchTerm}" di semua kategori.`}
-          type="info"
+          type="error"
+          message="Gagal Memuat Data"
+          description={error}
           showIcon
+          style={{ marginBottom: 24 }}
         />
       )}
 
-      {!loading && !error && memberships.length === 0 && !searchTerm && (
-        <Alert
-          message="Tidak Ada Data"
-          description="Tidak ada paket membership yang tersedia saat ini."
-          type="info"
-          showIcon
-        />
+      {/* Konten Kategori Aktif */}
+      {!loading && !error && activeCategoryData && (
+        <div>
+          <div style={{ marginBottom: "24px" }}>
+            <Title level={3} style={{ display: "flex", alignItems: "center" }}>
+              <span
+                style={{
+                  marginRight: "8px",
+                  fontSize: "28px",
+                  color: "#1890ff",
+                }}
+              >
+                {activeCategoryData.icon}
+              </span>
+              {activeCategoryData.title}
+            </Title>
+          </div>
+
+          {activeCategoryData.data.length > 0 ? (
+            activeCategoryData.data.map((item, i) => (
+              <HorizontalPackageCard
+                key={i}
+                item={item}
+                navigate={navigate}
+                categoryIcon={activeCategoryData.icon}
+              />
+            ))
+          ) : (
+            <Alert
+              message="Data tidak ditemukan"
+              description="Belum ada paket membership di kategori ini."
+              type="info"
+              showIcon
+            />
+          )}
+        </div>
       )}
     </div>
   );
