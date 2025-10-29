@@ -14,6 +14,7 @@ import {
 import {
   MdChair,
   MdHistory,
+  MdMoneyOff,
   MdOutlineChair,
   MdOutlineHistory,
 } from "react-icons/md";
@@ -53,7 +54,7 @@ const SidebarAdmin = ({ children }) => {
     { name: "Transaksi", icon: <BsCart3 />, path: "/transaksiadmin" },
     { name: "Master Data", icon: <FaDatabase />, path: "/masterdataadmin" },
     { name: "Cost Bulanan", icon: <FaMoneyBill />, path: "/costbulananadmin" },
-    { name: "Hutang Admin", icon: <FaMoneyBill />, path: "/hutangadmin" },
+    { name: "Hutang Admin", icon: <MdMoneyOff />, path: "/hutangadmin" },
 
     {
       name: "Logout",

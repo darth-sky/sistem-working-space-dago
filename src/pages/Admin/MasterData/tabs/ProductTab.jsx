@@ -49,13 +49,10 @@ const ProductTab = () => {
   const [pageSize, setPageSize] = useState(5);
 
   const [kategoriList, setKategoriList] = useState([]);
-  const [tenantList, setTenantList] = useState([]); // Daftar unik tenant
-  const [filteredKategoriList, setFilteredKategoriList] = useState([]); // Daftar kategori setelah tenant dipilih
-
+  const [tenantList, setTenantList] = useState([]);
+  const [filteredKategoriList, setFilteredKategoriList] = useState([]);
 
   // 🚀 Fetch data produk
-  // Ganti fungsi fetchData di ProductTab.js Anda dengan yang ini
-
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -63,26 +60,23 @@ const ProductTab = () => {
       if (res.status === 200 && res.data.message === "OK") {
         const produk = res.data.datas.map((item, index) => ({
           key: index + 1,
-          // --- PERUBAHAN: Gunakan spread operator agar lebih aman jika ada field baru ---
-          ...item
+          ...item,
         }));
         setData(produk);
       }
 
       const resKategori = await getKategoriTenant();
       if (resKategori.status === 200 && resKategori.data.message === "OK") {
-        // --- PERBAIKAN DI SINI: Gunakan satu nama variabel yang konsisten ---
         const allKategori = resKategori.data.datas.map((item) => ({
           id: item.id_kategori,
           nama: item.nama_kategori,
           tenant: item.nama_tenant,
-          id_tenant: item.id_tenant
+          id_tenant: item.id_tenant,
         }));
         setKategoriList(allKategori);
 
-        // Sekarang `allKategori` sudah terdefinisi dengan benar dan bisa digunakan
         const uniqueTenants = allKategori.reduce((acc, current) => {
-          if (!acc.find(item => item.id_tenant === current.id_tenant)) {
+          if (!acc.find((item) => item.id_tenant === current.id_tenant)) {
             acc.push({ id_tenant: current.id_tenant, nama_tenant: current.tenant });
           }
           return acc;
@@ -96,33 +90,43 @@ const ProductTab = () => {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     fetchData();
   }, []);
 
-  // --- PERUBAHAN 3: useEffect untuk memfilter kategori berdasarkan tenant yang dipilih ---
   useEffect(() => {
     if (formData.id_tenant) {
-      const filtered = kategoriList.filter(k => k.id_tenant === formData.id_tenant);
+      const filtered = kategoriList.filter((k) => k.id_tenant === formData.id_tenant);
       setFilteredKategoriList(filtered);
     } else {
-      setFilteredKategoriList([]); // Kosongkan jika tidak ada tenant dipilih
+      setFilteredKategoriList([]);
     }
   }, [formData.id_tenant, kategoriList]);
 
-
-  // 🔎 Filter pencarian
+  // 🔎 Filter pencarian global
   const filteredData = data.filter(
     (item) =>
       item.nama_produk.toLowerCase().includes(searchText.toLowerCase()) ||
       item.nama_kategori.toLowerCase().includes(searchText.toLowerCase())
   );
 
+  // --- 🔽 FILTER PER KOLOM TABLE ---
+  const uniqueValues = (arr, key) => {
+    return [...new Set(arr.map((item) => item[key]).filter(Boolean))].map((val) => ({
+      text: val,
+      value: val,
+    }));
+  };
+
   const columns = [
     {
       title: "Nama Produk",
       dataIndex: "nama_produk",
       key: "nama_produk",
+      filters: uniqueValues(data, "nama_produk"),
+      onFilter: (value, record) =>
+        record.nama_produk.toLowerCase().includes(value.toLowerCase()),
       render: (text) => (
         <Space>
           <ShoppingOutlined style={{ color: "#1890ff" }} />
@@ -131,31 +135,38 @@ const ProductTab = () => {
       ),
     },
     {
-      // --- PERUBAHAN DI SINI ---
       title: "Kategori",
-      dataIndex: "nama_kategori", // bisa tetap ada atau dihapus
-      key: "kategori_info", // ganti key agar unik
+      dataIndex: "nama_kategori",
+      key: "kategori_info",
+      filters: uniqueValues(data, "nama_kategori"),
+      onFilter: (value, record) =>
+        record.nama_kategori.toLowerCase().includes(value.toLowerCase()),
       render: (_, record) => (
         <div>
           <Text strong>{record.nama_kategori}</Text>
           <br />
-          <Text type="secondary" style={{ fontSize: '12px' }}>
-            {record.nama_tenant || 'N/A'}
+          <Text type="secondary" style={{ fontSize: "12px" }}>
+            {record.nama_tenant || "N/A"}
           </Text>
         </div>
       ),
-      // --- AKHIR PERUBAHAN ---
     },
     {
       title: "Harga",
       dataIndex: "harga",
       key: "harga",
+      sorter: (a, b) => a.harga - b.harga,
       render: (harga) => `Rp ${Number(harga).toLocaleString("id-ID")}`,
     },
     {
       title: "Status",
       dataIndex: "status_ketersediaan",
       key: "status_ketersediaan",
+      filters: [
+        { text: "Active", value: "Active" },
+        { text: "Inactive", value: "Inactive" },
+      ],
+      onFilter: (value, record) => record.status_ketersediaan === value,
       render: (status) =>
         status === "Active" ? (
           <Text type="success">Active</Text>
@@ -167,11 +178,7 @@ const ProductTab = () => {
       title: "Deskripsi",
       dataIndex: "deskripsi_produk",
       key: "deskripsi_produk",
-      render: (text) => (
-        <Text >
-          {text || "-"}
-        </Text>
-      ),
+      render: (text) => <Text>{text || "-"}</Text>,
     },
     {
       title: "Foto",
@@ -180,7 +187,7 @@ const ProductTab = () => {
       render: (url) =>
         url ? (
           <img
-            src={`${import.meta.env.VITE_BASE_URL}/static/${url}`} // ⚡ sesuaikan kalau backend serve di /img
+            src={`${import.meta.env.VITE_BASE_URL}/static/${url}`}
             alt="produk"
             style={{ width: 50, borderRadius: 8 }}
           />
@@ -210,7 +217,7 @@ const ProductTab = () => {
               okText="Yes"
               cancelText="No"
             >
-              {/* <Button type="link" danger icon={<DeleteOutlined />} /> */}
+              <Button type="link" danger icon={<DeleteOutlined />} />
             </Popconfirm>
           </Tooltip>
         </Space>
@@ -218,17 +225,15 @@ const ProductTab = () => {
     },
   ];
 
-  // --- PERUBAHAN 4: Modifikasi handler untuk form ---
+  // --- Form Handler ---
   const handleChange = (field, value) => {
     const newFormData = { ...formData, [field]: value };
-    // Jika yang berubah adalah tenant, reset pilihan kategori
-    if (field === 'id_tenant') {
+    if (field === "id_tenant") {
       delete newFormData.id_kategori;
     }
     setFormData(newFormData);
   };
 
-  // ➕ Tambah / ✏️ Edit produk
   const handleAddProduct = async () => {
     if (!formData.nama_produk || !formData.id_kategori || !formData.harga) {
       message.error("Mohon lengkapi semua field wajib!");
@@ -247,21 +252,15 @@ const ProductTab = () => {
       );
       formPayload.append("id_kategori", formData.id_kategori);
 
-      if (fileFoto) {
-        formPayload.append("foto_produk", fileFoto);
-      }
+      if (fileFoto) formPayload.append("foto_produk", fileFoto);
 
       let res;
       if (editingProduct) {
         res = await updateProduk(editingProduct.id_produk, formPayload);
-        if (res.status === 200) {
-          message.success("Produk berhasil diperbarui!");
-        }
+        if (res.status === 200) message.success("Produk berhasil diperbarui!");
       } else {
         res = await createProduk(formPayload);
-        if (res.status === 201) {
-          message.success("Produk baru berhasil ditambahkan!");
-        }
+        if (res.status === 201) message.success("Produk baru berhasil ditambahkan!");
       }
 
       await fetchData();
@@ -293,9 +292,7 @@ const ProductTab = () => {
   };
 
   const handleEdit = (product) => {
-    // Cari tenant dari produk yang diedit
-    const kategoriProduk = kategoriList.find(k => k.id === product.id_kategori);
-
+    const kategoriProduk = kategoriList.find((k) => k.id === product.id_kategori);
     setEditingProduct(product);
     setFormData({
       id_tenant: kategoriProduk ? kategoriProduk.id_tenant : null,
@@ -309,7 +306,6 @@ const ProductTab = () => {
     setOpen(true);
   };
 
-
   const handleCancel = () => {
     setOpen(false);
     setFormData({});
@@ -319,12 +315,7 @@ const ProductTab = () => {
 
   return (
     <div style={{ padding: "24px" }}>
-      <Row
-        gutter={[16, 16]}
-        align="middle"
-        justify="space-between"
-        style={{ marginBottom: 24 }}
-      >
+      <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
         <Col flex="1">
           <Search
             placeholder="Cari produk..."
@@ -333,10 +324,8 @@ const ProductTab = () => {
             size="large"
             onSearch={setSearchText}
             onChange={(e) => setSearchText(e.target.value)}
-            className="rounded-lg"
           />
         </Col>
-
         <Col flex="none">
           <Button
             type="primary"
@@ -361,13 +350,10 @@ const ProductTab = () => {
           columns={columns}
           dataSource={filteredData}
           pagination={{
-            pageSize: pageSize,
+            pageSize,
             showSizeChanger: true,
             showQuickJumper: true,
-            pageSizeOptions: ["5", "10", "50", "100"],
-            onChange: (page, newPageSize) => {
-              setPageSize(newPageSize); // ✅ update state saat ganti
-            },
+            onChange: (page, newSize) => setPageSize(newSize),
           }}
           loading={loading}
         />
@@ -389,7 +375,6 @@ const ProductTab = () => {
       >
         <Row gutter={[20, 20]}>
           <Col span={12}>
-            {/* DROPDOWN BARU UNTUK TENANT */}
             <Text strong>Tenant *</Text>
             <Select
               placeholder="Pilih tenant"
@@ -398,7 +383,9 @@ const ProductTab = () => {
               style={{ width: "100%", marginBottom: 16 }}
               showSearch
               optionFilterProp="children"
-              filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              filterOption={(input, option) =>
+                (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
+              }
             >
               {tenantList.map((t) => (
                 <Option key={t.id_tenant} value={t.id_tenant}>
@@ -407,17 +394,18 @@ const ProductTab = () => {
               ))}
             </Select>
 
-            {/* DROPDOWN KATEGORI YANG SUDAH DINAMIS */}
             <Text strong>Kategori *</Text>
             <Select
               placeholder="Pilih kategori"
               value={formData.id_kategori}
               onChange={(val) => handleChange("id_kategori", val)}
               style={{ width: "100%", marginBottom: 16 }}
-              disabled={!formData.id_tenant} // Nonaktif jika tenant belum dipilih
+              disabled={!formData.id_tenant}
               showSearch
               optionFilterProp="children"
-              filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              filterOption={(input, option) =>
+                (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
+              }
             >
               {filteredKategoriList.map((k) => (
                 <Option key={k.id} value={k.id}>
@@ -469,7 +457,7 @@ const ProductTab = () => {
             <Upload
               beforeUpload={(file) => {
                 setFileFoto(file);
-                return false; // jangan auto upload
+                return false;
               }}
               maxCount={1}
               accept="image/*"

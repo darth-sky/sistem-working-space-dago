@@ -14,28 +14,22 @@ import {
     Tooltip,
     InputNumber,
     Select,
-    Tag,        // ✅ PERUBAHAN: Import komponen Tag
-    Switch      // ✅ PERUBAHAN: Import komponen Switch
+    Tag,
+    Switch,
 } from "antd";
 import {
     PlusOutlined,
     EditOutlined,
     DeleteOutlined,
     SearchOutlined,
-    CreditCardOutlined,
-    TagOutlined,
-    ClockCircleOutlined,
-    CheckCircleOutlined,
 } from "@ant-design/icons";
-
-// ASUMSI: Import service sudah benar
 import {
     getPaketMembership,
     createPaketMembership,
     updatePaketMembership,
     deletePaketMembership,
     getKategoriRuangan,
-} from "../../../../services/service"; // Ganti dengan path service yang benar
+} from "../../../../services/service";
 
 const { Text } = Typography;
 const { Search } = Input;
@@ -45,15 +39,17 @@ const PaketMembershipTab = () => {
     const [open, setOpen] = useState(false);
     const [editingPackage, setEditingPackage] = useState(null);
     const [searchText, setSearchText] = useState("");
-    const [formData, setFormData] = useState({ status_paket: 'Active' }); // ✅ PERUBAHAN: Set default status
+    const [formData, setFormData] = useState({ status_paket: "Active" });
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
     const [kategoriRuanganList, setKategoriRuanganList] = useState([]);
 
     const getKategoriName = (id) => {
-        const kategori = kategoriRuanganList.find(k => k.id_kategori_ruangan === id);
-        return kategori ? kategori.nama_kategori : `ID: ${id} (Tidak Dikenal)`;
+        const kategori = kategoriRuanganList.find(
+            (k) => k.id_kategori_ruangan === id
+        );
+        return kategori ? kategori.nama_kategori : `ID: ${id}`;
     };
 
     const fetchData = async () => {
@@ -76,7 +72,7 @@ const PaketMembershipTab = () => {
                     kuota: item.kuota,
                     deskripsi_benefit: item.deskripsi_benefit,
                     fitur_membership: item.fitur_membership,
-                    status_paket: item.status_paket, // ✅ PERUBAHAN: Ambil status_paket dari API
+                    status_paket: item.status_paket,
                 }));
                 setData(paket);
             }
@@ -92,35 +88,56 @@ const PaketMembershipTab = () => {
         fetchData();
     }, []);
 
+    // Data hasil pencarian global
     const filteredData = data.filter(
         (item) =>
             item.nama_paket.toLowerCase().includes(searchText.toLowerCase()) ||
             (item.deskripsi_benefit &&
-                item.deskripsi_benefit.toLowerCase().includes(searchText.toLowerCase()))
+                item.deskripsi_benefit
+                    .toLowerCase()
+                    .includes(searchText.toLowerCase()))
     );
+
+    // Ambil filter unik dari data
+    const kategoriFilters = kategoriRuanganList.map((k) => ({
+        text: k.nama_kategori,
+        value: k.id_kategori_ruangan,
+    }));
+    const statusFilters = [
+        { text: "Active", value: "Active" },
+        { text: "Inactive", value: "Inactive" },
+    ];
+    const durasiFilters = [
+        ...new Set(data.map((d) => d.durasi)),
+    ].map((d) => ({ text: `${d} Hari`, value: d }));
+    const kuotaFilters = [
+        ...new Set(data.map((d) => d.kuota)),
+    ].map((d) => ({ text: `${d}`, value: d }));
 
     const columns = [
         {
             title: "ID",
             dataIndex: "id_paket_membership",
             key: "id_paket_membership",
-            width: 60,
-            responsive: ['md'],
+            width: 70,
+            sorter: (a, b) => a.id_paket_membership - b.id_paket_membership,
         },
         {
             title: "Nama Paket",
             dataIndex: "nama_paket",
             key: "nama_paket",
+            sorter: (a, b) => a.nama_paket.localeCompare(b.nama_paket),
         },
-        // ✅ PERUBAHAN: Menambahkan Kolom Status
         {
             title: "Status",
             dataIndex: "status_paket",
             key: "status_paket",
             width: 100,
-            align: 'center',
+            align: "center",
+            filters: statusFilters,
+            onFilter: (value, record) => record.status_paket === value,
             render: (status) => (
-                <Tag color={status === 'Active' ? 'green' : 'volcano'}>
+                <Tag color={status === "Active" ? "green" : "volcano"}>
                     {status.toUpperCase()}
                 </Tag>
             ),
@@ -129,6 +146,9 @@ const PaketMembershipTab = () => {
             title: "Kategori Ruangan",
             dataIndex: "id_kategori_ruangan",
             key: "id_kategori_ruangan",
+            filters: kategoriFilters,
+            onFilter: (value, record) =>
+                record.id_kategori_ruangan === value,
             render: (id) => getKategoriName(id),
         },
         {
@@ -136,21 +156,27 @@ const PaketMembershipTab = () => {
             dataIndex: "harga",
             key: "harga",
             align: "right",
-            render: (text) => new Intl.NumberFormat("id-ID").format(text),
+            sorter: (a, b) => a.harga - b.harga,
+            render: (text) =>
+                new Intl.NumberFormat("id-ID").format(text),
         },
         {
             title: "Durasi (Hari)",
             dataIndex: "durasi",
             key: "durasi",
             align: "center",
-            responsive: ['md'],
+            filters: durasiFilters,
+            onFilter: (value, record) => record.durasi === value,
+            sorter: (a, b) => a.durasi - b.durasi,
         },
         {
             title: "Kuota",
             dataIndex: "kuota",
             key: "kuota",
             align: "center",
-            responsive: ['md'],
+            filters: kuotaFilters,
+            onFilter: (value, record) => record.kuota === value,
+            sorter: (a, b) => a.kuota - b.kuota,
         },
         {
             title: "Actions",
@@ -165,11 +191,13 @@ const PaketMembershipTab = () => {
                             onClick={() => handleEdit(record)}
                         />
                     </Tooltip>
-                    <Tooltip title="Delete Paket">
+                    <Tooltip title="Hapus Paket">
                         <Popconfirm
                             title="Hapus Paket Permanen"
                             description="Yakin ingin menghapus paket ini? Tindakan ini tidak bisa dibatalkan."
-                            onConfirm={() => handleDelete(record.id_paket_membership)}
+                            onConfirm={() =>
+                                handleDelete(record.id_paket_membership)
+                            }
                             okText="Ya, Hapus"
                             cancelText="Batal"
                         >
@@ -186,8 +214,14 @@ const PaketMembershipTab = () => {
     };
 
     const handleSave = async () => {
-        // ✅ PERUBAHAN: Menambahkan validasi untuk status_paket
-        if (!formData.nama_paket || !formData.harga || !formData.kuota || !formData.id_kategori_ruangan || !formData.durasi || !formData.status_paket) {
+        if (
+            !formData.nama_paket ||
+            !formData.harga ||
+            !formData.kuota ||
+            !formData.id_kategori_ruangan ||
+            !formData.durasi ||
+            !formData.status_paket
+        ) {
             message.error("Semua field bertanda * dan status wajib diisi!");
             return;
         }
@@ -202,28 +236,26 @@ const PaketMembershipTab = () => {
                 kuota: formData.kuota,
                 deskripsi_benefit: formData.deskripsi_benefit || null,
                 fitur_membership: formData.fitur_membership || null,
-                status_paket: formData.status_paket, // ✅ PERUBAHAN: Kirim status_paket ke API
+                status_paket: formData.status_paket,
             };
 
             let res;
             if (editingPackage) {
-                res = await updatePaketMembership(editingPackage.id_paket_membership, payload);
-                if (res.status === 200) {
-                    message.success("Paket berhasil diperbarui!");
-                }
+                res = await updatePaketMembership(
+                    editingPackage.id_paket_membership,
+                    payload
+                );
+                if (res.status === 200) message.success("Paket berhasil diperbarui!");
             } else {
                 res = await createPaketMembership(payload);
-                if (res.status === 201) {
-                    message.success("Paket baru berhasil ditambahkan!");
-                }
+                if (res.status === 201) message.success("Paket baru berhasil ditambahkan!");
             }
 
             if (res.status === 200 || res.status === 201) {
                 await fetchData();
                 handleCancel();
             } else {
-                const errorMessage = res.data.detail || res.data.error || "Gagal menyimpan paket";
-                message.error(`Gagal menyimpan: ${errorMessage}`);
+                message.error("Gagal menyimpan paket!");
             }
         } catch (err) {
             console.error("Error save paket:", err);
@@ -241,9 +273,7 @@ const PaketMembershipTab = () => {
                 message.success("Paket berhasil dihapus permanen!");
                 await fetchData();
             } else {
-                // Menangani error dari backend, misal foreign key constraint
-                const errorMessage = res.data.error || "Gagal menghapus paket";
-                message.error(errorMessage);
+                message.error("Gagal menghapus paket");
             }
         } catch (err) {
             console.error("Error delete paket:", err);
@@ -263,7 +293,7 @@ const PaketMembershipTab = () => {
             kuota: membershipPackage.kuota,
             deskripsi_benefit: membershipPackage.deskripsi_benefit,
             fitur_membership: membershipPackage.fitur_membership,
-            status_paket: membershipPackage.status_paket, // ✅ PERUBAHAN: Set status saat edit
+            status_paket: membershipPackage.status_paket,
         });
         setOpen(true);
     };
@@ -271,30 +301,39 @@ const PaketMembershipTab = () => {
     const handleCancel = () => {
         setOpen(false);
         setEditingPackage(null);
-        setFormData({ status_paket: 'Active' }); // ✅ PERUBAHAN: Reset form ke default
+        setFormData({ status_paket: "Active" });
     };
-    
-    // ✅ PERUBAHAN: Handler untuk komponen Switch
+
     const handleStatusChange = (checked) => {
-        handleChange("status_paket", checked ? 'Active' : 'Inactive');
+        handleChange("status_paket", checked ? "Active" : "Inactive");
     };
 
     return (
         <div style={{ padding: "24px" }}>
-            <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
+            <Row
+                gutter={[16, 16]}
+                align="middle"
+                justify="space-between"
+                style={{ marginBottom: 24 }}
+            >
                 <Col xs={24} md={12}>
                     <Search
                         placeholder="Cari paket membership..."
                         allowClear
                         onSearch={setSearchText}
                         onChange={(e) => setSearchText(e.target.value)}
+                        prefix={<SearchOutlined />}
                     />
                 </Col>
-                <Col xs={24} md={12} style={{ textAlign: 'right' }}>
+                <Col xs={24} md={12} style={{ textAlign: "right" }}>
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
-                        onClick={() => { setOpen(true); setEditingPackage(null); setFormData({ status_paket: 'Active' }); }}
+                        onClick={() => {
+                            setOpen(true);
+                            setEditingPackage(null);
+                            setFormData({ status_paket: "Active" });
+                        }}
                     >
                         Tambah Paket Baru
                     </Button>
@@ -312,10 +351,11 @@ const PaketMembershipTab = () => {
                         onShowSizeChange: (current, size) => setPageSize(size),
                     }}
                     loading={loading}
-                    scroll={{ x: 'max-content' }}
+                    scroll={{ x: "max-content" }}
                 />
             </Card>
 
+            {/* MODAL FORM */}
             <Modal
                 title={editingPackage ? "Edit Paket Membership" : "Tambah Paket Membership"}
                 open={open}
@@ -324,112 +364,97 @@ const PaketMembershipTab = () => {
                 confirmLoading={loading}
                 okText={editingPackage ? "Update" : "Simpan"}
                 cancelText="Batal"
-                bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+                bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
             >
-                {/* ✅ PERUBAHAN: Menambahkan Form Item untuk Status */}
-                <div style={{ marginTop: '16px' }}>
-                    <Row justify="space-between" align="middle">
-                        <Col>
-                            <Text strong>Status Paket</Text>
-                        </Col>
-                        <Col>
-                            <Switch
-                                checkedChildren="Active"
-                                unCheckedChildren="Inactive"
-                                checked={formData.status_paket === 'Active'}
-                                onChange={handleStatusChange}
-                            />
-                        </Col>
-                    </Row>
-                </div>
-                
-                <div style={{ marginTop: '16px' }}>
-                    <Text strong>Nama Paket <span style={{ color: "red" }}>*</span></Text>
-                    <Input
-                        placeholder="Contoh: Basic Open Space"
-                        value={formData.nama_paket || ""}
-                        onChange={(e) => handleChange("nama_paket", e.target.value)}
-                        style={{ marginTop: '8px' }}
-                    />
-                </div>
-
-                <div style={{ marginTop: '16px' }}>
-                    <Text strong>Kategori Ruangan <span style={{ color: "red" }}>*</span></Text>
-                    <Select
-                        style={{ width: '100%', marginTop: '8px' }}
-                        placeholder="Pilih Kategori Ruangan"
-                        value={formData.id_kategori_ruangan || undefined}
-                        onChange={(value) => handleChange("id_kategori_ruangan", value)}
-                    >
-                        {kategoriRuanganList.map(kategori => (
-                            <Select.Option key={kategori.id_kategori_ruangan} value={kategori.id_kategori_ruangan}>
-                                {kategori.nama_kategori}
-                            </Select.Option>
-                        ))}
-                    </Select>
-                </div>
-
-                <Row gutter={16}>
-                    <Col xs={24} md={12}>
-                        <div style={{ marginTop: '16px' }}>
-                            <Text strong>Durasi (Hari) <span style={{ color: "red" }}>*</span></Text>
-                            <InputNumber
-                                style={{ width: '100%', marginTop: '8px' }}
-                                placeholder="Contoh: 30"
-                                min={1}
-                                value={formData.durasi}
-                                onChange={(value) => handleChange("durasi", value)}
-                            />
-                        </div>
+                <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+                    <Col>
+                        <Text strong>Status Paket</Text>
                     </Col>
-                    <Col xs={24} md={12}>
-                        <div style={{ marginTop: '16px' }}>
-                            <Text strong>Kuota/Kredit <span style={{ color: "red" }}>*</span></Text>
-                            <InputNumber
-                                style={{ width: '100%', marginTop: '8px' }}
-                                placeholder="Jumlah kredit"
-                                min={0}
-                                value={formData.kuota}
-                                onChange={(value) => handleChange("kuota", value)}
-                            />
-                        </div>
+                    <Col>
+                        <Switch
+                            checkedChildren="Active"
+                            unCheckedChildren="Inactive"
+                            checked={formData.status_paket === "Active"}
+                            onChange={handleStatusChange}
+                        />
                     </Col>
                 </Row>
 
-                <div style={{ marginTop: '16px' }}>
-                    <Text strong>Harga (Rp) <span style={{ color: "red" }}>*</span></Text>
-                    <InputNumber
-                        style={{ width: '100%', marginTop: '8px' }}
-                        placeholder="Contoh: 500000"
-                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
-                        min={0}
-                        value={formData.harga}
-                        onChange={(value) => handleChange("harga", value)}
-                    />
-                </div>
+                <Text strong>Nama Paket <span style={{ color: "red" }}>*</span></Text>
+                <Input
+                    placeholder="Contoh: Basic Open Space"
+                    value={formData.nama_paket || ""}
+                    onChange={(e) => handleChange("nama_paket", e.target.value)}
+                    style={{ marginBottom: 16 }}
+                />
 
-                <div style={{ marginTop: '16px' }}>
-                    <Text strong>Deskripsi Benefit</Text>
-                    <TextArea
-                        rows={3}
-                        placeholder="Penjelasan benefit (opsional)"
-                        value={formData.deskripsi_benefit || ""}
-                        onChange={(e) => handleChange("deskripsi_benefit", e.target.value)}
-                        style={{ marginTop: '8px' }}
-                    />
-                </div>
+                <Text strong>Kategori Ruangan <span style={{ color: "red" }}>*</span></Text>
+                <Select
+                    style={{ width: "100%", marginBottom: 16 }}
+                    placeholder="Pilih Kategori Ruangan"
+                    value={formData.id_kategori_ruangan || undefined}
+                    onChange={(value) => handleChange("id_kategori_ruangan", value)}
+                >
+                    {kategoriRuanganList.map((kategori) => (
+                        <Select.Option
+                            key={kategori.id_kategori_ruangan}
+                            value={kategori.id_kategori_ruangan}
+                        >
+                            {kategori.nama_kategori}
+                        </Select.Option>
+                    ))}
+                </Select>
 
-                <div style={{ marginTop: '16px' }}>
-                    <Text strong>Fitur Membership</Text>
-                    <TextArea
-                        rows={2}
-                        placeholder="Fitur tambahan (opsional)"
-                        value={formData.fitur_membership || ""}
-                        onChange={(e) => handleChange("fitur_membership", e.target.value)}
-                        style={{ marginTop: '8px' }}
-                    />
-                </div>
+                <Row gutter={16}>
+                    <Col xs={24} md={12}>
+                        <Text strong>Durasi (Hari) <span style={{ color: "red" }}>*</span></Text>
+                        <InputNumber
+                            style={{ width: "100%", marginBottom: 16 }}
+                            placeholder="Contoh: 30"
+                            min={1}
+                            value={formData.durasi}
+                            onChange={(v) => handleChange("durasi", v)}
+                        />
+                    </Col>
+                    <Col xs={24} md={12}>
+                        <Text strong>Kuota/Kredit <span style={{ color: "red" }}>*</span></Text>
+                        <InputNumber
+                            style={{ width: "100%", marginBottom: 16 }}
+                            placeholder="Jumlah kredit"
+                            min={0}
+                            value={formData.kuota}
+                            onChange={(v) => handleChange("kuota", v)}
+                        />
+                    </Col>
+                </Row>
+
+                <Text strong>Harga (Rp) <span style={{ color: "red" }}>*</span></Text>
+                <InputNumber
+                    style={{ width: "100%", marginBottom: 16 }}
+                    placeholder="Contoh: 500000"
+                    formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
+                    min={0}
+                    value={formData.harga}
+                    onChange={(v) => handleChange("harga", v)}
+                />
+
+                <Text strong>Deskripsi Benefit</Text>
+                <TextArea
+                    rows={3}
+                    placeholder="Penjelasan benefit (opsional)"
+                    value={formData.deskripsi_benefit || ""}
+                    onChange={(e) => handleChange("deskripsi_benefit", e.target.value)}
+                    style={{ marginBottom: 16 }}
+                />
+
+                <Text strong>Fitur Membership</Text>
+                <TextArea
+                    rows={2}
+                    placeholder="Fitur tambahan (opsional)"
+                    value={formData.fitur_membership || ""}
+                    onChange={(e) => handleChange("fitur_membership", e.target.value)}
+                />
             </Modal>
         </div>
     );

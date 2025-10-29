@@ -5,6 +5,534 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
+export const getSelf = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
+
+    const response = await fetch(`${baseUrl}/api/v1/ruangan/self`, { // Asumsi endpoint-nya ini
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error("Gagal mengambil data user");
+    return await response.json();
+  } catch (error) {
+    console.error("Error getSelf:", error);
+    throw error;
+  }
+};
+
+// Fungsi BARU untuk mengambil data ruangan untuk halaman Private Office
+export const getPrivateOfficeRooms = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/ruangan/private-office-rooms`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      throw new Error("Gagal mengambil data ruangan");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error getPrivateOfficeRooms:", error);
+    throw error;
+  }
+};
+
+// Fungsi BARU untuk mengirim data booking bulk
+export const createBulkBooking = async (payload) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/ruangan/bookRuanganBulk`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseData = await response.json();
+
+    // Kembalikan objek utuh berisi status dan data
+    return {
+      status: response.status,
+      data: responseData
+    };
+
+  } catch (error) {
+    console.error("Error createBulkBooking:", error);
+    throw error;
+  }
+};
+
+
+
+
+
+
+// Helper untuk menangani response
+const handleResponse = async (response) => {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({})); // Tangkap jika body bukan json
+    throw new Error(
+      errorData.error ||
+      errorData.message ||
+      `HTTP error! status: ${response.status}`
+    );
+  }
+  // Cek jika content-type adalah json
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+  // Jika bukan json (misal: file csv)
+  return response;
+};
+
+// Helper untuk download file
+const downloadFile = async (response, defaultFilename) => {
+  const contentDisposition = response.headers.get("content-disposition");
+  let filename = defaultFilename;
+  if (contentDisposition) {
+    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+    if (filenameMatch && filenameMatch[1]) {
+      filename = filenameMatch[1];
+    }
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+const getAuthHeaders = async () => {
+  const token = await jwtStorage.retrieveToken();
+  return {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+};
+
+
+export const fetchRekapData = async (params) => {
+  const { tahun, bulan, p1_start, p1_end, p2_start, p2_end } = params;
+  const query = new URLSearchParams({
+    tahun,
+    bulan,
+    p1_start,
+    p1_end,
+    p2_start,
+    p2_end,
+  }).toString();
+
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/rekap-bagi-hasil?${query}`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error fetching rekap data:", error);
+    throw error;
+  }
+};
+
+
+export const updateRekapData = async (data) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/rekap-bagi-hasil/update`, {
+      method: "PUT",
+      headers: await getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error updating rekap data:", error);
+    throw error;
+  }
+};
+
+export const addUtangTenant = async (data) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/utang-tenant`, {
+      method: "POST",
+      headers: await getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error adding utang tenant:", error);
+    throw error;
+  }
+};
+
+
+export const deleteUtangTenant = async (id_utang) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/utang-tenant/${id_utang}`, {
+      method: "DELETE",
+      headers: await getAuthHeaders(),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error deleting utang tenant:", error);
+    throw error;
+  }
+};
+
+/**
+ * Download rekap semua bulan (format CSV)
+ */
+export const downloadRekapSemuaBulan = async () => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/rekap-bagi-hasil/export/all`, {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    });
+    const res = await handleResponse(response);
+    await downloadFile(res, "rekap_semua_bulan.csv");
+    return { message: "OK", info: "File berhasil di-download" };
+  } catch (error) {
+    console.error("Error downloading all rekap:", error);
+    throw error;
+  }
+};
+
+
+export const downloadRekapBulanan = (csvContent, filename) => {
+  try {
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Error downloading monthly rekap:", error);
+    throw error;
+  }
+};
+
+export const getRekapBagiHasil = async (startDate, endDate) => {
+  try {
+    // Ambil bulan dan tahun dari startDate
+    const date = new Date(startDate);
+    const month = date.getMonth() + 1; // JS month is 0-11
+    const year = date.getFullYear();
+
+    const response = await fetch(`${baseUrl}/api/v1/admin/rekapBagiHasil?startDate=${startDate}&endDate=${endDate}&month=${month}&year=${year}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || "Gagal mengambil data rekap bagi hasil");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching rekap bagi hasil:", error);
+    throw error;
+  }
+};
+
+// 2. Service untuk form "Input Utang Tenant Baru" (UPDATE/CREATE)
+export const saveTenantHutang = async (id_tenant, periode_bulan, periode_tahun, utang_awal) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/rekapBagiHasil/utang`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id_tenant,
+        periode_bulan,
+        periode_tahun,
+        utang_awal: Number(utang_awal) || 0,
+      }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || "Gagal menyimpan utang tenant");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error saving tenant hutang:", error);
+    throw error;
+  }
+};
+
+// 3. Service untuk mengubah status bayar T1/T2
+export const toggleTenantPayment = async (id_tenant, periode_bulan, periode_tahun, termin) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/admin/rekapBagiHasil/payment`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id_tenant,
+        periode_bulan,
+        periode_tahun,
+        termin, // kirim 'all_paid' atau 'all_unpaid'
+      }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || "Gagal mengubah status pembayaran");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error toggling tenant payment:", error);
+    throw error;
+  }
+};
+
+// 4. Service untuk mendapatkan daftar tenant (untuk dropdown)
+export const getAllTenants = async () => {
+  try {
+    // Asumsi Anda punya endpoint untuk ini di MasterData
+    // Jika tidak, buat endpoint sederhana: SELECT id_tenant, nama_tenant FROM tenants
+    const response = await fetch(`${baseUrl}/api/v1/admin/tenants`);
+    if (!response.ok) {
+      throw new Error("Gagal mengambil daftar tenant");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching tenants:", error);
+    throw error;
+  }
+};
+
+
+
+export const getAdminAcara = async () => {
+  try {
+    // Diasumsikan perlu token untuk akses admin
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/acara/getAcaraAdmin`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// ✅ Create Acara (menggunakan FormData)
+export const createAcara = async (formData) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/acara/createAcara`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData, // FormData sudah benar
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// ✅ Update Acara (menggunakan FormData)
+export const updateAcara = async (id_acara, formData) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/acara/updateAcara/${id_acara}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData, // FormData sudah benar
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateAcaraStatus = async (id_acara, newStatus) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/acara/updateAcaraStatus/${id_acara}/status`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json", // Kirim JSON untuk status
+      },
+      body: JSON.stringify({ status_acara: newStatus }), // Body berisi status baru
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// ✅ Delete Acara
+export const deleteAcara = async (id_acara) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/acara/deleteAcara/${id_acara}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+
+
+export const getSemuaAcara = async () => {
+  try {
+    // Diasumsikan tidak perlu token karena ini halaman info publik
+    const response = await fetch(`${baseUrl}/api/v1/acara/Getacara`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Gagal mengambil data acara");
+    }
+
+    const result = await response.json();
+    return result.data; // Langsung kembalikan array 'data'
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const saveOrderKasir = async (orderData) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/save-order`, { // Endpoint baru
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(orderData), // Mengirim data order dalam format JSON
+    });
+
+    if (!response.ok) {
+      // Coba parse error JSON dari backend
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        // Jika respons bukan JSON, gunakan status text
+        throw new Error(response.statusText || `HTTP error! status: ${response.status}`);
+      }
+      // Gunakan pesan error dari backend jika ada, fallback ke status text
+      throw new Error(errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log("Save Order Response:", result); // Log respons sukses
+    return result; // Mengembalikan respons sukses dari server (e.g., {"message": "OK", "id_transaksi": ...})
+
+  } catch (error) {
+    console.error("Error saving order (service):", error);
+    // Lemparkan error agar bisa ditangkap oleh komponen pemanggil
+    throw error;
+  }
+};
+
+
+export const getSavedOrderDetails = async (id_transaksi) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/saved-order/${id_transaksi}`, { // Endpoint baru
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        // Tidak perlu 'Content-Type' untuk GET tanpa body
+      },
+    });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        throw new Error(response.statusText || `HTTP error! status: ${response.status}`);
+      }
+      throw new Error(errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`Get Saved Order Details (ID: ${id_transaksi}) Response:`, result);
+    // Konversi beberapa string angka kembali ke number jika perlu di frontend
+    // Ini tergantung bagaimana Anda ingin menggunakannya di state React
+    result.subtotal = parseFloat(result.subtotal || 0);
+    result.taxPercentage = parseFloat(result.taxPercentage || 0);
+    result.taxNominal = parseFloat(result.taxNominal || 0);
+    result.totalAmount = parseFloat(result.totalAmount || 0);
+    result.discountPercentage = parseFloat(result.discountPercentage || 0);
+    if (result.items && Array.isArray(result.items)) {
+      result.items = result.items.map(item => ({
+        ...item,
+        harga_saat_order: parseFloat(item.harga_saat_order || 0),
+        jumlah: parseInt(item.jumlah || 0)
+      }));
+    }
+
+    return result; // Data order: { customerName, items: [...], ... }
+
+  } catch (error) {
+    console.error(`Error fetching saved order details for ID ${id_transaksi} (service):`, error);
+    throw error;
+  }
+};
+
+export const paySavedOrder = async (id_transaksi, updatedOrderData) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/pay-saved-order/${id_transaksi}`, { // Endpoint baru
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updatedOrderData), // Kirim data order yang sudah diupdate
+    });
+
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        throw new Error(response.statusText || `HTTP error! status: ${response.status}`);
+      }
+      throw new Error(errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`Pay Saved Order (ID: ${id_transaksi}) Response:`, result);
+    return result; // e.g., {"message": "OK", "info": "Order #... berhasil dibayar."}
+
+  } catch (error) {
+    console.error(`Error paying saved order ID ${id_transaksi} (service):`, error);
+    throw error;
+  }
+};
+
 export const updatePaymentStatus = async (trx_id) => {
   try {
     const token = await jwtStorage.retrieveToken();
@@ -30,6 +558,31 @@ export const updatePaymentStatus = async (trx_id) => {
   }
 };
 
+
+export const updateBatalStatus = async (trx_id) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(
+      `${baseUrl}/api/v1/kasir/updateBatalStatus/${trx_id}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Gagal memperbarui status pembayaran");
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    throw error;
+  }
+};
 
 
 export const getUserProfile = async () => {
@@ -77,32 +630,32 @@ export const getUserProfile = async () => {
 };
 
 
-export const createBulkBooking = async (bookingData) => {
-  try {
-    const token = jwtStorage.retrieveToken();
-    // GANTI '/api/v1/booking/createBulk' jika nama endpoint di backend berbeda
-    const response = await fetch(`${baseUrl}/api/v1/ruangan/createBulk`, { // Sesuaikan baseUrl jika perlu
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(bookingData),
-    });
-    // Cek jika respons tidak OK (misal: 4xx, 5xx)
-    if (!response.ok) {
-      // Coba parse error dari body JSON backend
-      const errorResult = await response.json().catch(() => ({})); // Tangkap jika body bukan JSON
-      throw new Error(errorResult.error || `HTTP error! status: ${response.status}`);
-    }
-    const result = await response.json();
-    return { status: response.status, data: result }; // Kembalikan status & data
-  } catch (error) {
-    console.error("Error during bulk booking creation:", error);
-    // Lempar error agar bisa ditangkap di komponen dan menampilkan pesan yang sesuai
-    throw error;
-  }
-};
+// export const createBulkBooking = async (bookingData) => {
+//   try {
+//     const token = jwtStorage.retrieveToken();
+//     // GANTI '/api/v1/booking/createBulk' jika nama endpoint di backend berbeda
+//     const response = await fetch(`${baseUrl}/api/v1/ruangan/createBulk`, { // Sesuaikan baseUrl jika perlu
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Bearer ${token}`,
+//       },
+//       body: JSON.stringify(bookingData),
+//     });
+//     // Cek jika respons tidak OK (misal: 4xx, 5xx)
+//     if (!response.ok) {
+//       // Coba parse error dari body JSON backend
+//       const errorResult = await response.json().catch(() => ({})); // Tangkap jika body bukan JSON
+//       throw new Error(errorResult.error || `HTTP error! status: ${response.status}`);
+//     }
+//     const result = await response.json();
+//     return { status: response.status, data: result }; // Kembalikan status & data
+//   } catch (error) {
+//     console.error("Error during bulk booking creation:", error);
+//     // Lempar error agar bisa ditangkap di komponen dan menampilkan pesan yang sesuai
+//     throw error;
+//   }
+// };
 
 
 export const calculateBagiHasil = async (periode) => {
@@ -823,16 +1376,19 @@ export const getOrdersByTenant = async (tenantId) => {
 };
 
 
-export const updateOrderStatus = async (orderId, newStatus) => {
+export const updateOrderStatus = async (transaksiId, newStatus, tenantId) => {
   try {
-    const token = jwtStorage.retrieveToken(); // Asumsi Anda punya fungsi ini
-    const response = await fetch(`${baseUrl}/api/v1/tenant/orders/${orderId}/status`, { // Sesuaikan baseUrl dan path
+    const token = jwtStorage.retrieveToken();
+
+    // 1. Sesuaikan URL endpoint
+    const response = await fetch(`${baseUrl}/api/v1/tenant/orders/transaksi/${transaksiId}/status`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ status: newStatus }) // Kirim status baru dalam body
+      // 2. Kirim status DAN tenant_id di body
+      body: JSON.stringify({ status: newStatus, tenant_id: tenantId })
     });
 
     if (!response.ok) {
@@ -840,9 +1396,9 @@ export const updateOrderStatus = async (orderId, newStatus) => {
       throw new Error(errorData.message || 'Gagal memperbarui status pesanan');
     }
 
-    return await response.json(); // Kembalikan respons sukses dari server
+    return await response.json();
   } catch (error) {
-    console.error(`Error updating order status for order ${orderId}:`, error);
+    console.error(`Error updating order status for transaction ${transaksiId}:`, error);
     throw error;
   }
 };
@@ -1022,6 +1578,7 @@ export const getActivePromos = async () => {
     throw error;
   }
 };
+
 
 export const getWorkspaces = async () => {
   try {

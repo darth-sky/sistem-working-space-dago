@@ -1,30 +1,30 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { Input, Modal, Button, Spin, message } from "antd";
-import { getOrdersByTenant, updateOrderStatus } from "../../../services/service";
-import { AuthContext } from "../../../providers/AuthProvider";
+import { getOrdersByTenant, updateOrderStatus } from "../../../services/service"; // Pastikan path ini benar
+import { AuthContext } from "../../../providers/AuthProvider"; // Pastikan path ini benar
 
 const { Search } = Input;
 const useAuth = () => useContext(AuthContext);
 
 const DashboardTenant = () => {
     const [orders, setOrders] = useState([]);
-    const [filteredOrders, setFilteredOrders] = useState([]); // State untuk hasil pencarian
+    const [filteredOrders, setFilteredOrders] = useState([]); 
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isUpdating, setIsUpdating] = useState(false);
     const { userProfile, loading: authLoading } = useAuth();
+    
+    // 👈 PERUBAHAN: tenantId diambil dari context
     const tenantId = userProfile?.detail?.id_tenant;
 
-    // 💎 1. Buat 'ref' untuk menyimpan objek audio dan melacak pesanan
     const notificationSound = useRef(null);
     const knownOrderIds = useRef(new Set());
 
-    // 💎 2. Inisialisasi audio saat komponen pertama kali dimuat
     useEffect(() => {
-        notificationSound.current = new Audio("../../../../public/sounds/notification.mp3");
+        // 👈 PERUBAHAN: Pastikan path ke file audio benar dari root public
+        notificationSound.current = new Audio("/sounds/notification.mp3");
     }, []);
 
-    // 💎 3. Logika untuk mengambil data dan polling
     useEffect(() => {
         if (authLoading || !tenantId) return;
 
@@ -33,61 +33,67 @@ const DashboardTenant = () => {
                 const res = await getOrdersByTenant(tenantId);
                 const fetchedOrders = res.data.datas || [];
 
-                // Cek apakah ada pesanan baru yang belum pernah dilihat
                 const hasNewOrder = fetchedOrders.some(order => !knownOrderIds.current.has(order.id));
 
-                if (hasNewOrder && knownOrderIds.current.size > 0) { // Hanya putar suara jika bukan fetch pertama kali
+                if (hasNewOrder && knownOrderIds.current.size > 0) { 
                     notificationSound.current.play().catch(e => console.error("Audio play failed:", e));
                 }
 
-                // Perbarui daftar ID pesanan yang sudah diketahui
                 fetchedOrders.forEach(order => knownOrderIds.current.add(order.id));
 
                 setOrders(fetchedOrders);
 
             } catch (err) {
                 console.error("Polling error:", err);
-                // Jangan tampilkan error setiap polling gagal, agar tidak mengganggu user
             } finally {
-                setLoading(false); // Matikan loading utama hanya sekali
+                setLoading(false); 
             }
         };
 
-        // Panggil sekali saat komponen dimuat
         fetchAndCheckOrders();
-
-        // Atur interval polling (setiap 15 detik)
         const intervalId = setInterval(fetchAndCheckOrders, 15000);
-
-        // Hentikan interval saat komponen dibongkar (pindah halaman)
         return () => clearInterval(intervalId);
 
     }, [tenantId, authLoading]);
 
-    // Efek untuk memfilter data setiap kali 'orders' atau 'searchText' berubah
     useEffect(() => {
-        setFilteredOrders(orders); // Inisialisasi awal
+        setFilteredOrders(orders); 
     }, [orders]);
 
 
+    // 👈 PERUBAHAN BESAR: Logika fungsi updateStatus diubah total
+    const updateStatus = async (transaksiId, newStatusUi) => {
+        // transaksiId = ID Transaksi (misal: 346)
+        // newStatusUi = Status dari UI (misal: "ON PROSES" atau "FINISH")
 
-    const updateStatus = async (id, newStatus) => {
-        console.log(id)
-        if (selectedOrder.status === newStatus) return;
-
+        // 1. Cek apakah tenantId ada sebelum mengirim
+        if (!tenantId) {
+            message.error("ID Tenant tidak ditemukan. Silakan login ulang.");
+            return;
+        }
+        
         try {
             setIsUpdating(true);
-            await updateOrderStatus(id, newStatus);
+            
+            // 2. 👈 Panggil service dengan 3 parameter
+            await updateOrderStatus(transaksiId, newStatusUi, tenantId);
 
-            // Logika update state lokal setelah sukses
+            // 3. Siapkan status DB baru untuk update state lokal
+            const dbStatusMap = {
+                "ON PROSES": "Diproses",
+                "FINISH": "Selesai"
+            };
+            const newDbStatus = dbStatusMap[newStatusUi]; // misal: "Diproses"
+
+            // 4. Logika update state lokal (cocokkan dengan ID Transaksi)
             const updatedOrders = orders.map((order) =>
-
-                order.id_detail_order === id ? { ...order, status: newStatus } : order
+                order.id === transaksiId ? { ...order, status: newDbStatus } : order
             );
             setOrders(updatedOrders);
-            setFilteredOrders(updatedOrders); // Jangan lupa update data filter juga
+            setFilteredOrders(updatedOrders); 
 
-            setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : prev));
+            // 5. Update state modal juga
+            setSelectedOrder((prev) => (prev ? { ...prev, status: newDbStatus } : prev));
 
             message.success(`Status pesanan #${selectedOrder.code} berhasil diperbarui!`);
 
@@ -146,7 +152,7 @@ const DashboardTenant = () => {
                 {filteredOrders.length > 0 ? (
                     filteredOrders.map((order) => (
                         <div
-                            key={order.id}
+                            key={order.id} // key menggunakan ID Transaksi
                             className="bg-white shadow rounded-lg p-4 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow"
                             onClick={() => setSelectedOrder(order)}
                         >
@@ -191,7 +197,8 @@ const DashboardTenant = () => {
                         <p className="font-semibold mb-2 text-md">Rincian Pesanan:</p>
                         <ul className="space-y-2 list-disc list-inside">
                             {selectedOrder.items.map((item, idx) => (
-                                <li key={item.id || idx} className="ml-2">
+                                // key menggunakan id_detail_order dari item
+                                <li key={item.id_detail_order || idx} className="ml-2"> 
                                     <span className="font-medium">{item.name}</span> (Qty: {item.qty})<br />
                                     {item.note && <span className="text-gray-600 text-xs italic">Catatan: {item.note}</span>}
                                 </li>
@@ -203,7 +210,8 @@ const DashboardTenant = () => {
                                 <>
                                     <Button
                                         type="primary"
-                                        onClick={() => updateStatus(selectedOrder.id_detail_order, "Diproses")}
+                                        // 👈 PERUBAHAN: Kirim ID Transaksi dan Status UI
+                                        onClick={() => updateStatus(selectedOrder.id, "ON PROSES")}
                                         loading={isUpdating}
                                     >
                                         Terima Order
@@ -220,7 +228,8 @@ const DashboardTenant = () => {
                                 <Button
                                     type="primary"
                                     style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
-                                    onClick={() => updateStatus(selectedOrder.id_detail_order, "Selesai")}
+                                    // 👈 PERUBAHAN: Kirim ID Transaksi dan Status UI
+                                    onClick={() => updateStatus(selectedOrder.id, "FINISH")}
                                     loading={isUpdating}
                                 >
                                     Tandai Selesai

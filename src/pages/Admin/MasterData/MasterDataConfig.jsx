@@ -15,8 +15,9 @@ import VirtualOfficePackageTab from "./tabs/VirtualOfficePackageTab";
 import PromoTab from "./tabs/PromoTab";
 import EventSpacesTab from "./tabs/EventSpacesTab";
 import { AiOutlineProduct } from "react-icons/ai";
-import { MdOutlineProductionQuantityLimits, MdChair, MdCardMembership, MdDiscount, MdEvent } from "react-icons/md";
+import { MdOutlineProductionQuantityLimits, MdChair, MdCardMembership, MdDiscount, MdEvent, MdEventAvailable } from "react-icons/md";
 import { GiPostOffice } from "react-icons/gi";
+import AcaraTab from "./tabs/AcaraTab";
 
 
 
@@ -90,8 +91,15 @@ export const tabsConfig = [
         key: "eventspaces",
         path: "eventspaces",
         label: "Event Spaces",
-        icon: MdEvent,
+        icon: MdEventAvailable,
         component: <EventSpacesTab />,
+    },
+    {
+        key: "acara",
+        path: "acara",
+        label: "Acara",
+        icon: MdEvent,
+        component: <AcaraTab />,
     },
 ];
 

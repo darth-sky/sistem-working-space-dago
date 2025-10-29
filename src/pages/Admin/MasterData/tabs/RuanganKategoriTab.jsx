@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from "react";
 import {
     Table, Button, Modal, Input, Typography, Row, Col, Card, Space, message, Popconfirm, Tooltip,
-    Switch, Tag,
-    Upload, Image // PERBAIKAN: Impor Upload dan Image
+    Switch, Tag, Upload, Image
 } from "antd";
 import {
     PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
-    UploadOutlined, AppstoreOutlined // PERBAIKAN: Impor Ikon Upload
+    UploadOutlined, AppstoreOutlined
 } from "@ant-design/icons";
 import {
     getKategoriRuangan, createKategoriRuangan, updateKategoriRuangan, deleteKategoriRuangan
-} from "../../../../services/service"; // pastikan path import benar
+} from "../../../../services/service";
 
 const { Text } = Typography;
 const { Search } = Input;
 const { TextArea } = Input;
 
-// PERBAIKAN: Definisikan base URL untuk folder 'uploads' di backend Anda
 const UPLOAD_URL = `${import.meta.env.VITE_BASE_URL}/static/`;
 
 const RuanganKategoriTab = () => {
@@ -27,7 +25,7 @@ const RuanganKategoriTab = () => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
-    const [fileList, setFileList] = useState([]); // State baru untuk mengelola file gambar
+    const [fileList, setFileList] = useState([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -35,7 +33,7 @@ const RuanganKategoriTab = () => {
             const res = await getKategoriRuangan();
             if (res.status === 200 && res.data.message === "OK") {
                 const kategori = res.data.datas.map((item) => ({
-                    key: item.id_kategori_ruangan, // Gunakan ID unik dari DB sebagai key
+                    key: item.id_kategori_ruangan,
                     ...item,
                 }));
                 setData(kategori);
@@ -52,39 +50,101 @@ const RuanganKategoriTab = () => {
         fetchData();
     }, []);
 
+    // 🔍 Filter global
     const filteredData = data.filter(
         (item) =>
             item.nama_kategori.toLowerCase().includes(searchText.toLowerCase()) ||
-            (item.deskripsi &&
-                item.deskripsi.toLowerCase().includes(searchText.toLowerCase()))
+            (item.deskripsi && item.deskripsi.toLowerCase().includes(searchText.toLowerCase()))
     );
 
+    // 🔽 Membuat opsi filter unik untuk tiap kolom
+    const uniqueFilters = (field) =>
+        [...new Set(data.map((item) => item[field]).filter(Boolean))].map((value) => ({
+            text: value,
+            value,
+        }));
+
     const columns = [
-        // PERBAIKAN: Tambah kolom untuk menampilkan gambar
         {
             title: "Gambar",
             dataIndex: "gambar_kategori_ruangan",
             key: "gambar_kategori_ruangan",
             width: 120,
-            render: (filename) => filename 
-                ? <Image width={80} src={`${UPLOAD_URL}${filename}`} /> 
-                : <Text type="secondary">No Image</Text>
+            render: (filename) =>
+                filename ? (
+                    <Image width={80} src={`${UPLOAD_URL}${filename}`} />
+                ) : (
+                    <Text type="secondary">No Image</Text>
+                ),
         },
-        { title: "ID", dataIndex: "id_kategori_ruangan", key: "id_kategori_ruangan", width: 80 },
-        { title: "Nama Kategori", dataIndex: "nama_kategori", key: "nama_kategori", render: (text) => (<Space><AppstoreOutlined style={{ color: "#1890ff" }} /><Text strong>{text}</Text></Space>) },
-        { title: "Deskripsi", dataIndex: "deskripsi", key: "deskripsi", ellipsis: true },
         {
-            title: "Status", dataIndex: "status", key: "status", width: 120,
-            render: (status) => (<Tag color={status === 'Active' ? 'green' : 'red'}>{status?.toUpperCase()}</Tag>),
-            filters: [{ text: 'Active', value: 'Active' }, { text: 'Inactive', value: 'Inactive' }],
+            title: "ID",
+            dataIndex: "id_kategori_ruangan",
+            key: "id_kategori_ruangan",
+            width: 80,
+            sorter: (a, b) => a.id_kategori_ruangan - b.id_kategori_ruangan,
+        },
+        {
+            title: "Nama Kategori",
+            dataIndex: "nama_kategori",
+            key: "nama_kategori",
+            filters: uniqueFilters("nama_kategori"),
+            onFilter: (value, record) =>
+                record.nama_kategori && record.nama_kategori.indexOf(value) === 0,
+            render: (text) => (
+                <Space>
+                    <AppstoreOutlined style={{ color: "#1890ff" }} />
+                    <Text strong>{text}</Text>
+                </Space>
+            ),
+            sorter: (a, b) => a.nama_kategori.localeCompare(b.nama_kategori),
+        },
+        {
+            title: "Deskripsi",
+            dataIndex: "deskripsi",
+            key: "deskripsi",
+            filters: uniqueFilters("deskripsi"),
+            onFilter: (value, record) =>
+                record.deskripsi && record.deskripsi.indexOf(value) === 0,
+            ellipsis: true,
+        },
+        {
+            title: "Status",
+            dataIndex: "status",
+            key: "status",
+            width: 120,
+            render: (status) => (
+                <Tag color={status === 'Active' ? 'green' : 'red'}>
+                    {status?.toUpperCase()}
+                </Tag>
+            ),
+            filters: [
+                { text: 'Active', value: 'Active' },
+                { text: 'Inactive', value: 'Inactive' },
+            ],
             onFilter: (value, record) => record.status.indexOf(value) === 0,
         },
         {
-            title: "Actions", key: "actions", width: 120,
+            title: "Actions",
+            key: "actions",
+            width: 120,
             render: (_, record) => (
                 <Space size="small">
-                    <Tooltip title="Edit Kategori"><Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} /></Tooltip>
-                    <Tooltip title="Delete Kategori"><Popconfirm title="Yakin ingin menghapus kategori ini?" onConfirm={() => handleDelete(record.id_kategori_ruangan)}><Button type="link" danger icon={<DeleteOutlined />} /></Popconfirm></Tooltip>
+                    <Tooltip title="Edit Kategori">
+                        <Button
+                            type="link"
+                            icon={<EditOutlined />}
+                            onClick={() => handleEdit(record)}
+                        />
+                    </Tooltip>
+                    <Tooltip title="Delete Kategori">
+                        <Popconfirm
+                            title="Yakin ingin menghapus kategori ini?"
+                            onConfirm={() => handleDelete(record.id_kategori_ruangan)}
+                        >
+                            <Button type="link" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                    </Tooltip>
                 </Space>
             ),
         },
@@ -94,7 +154,6 @@ const RuanganKategoriTab = () => {
         setFormData({ ...formData, [field]: value });
     };
 
-    // PERBAIKAN: Logika handleSave diubah total untuk mengirim FormData
     const handleSave = async () => {
         if (!formData.nama_kategori) {
             message.error("Nama Kategori wajib diisi!");
@@ -103,21 +162,25 @@ const RuanganKategoriTab = () => {
         setLoading(true);
 
         const formDataToSend = new FormData();
-        // Tambahkan semua data teks dari state `formData` ke `formDataToSend`
-        Object.keys(formData).forEach(key => {
+        Object.keys(formData).forEach((key) => {
             if (formData[key] !== null && formData[key] !== undefined) {
                 formDataToSend.append(key, formData[key]);
             }
         });
-        
-        // Tambahkan file gambar jika ada yang baru dipilih
+
         if (fileList.length > 0 && fileList[0].originFileObj) {
-            formDataToSend.append('gambar_kategori_ruangan', fileList[0].originFileObj);
+            formDataToSend.append(
+                "gambar_kategori_ruangan",
+                fileList[0].originFileObj
+            );
         }
 
         try {
             if (editingCategory) {
-                const res = await updateKategoriRuangan(editingCategory.id_kategori_ruangan, formDataToSend);
+                const res = await updateKategoriRuangan(
+                    editingCategory.id_kategori_ruangan,
+                    formDataToSend
+                );
                 if (res.status === 200) message.success("Kategori berhasil diperbarui!");
             } else {
                 const res = await createKategoriRuangan(formDataToSend);
@@ -132,27 +195,39 @@ const RuanganKategoriTab = () => {
             setLoading(false);
         }
     };
-    
-    const handleDelete = async (id_kategori) => { /* ... (fungsi ini sudah benar) ... */ };
-    
+
+    const handleDelete = async (id_kategori) => {
+        try {
+            const res = await deleteKategoriRuangan(id_kategori);
+            if (res.status === 200) {
+                message.success("Kategori berhasil dihapus!");
+                fetchData();
+            }
+        } catch (err) {
+            console.error("Gagal menghapus kategori:", err);
+            message.error("Gagal menghapus kategori");
+        }
+    };
+
     const handleAdd = () => {
         setEditingCategory(null);
-        setFormData({ status: 'Active' });
-        setFileList([]); // Kosongkan file list
+        setFormData({ status: "Active" });
+        setFileList([]);
         setOpen(true);
     };
 
     const handleEdit = (record) => {
         setEditingCategory(record);
         setFormData(record);
-        // Tampilkan gambar yang sudah ada di komponen Upload
         if (record.gambar_kategori_ruangan) {
-            setFileList([{
-                uid: '-1',
-                name: record.gambar_kategori_ruangan,
-                status: 'done',
-                url: `${UPLOAD_URL}${record.gambar_kategori_ruangan}`,
-            }]);
+            setFileList([
+                {
+                    uid: "-1",
+                    name: record.gambar_kategori_ruangan,
+                    status: "done",
+                    url: `${UPLOAD_URL}${record.gambar_kategori_ruangan}`,
+                },
+            ]);
         } else {
             setFileList([]);
         }
@@ -161,20 +236,51 @@ const RuanganKategoriTab = () => {
 
     const handleCancel = () => {
         setOpen(false);
-        setFormData({ status: 'Active' });
+        setFormData({ status: "Active" });
         setEditingCategory(null);
-        setFileList([]); // Selalu reset file list saat modal ditutup
+        setFileList([]);
     };
 
     return (
         <div style={{ padding: "24px" }}>
-            <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
-                <Col flex="1"><Search placeholder="Cari kategori ruangan..." onChange={(e) => setSearchText(e.target.value)} allowClear size="large" /></Col>
-                <Col flex="none"><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">Tambah Kategori</Button></Col>
+            <Row
+                gutter={[16, 16]}
+                align="middle"
+                justify="space-between"
+                style={{ marginBottom: 24 }}
+            >
+                <Col flex="1">
+                    <Search
+                        placeholder="Cari kategori ruangan..."
+                        onChange={(e) => setSearchText(e.target.value)}
+                        allowClear
+                        size="large"
+                    />
+                </Col>
+                <Col flex="none">
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleAdd}
+                        size="large"
+                    >
+                        Tambah Kategori
+                    </Button>
+                </Col>
             </Row>
 
             <Card style={{ borderRadius: "12px" }}>
-                <Table columns={columns} dataSource={filteredData} loading={loading} pagination={{ pageSize, showSizeChanger: true, pageSizeOptions: ["5", "10", "20"] , onShowSizeChange: (c, size) => setPageSize(size)}}/>
+                <Table
+                    columns={columns}
+                    dataSource={filteredData}
+                    loading={loading}
+                    pagination={{
+                        pageSize,
+                        showSizeChanger: true,
+                        pageSizeOptions: ["5", "10", "20"],
+                        onShowSizeChange: (c, size) => setPageSize(size),
+                    }}
+                />
             </Card>
 
             <Modal
@@ -185,15 +291,25 @@ const RuanganKategoriTab = () => {
                 confirmLoading={loading}
             >
                 <div style={{ marginTop: 24 }}>
-                    <Text strong>Nama Kategori <span style={{ color: "red" }}>*</span></Text>
-                    <Input value={formData.nama_kategori || ""} onChange={(e) => handleChange("nama_kategori", e.target.value)} style={{ marginTop: 8 }} />
+                    <Text strong>
+                        Nama Kategori <span style={{ color: "red" }}>*</span>
+                    </Text>
+                    <Input
+                        value={formData.nama_kategori || ""}
+                        onChange={(e) => handleChange("nama_kategori", e.target.value)}
+                        style={{ marginTop: 8 }}
+                    />
                 </div>
                 <div style={{ marginTop: 16 }}>
                     <Text strong>Deskripsi</Text>
-                    <TextArea rows={3} value={formData.deskripsi || ""} onChange={(e) => handleChange("deskripsi", e.target.value)} style={{ marginTop: 8 }} />
+                    <TextArea
+                        rows={3}
+                        value={formData.deskripsi || ""}
+                        onChange={(e) => handleChange("deskripsi", e.target.value)}
+                        style={{ marginTop: 8 }}
+                    />
                 </div>
-                
-                {/* PERBAIKAN: Tambahkan komponen Upload */}
+
                 <div style={{ marginTop: 16 }}>
                     <Text strong>Gambar Kategori</Text>
                     <Upload
@@ -210,14 +326,23 @@ const RuanganKategoriTab = () => {
                         </div>
                     </Upload>
                 </div>
-                
-                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: '16px' }}>
+
+                <div
+                    style={{
+                        marginTop: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "16px",
+                    }}
+                >
                     <Text strong>Status</Text>
                     <Switch
                         checkedChildren="Active"
                         unCheckedChildren="Inactive"
-                        checked={formData.status === 'Active'}
-                        onChange={(checked) => handleChange("status", checked ? "Active" : "Inactive")}
+                        checked={formData.status === "Active"}
+                        onChange={(checked) =>
+                            handleChange("status", checked ? "Active" : "Inactive")
+                        }
                     />
                 </div>
             </Modal>

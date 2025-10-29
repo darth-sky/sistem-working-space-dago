@@ -62,6 +62,8 @@ import VirtualOfficeApproval from "./pages/Admin/VirtualOfficeApproval/VirtualOf
 import HutangAdmin from "./pages/Admin/HutangAdmin/HutangAdmin";
 import LaporanPembayaran from "./pages/Kasir/LaporanPembayaran/LaporanPembayaran";
 import PrivateOffice from "./pages/Pelanggan/PrivateOffice/PrivateOffice";
+import InformasiAcara from "./pages/Pelanggan/InformasiAcara/InformasiAcara";
+import KasirSession from "./pages/Kasir/KasirSession/KasirSession";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -78,7 +80,14 @@ const App = () => {
 
         <Route path="/roomdetail/:id" element={<RoomDetail />} />
 
-
+        <Route
+          path="/kasir-session"
+          element={
+            
+              <KasirSession />
+            
+          }
+        />
 
         <Route
           path="/dashboard-pengguna"
@@ -184,6 +193,8 @@ const App = () => {
         <Route path="/informasivo" element={<InformasiVO />} />
 
         <Route path="/eventspaces" element={<EventSpaces />} />
+
+        <Route path="/informasi-acara" element={<InformasiAcara />} />
 
         {/* ADMIN */}
         {/* <Route
@@ -322,11 +333,11 @@ const App = () => {
             </PrivateRoute>
           }
         >
-          {/* Semua rute "anak" di bawah ini sekarang otomatis aman.
-      Mereka hanya bisa diakses jika:
-      1. User sudah login.
-      2. User memiliki role 'kasir'.
-    */}
+        {/* Semua rute "anak" di bawah ini sekarang otomatis aman.
+        Mereka hanya bisa diakses jika:
+        1. User sudah login.
+        2. User memiliki role 'kasir'.
+        */}
           <Route path="/transaksikasir" element={<TransaksiKasir />} />
           <Route path="/merchantkasir" element={<MerchantKasir />} />
           <Route path="/productkasir" element={<ProductKasir />} />
