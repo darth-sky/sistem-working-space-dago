@@ -17,6 +17,7 @@
     "chartjs-plugin-datalabels": "^2.2.0",
     "encrypt-storage": "^2.14.7",
     "framer-motion": "^12.23.16",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.542.0",
     "moment": "^2.30.1",
     "react": "^19.1.1",

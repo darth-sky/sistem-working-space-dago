@@ -406,16 +406,13 @@ const PrivateOffice = () => {
                 <Spin spinning={submitLoading} tip="Memproses pesanan...">
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 gap-2">
-                            <Input addonBefore="Nama" value={loggedInUser?.nama || "..."} readOnly />
+
                             {/* <Input addonBefore="Perusahaan" value={formData.perusahaan} readOnly /> */}
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1">Metode Pembayaran</label>
-                            <Select value="qris" disabled className="w-full">
-                                <Option value="qris">QRIS</Option>
-                            </Select>
-                            v             <div className="mt-3 flex flex-col items-center p-3 border rounded-lg bg-gray-50">
+
+                            <div className="mt-3 flex flex-col items-center p-3 border rounded-lg bg-gray-50">
                                 <img
                                     src={qrisImgSrc}
                                     alt="QRIS Barcode"
@@ -461,7 +458,7 @@ const PrivateOffice = () => {
                             >
                                 Saya Sudah Bayar & Kirim Pesanan
                             </Button>
-                            Data</div>
+                            </div>
                     </div>
                 </Spin>
             </Modal>

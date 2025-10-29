@@ -64,6 +64,10 @@ import LaporanPembayaran from "./pages/Kasir/LaporanPembayaran/LaporanPembayaran
 import PrivateOffice from "./pages/Pelanggan/PrivateOffice/PrivateOffice";
 import InformasiAcara from "./pages/Pelanggan/InformasiAcara/InformasiAcara";
 import KasirSession from "./pages/Kasir/KasirSession/KasirSession";
+import BukaSesi from "./pages/Kasir/BukaSesi/BukaSesi";
+import SesiKasirGuard from "./components/SesiKasirGuard";
+import LaporanPajak from "./pages/Owner/LaporanPajak/LaporanPajak";
+import InformasiAcaraLogin from "./pages/Pelanggan/InformasiAcaraLogin/InformasiAcaraLogin";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -83,9 +87,9 @@ const App = () => {
         <Route
           path="/kasir-session"
           element={
-            
-              <KasirSession />
-            
+
+            <KasirSession />
+
           }
         />
 
@@ -100,7 +104,7 @@ const App = () => {
 
         <Route path="/daftar-vo/:id" element={<DaftarVO />} />
 
-        <Route
+        {/* <Route
           path="/booking/:id"
           element={
             <PrivateRoute>
@@ -118,7 +122,7 @@ const App = () => {
               <BookingPayment />{" "}
             </PrivateRoute>
           }
-        />
+        /> */}
 
         <Route
           path="/booking-sukses"
@@ -167,14 +171,14 @@ const App = () => {
           }
         />
 
-        <Route
+        {/* <Route
           path="/detail-event-spaces/:id" // <-- UBAH DI SINI
           element={
             <PrivateRoute>
               <DetailEventSpaces />
             </PrivateRoute>
           }
-        />
+        /> */}
 
 
 
@@ -196,158 +200,97 @@ const App = () => {
 
         <Route path="/informasi-acara" element={<InformasiAcara />} />
 
-        {/* ADMIN */}
-        {/* <Route
-          path="/dashboardadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <DashboardAdmins />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        /> */}
+        {/* ===================== */}
+        {/* === RUTE ADMIN DAGO (REVISED) === */}
+        {/* ===================== */}
+        <Route element={<PrivateRoute allowedRoles={['admin_dago']} />}> {/* 1. Cek Login & Role */}
+          <Route element={<SidebarAdmin />}> {/* 2. Tampilkan Layout Sidebar Admin */}
 
-        <Route
-          path="/virtualofficeadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <VirtualOfficeApproval />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
+            {/* 3. Halaman-halaman Admin di dalam Outlet SidebarAdmin */}
+            <Route path="/virtualofficeadmin" element={<VirtualOfficeApproval />} />
+            <Route path="/eventspacesadmin" element={<EventSpacesAdmin />} />
+            <Route path="/transaksiadmin" element={<TransaksiAdmin />} />
 
+            {/* --- PERBAIKAN RUTE MASTER DATA --- */}
+            {/* Rute ini menangani /masterdataadmin (tanpa tabKey) */}
+            <Route path="/masterdataadmin" element={<MasterData />} />
+            {/* Rute ini menangani /masterdataadmin/:tabKey */}
+            <Route path="/masterdataadmin/:tabKey" element={<MasterData />} />
+            {/* --- AKHIR PERBAIKAN --- */}
 
-        <Route
-          path="/eventspacesadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <EventSpacesAdmin />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
+            <Route path="/costbulananadmin" element={<CostBulanan />} />
+            <Route path="/hutangadmin" element={<HutangAdmin />} />
 
-        <Route
-          path="/transaksiadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <TransaksiAdmin />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
+            {/* Tambahkan rute admin lain di sini */}
 
-        <Route
-          path="masterdataadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <MasterData />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
+            {/* Hapus redirect <Navigate> yang sebelumnya ada di sini */}
 
-        <Route
-          path="costbulananadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <CostBulanan />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="hutangadmin"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <HutangAdmin />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
-
-        {/* 1. Route dengan :tabKey (lebih spesifik) */}
-        <Route
-          path="/masterdataadmin/:tabKey"
-          element={
-            <PrivateRoute>
-              <SidebarAdmin>
-                <MasterData />
-              </SidebarAdmin>
-            </PrivateRoute>
-          }
-        />
-
-        {/* 2. Default redirect kalau user buka /masterdataadmin langsung */}
-        <Route
-          path="/masterdataadmin"
-          element={<Navigate to="/masterdataadmin/user" replace />}
-        />
-
-        {/* Admin Tenant */}
-        <Route
-          path="/ordertenant"
-          element={
-            <PrivateRoute>
-              <SidebarTenant>
-                <DashboardTenant />
-              </SidebarTenant>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/stoktenant"
-          element={
-            <PrivateRoute>
-              <SidebarTenant>
-                <KelolaStok />
-              </SidebarTenant>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/settingstenant"
-          element={
-            <PrivateRoute>
-              <SidebarTenant>
-                <SettingTenant />
-              </SidebarTenant>
-            </PrivateRoute>
-          }
-        />
-
-        {/* Kasir */}
-
-        <Route
-          element={
-            <PrivateRoute allowedRoles={['kasir']}>
-              <SidebarKasir />
-            </PrivateRoute>
-          }
-        >
-        {/* Semua rute "anak" di bawah ini sekarang otomatis aman.
-        Mereka hanya bisa diakses jika:
-        1. User sudah login.
-        2. User memiliki role 'kasir'.
-        */}
-          <Route path="/transaksikasir" element={<TransaksiKasir />} />
-          <Route path="/merchantkasir" element={<MerchantKasir />} />
-          <Route path="/productkasir" element={<ProductKasir />} />
-          <Route path="/historykasir" element={<HistoryKasir />} />
-          <Route path="/spacekasir" element={<SpaceKasir />} />
-          <Route path="/laporanpembayarankasir" element={<LaporanPembayaran />} />
-          <Route path="/settingskasir" element={<SettingsKasir />} />
-          <Route path="/buatorderkasir" element={<BuatOrderKasir />} />
-          <Route path="/orderkasir" element={<OrderKasir />} />
+          </Route>
         </Route>
+
+        {/* ======================= */}
+        {/* === RUTE ADMIN TENANT === */}
+        {/* ======================= */}
+        <Route element={<PrivateRoute allowedRoles={['admin_tenant']} />}> {/* 1. Cek Login & Role 'admin_tenant' */}
+          <Route element={<SidebarTenant />}> {/* 2. Tampilkan Layout Sidebar Tenant */}
+
+            {/* 3. Halaman-halaman Tenant di dalam Outlet SidebarTenant */}
+            <Route path="/ordertenant" element={<DashboardTenant />} />
+            <Route path="/stoktenant" element={<KelolaStok />} />
+            <Route path="/settingstenant" element={<SettingTenant />} />
+
+            {/* Tambahkan rute tenant lain di sini */}
+
+          </Route>
+        </Route>
+        {/* Kasir */}
+        {/* ======================= */}
+        {/* === RUTE KASIR BARU === */}
+        {/* ======================= */}
+
+        {/* RUTE 1: HALAMAN BUKA SESI
+            Ini adalah rute untuk /kasir/buka-sesi.
+            - Dibungkus PrivateRoute (cek login)
+            - TIDAK DIBUNGKUS SidebarKasir
+        */}
+        <Route element={<PrivateRoute allowedRoles={['kasir']} />}>
+          <Route path="/kasir/buka-sesi" element={<BukaSesi />} />
+        </Route>
+
+
+        {/* RUTE 2: SEMUA HALAMAN KASIR LAINNYA
+            Ini adalah struktur "nested" (bersarang) yang benar.
+        */}
+        <Route element={<PrivateRoute allowedRoles={['kasir']} />}>  {/* 1. Cek Login & Role */}
+          <Route element={<SesiKasirGuard />}> {/* 2. Cek Sesi Aktif */}
+            <Route element={<SidebarKasir />}> {/* 3. Tampilkan Layout Sidebar (yang punya <Outlet/>) */}
+
+              {/* 4. Halaman-halaman ini akan dirender di dalam <Outlet /> milik SidebarKasir */}
+              <Route path="/transaksikasir" element={<TransaksiKasir />} />
+              <Route path="/merchantkasir" element={<MerchantKasir />} />
+              <Route path="/productkasir" element={<ProductKasir />} />
+              <Route path="/historykasir" element={<HistoryKasir />} />
+              <Route path="/spacekasir" element={<SpaceKasir />} />
+              <Route path="/laporanpembayarankasir" element={<LaporanPembayaran />} />
+              <Route path="/settingskasir" element={<SettingsKasir />} />
+              <Route path="/buatorderkasir" element={<BuatOrderKasir />} />
+              <Route path="/orderkasir" element={<OrderKasir />} />
+              <Route path="/reportkasir" element={<ReportKasir />} />
+
+            </Route>
+          </Route>
+        </Route>
+
+        {/* ======================= */}
+        {/* === AKHIR RUTE KASIR === */}
+        {/* ======================= */}
+
+        {/* (Pastikan Anda MENGHAPUS semua rute kasir duplikat lainnya) */}
+
+        {/* ... (Rute Admin, Pelanggan, Owner Anda) ... */}
+
+
+
 
         <Route
           path="/orderkasir"
@@ -443,133 +386,82 @@ const App = () => {
 
         {/* Kasir End */}
 
-        {/* Pelanggan */}
-        <Route
-          path="/informasi-ruangan"
-          element={
-            <PrivateRoute allowedRoles={["pelanggan"]}>
-              <DashboardPengguna>
-                <InformasiRuangan />
-              </DashboardPengguna>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/membership"
-          element={
-            <PrivateRoute>
-              <DashboardPengguna>
-                <Membership />
-              </DashboardPengguna>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/virtual-office"
-          element={
-            <DashboardPengguna>
-              <VirtualOffice />
-            </DashboardPengguna>
-          }
-        />
-        <Route
-          path="/cek-kredit-membership"
-          element={
-            <DashboardPengguna>
-              <CekKreditMembership />
-            </DashboardPengguna>
-          }
-        />
-        <Route
-          path="/cek-masa-vo"
-          element={
-            <DashboardPengguna>
-              <CekMasaVO />
-            </DashboardPengguna>
-          }
-        />
-        <Route
-          path="/private-office"
-          element={
-            <DashboardPengguna>
-              <PrivateOffice />
-            </DashboardPengguna>
-          }
-        />
-        <Route
-          path="/riwayat-transaksi"
-          element={
-            <DashboardPengguna>
-              <RiwayatTransaksi />
-            </DashboardPengguna>
-          }
-        />
-        <Route
-          path="/event-spaces"
-          element={
-            <DashboardPengguna>
-              <EventSpacesPelanggan />
-            </DashboardPengguna>
-          }
-        />
-        <Route
-          path="/promo-pelanggan"
-          element={
-            <DashboardPengguna>
-              <PromoPelanggan />
-            </DashboardPengguna>
-          }
-        />
+
+
+        {/* ... (Rute publik, Admin, Tenant, Kasir Anda) ... */}
+
+        {/* ========================== */}
+        {/* === RUTE PELANGGAN BARU === */}
+        {/* ========================== */}
+
+        <Route element={<PrivateRoute allowedRoles={['pelanggan']} />}>
+          <Route path="/booking/:id" element={<BookingRuangan />} />
+          <Route path="/payment/:id" element={<BookingPayment />} />
+          {/* Tambahkan rute lain yang tidak pakai DashboardPengguna di sini */}
+          <Route
+            path="/detail-event-spaces/:id" // <-- UBAH DI SINI
+            element={
+              <DetailEventSpaces />
+            }
+          />
+        </Route>
+
+        {/* Grup rute ini dilindungi oleh PrivateRoute (hanya role 'pelanggan')
+            dan menggunakan layout DashboardPengguna */}
+        <Route element={<PrivateRoute allowedRoles={['pelanggan']} />}> {/* 1. Cek Login & Role */}
+          <Route element={<DashboardPengguna />}> {/* 2. Tampilkan Layout (harus punya <Outlet/>) */}
+
+            {/* 3. Halaman-halaman ini akan dirender di dalam <Outlet/> DashboardPengguna */}
+            <Route path="/informasi-ruangan" element={<InformasiRuangan />} />
+            <Route path="/membership" element={<Membership />} />
+            <Route path="/virtual-office" element={<VirtualOffice />} />
+            <Route path="/cek-kredit-membership" element={<CekKreditMembership />} />
+            <Route path="/cek-masa-vo" element={<CekMasaVO />} />
+            <Route path="/private-office" element={<PrivateOffice />} />
+            <Route path="/riwayat-transaksi" element={<RiwayatTransaksi />} />
+            <Route path="/informasi-acara-pelanggan" element={<InformasiAcaraLogin />} />
+
+
+            {/* Perhatikan path event-spaces: sebelumnya ada '/event-spaces' & '/event-spaces-pelanggan'.
+                Saya asumsikan yang benar adalah '/event-spaces' sesuai menu. Sesuaikan jika perlu. */}
+            <Route path="/event-spaces" element={<EventSpacesPelanggan />} />
+
+            <Route path="/promo-pelanggan" element={<PromoPelanggan />} />
+
+            {/* Jika ada halaman pelanggan lain di dalam DashboardPengguna, tambahkan di sini */}
+
+          </Route>
+
+        </Route>
+
+        {/* ========================== */}
+        {/* === AKHIR RUTE PELANGGAN === */}
+        {/* ========================== */}
+
+        {/* Pelanggan End */}
+        {/* (HAPUS SEMUA RUTE PELANGGAN DUPLIKAT YANG LAMA) */}
 
 
 
 
         {/* Pelanggan End */}
+        <Route element={<PrivateRoute allowedRoles={['owner']} />}> {/* 1. Cek Login & Role 'owner' */}
+          <Route element={<SidebarOwner />}> {/* 2. Tampilkan Layout Sidebar Owner (harus punya <Outlet />) */}
 
-        {/* Owner */}
-        <Route
-          path="/laporan"
-          element={
-            <PrivateRoute>
-              <SidebarOwner>
-                <Laporan />
-              </SidebarOwner>
-            </PrivateRoute>
-          }
-        />
+            {/* 3. Halaman-halaman Owner di dalam Outlet SidebarOwner */}
+            <Route path="/laporan" element={<Laporan />} />
+            <Route path="/fnbdashboard" element={<FNBDashboard />} />
+            <Route path="/workingspace" element={<WorkingSpace />} />
+            <Route path="/bagihasil" element={<BagiHasil />} />
+            <Route path="/laporanpajak" element={<LaporanPajak />} />
 
-        <Route
-          path="/fnbdashboard"
-          element={
-            <PrivateRoute>
-              <SidebarOwner>
-                <FNBDashboard />
-              </SidebarOwner>
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/workingspace"
-          element={
-            <PrivateRoute>
-              <SidebarOwner>
-                <WorkingSpace />
-              </SidebarOwner>
-            </PrivateRoute>
-          }
-        />
+            {/* Tambahkan rute owner lain di sini jika ada */}
 
-        <Route
-          path="/bagihasil"
-          element={
-            <PrivateRoute>
-              <SidebarOwner>
-                <BagiHasil />
-              </SidebarOwner>
-            </PrivateRoute>
-          }
-        />
-
+          </Route>
+        </Route>
+        {/* ===================== */}
+        {/* === AKHIR RUTE OWNER === */}
+        {/* ===================== */}
       </Routes>
     </AuthProvider>
   );

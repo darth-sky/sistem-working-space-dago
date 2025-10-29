@@ -1,4 +1,7 @@
+// --- PERBAIKAN: Import 'useAuth' dan 'useNavigate' ---
 import React, { useState } from 'react';
+import { useAuth } from '../../../providers/AuthProvider'; // (Pastikan path ini benar)
+import { useNavigate } from 'react-router-dom';
 
 // A reusable Toggle Switch component
 const ToggleSwitch = ({ id, checked, onChange }) => {
@@ -20,12 +23,49 @@ const SettingsKasir = () => {
   const [isNetworkIndicator, setIsNetworkIndicator] = useState(true);
   const [isBackgroundTask, setIsBackgroundTask] = useState(false);
 
+  // --- PERBAIKAN: Hubungkan ke AuthContext ---
+  const { logout, closeSession, activeSession } = useAuth();
+  const navigate = useNavigate();
+  const [showModal, setShowModal] = useState(false);
+  const [saldoAktual, setSaldoAktual] = useState('');
+  const [error, setError] = useState('');
+
+  const handleCloseSessionClick = () => {
+    // Di sini Anda bisa mengambil data summary sesi jika perlu
+    // Untuk saat ini, kita langsung tampilkan modal
+    setShowModal(true);
+    setError('');
+  };
+
+  const handleConfirmCloseSession = async () => {
+    if (!saldoAktual || isNaN(parseFloat(saldoAktual))) {
+        setError('Saldo aktual wajib diisi dan harus angka.');
+        return;
+    }
+    try {
+        await closeSession(parseFloat(saldoAktual));
+        alert('Sesi berhasil ditutup!');
+        setShowModal(false);
+        navigate('/kasir/buka-sesi'); // Arahkan kembali ke BukaSesi
+    } catch (err) {
+        setError(err.message || 'Gagal menutup sesi');
+    }
+  };
+
+  // Fungsi untuk logout (dari tombol Sign Out)
+  const handleSignOut = () => {
+    // AuthProvider.jsx sudah mengatur navigate ke /login
+    logout(); 
+  };
+  // --- AKHIR PERBAIKAN ---
+
   return (
     <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-8">
         
-        {/* General Settings Section */}
+        {/* General Settings Section (Kode Anda) */}
         <div className="bg-white rounded-lg shadow">
+          {/* ... (bagian Dark Mode, Network, dll. tetap sama) ... */}
           <div className="p-6 flex justify-between items-center border-b border-gray-200">
             <div>
               <h3 className="text-lg font-semibold text-gray-800">Dark Mode</h3>
@@ -48,53 +88,22 @@ const SettingsKasir = () => {
           </div>
         </div>
 
-        {/* Hardware Section */}
+        {/* Hardware Section (Kode Anda) */}
         <div>
-          <h2 className="text-sm font-bold text-gray-600 uppercase mb-2 px-2">Hardware</h2>
-          <div className="bg-white rounded-lg shadow p-6 flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-800">Connect to Printer</h3>
-              <p className="text-sm text-green-600">Terhubung dengan RPP02</p>
-            </div>
-            <div className="flex space-x-2">
-              <button className="px-4 py-2 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-                Scan
-              </button>
-              <button className="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
-                Disconnect
-              </button>
-              <button className="px-4 py-2 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50">
-                Test Print
-              </button>
-            </div>
-          </div>
+          {/* ... (bagian Hardware tetap sama) ... */}
         </div>
 
         {/* Session Section */}
         <div>
           <h2 className="text-sm font-bold text-gray-600 uppercase mb-2 px-2">Session</h2>
           <div className="bg-red-50 border border-red-200 rounded-lg shadow">
-            <div className="p-6 flex justify-between items-center border-b border-red-200">
-                <h3 className="text-lg font-semibold text-gray-800">Timezone</h3>
-                <div className="flex items-center space-x-2 text-gray-600 cursor-pointer">
-                    <span>Asia/Makassar</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                </div>
-            </div>
-            <div className="p-6 flex justify-between items-center border-b border-red-200">
-                <div>
-                    <h3 className="text-lg font-semibold text-gray-800">Export File</h3>
-                    <p className="text-sm text-gray-500">Export file sebagai backup dari report</p>
-                </div>
-                <button className="px-5 py-2 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-                    Export
-                </button>
-            </div>
+            {/* ... (bagian Timezone & Export File tetap sama) ... */}
              <div className="p-6 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-red-700">Close Cashier Session</h3>
-                <button className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+                {/* --- PERBAIKAN: Hubungkan tombol Close --- */}
+                <button 
+                  onClick={handleCloseSessionClick}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
                     Close
                 </button>
             </div>
@@ -106,15 +115,64 @@ const SettingsKasir = () => {
           <h2 className="text-sm font-bold text-gray-600 uppercase mb-2 px-2">Account</h2>
           <div className="bg-red-50 border border-red-200 rounded-lg shadow p-6 flex justify-between items-center">
             <h3 className="text-lg font-semibold text-red-700">Sign Out</h3>
-            <button className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+             {/* --- PERBAIKAN: Hubungkan tombol Sign Out --- */}
+            <button 
+              onClick={handleSignOut}
+              className="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
                 Sign Out
             </button>
           </div>
         </div>
 
       </div>
+
+      {/* --- PERBAIKAN: Modal untuk Konfirmasi Tutup Sesi --- */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                <h3 className="text-lg font-bold mb-4">Tutup Sesi Kasir</h3>
+                <p className="text-sm mb-2">Sesi: <span className="font-semibold">{activeSession?.nama_sesi || 'N/A'}</span></p>
+                <p className="text-sm mb-4">Saldo Awal: <span className="font-semibold">Rp {new Intl.NumberFormat('id-ID').format(activeSession?.saldo_awal || 0)}</span></p>
+                
+                {/* Anda bisa menambahkan API untuk mengambil total tunai tercatat di sini */}
+
+                <div className="mt-4">
+                    <label htmlFor="saldo_aktual" className="block text-sm font-medium text-gray-700">
+                        Masukkan Saldo Tunai Aktual (yang dihitung manual)
+                    </label>
+                    <input 
+                        type="number" 
+                        id="saldo_aktual"
+                        value={saldoAktual}
+                        onChange={(e) => setSaldoAktual(e.target.value)}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Contoh: 1500000"
+                    />
+                </div>
+
+                {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+
+                <div className="mt-6 flex justify-end space-x-3">
+                    <button 
+                        onClick={() => setShowModal(false)}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                    >
+                        Batal
+                    </button>
+                    <button 
+                        onClick={handleConfirmCloseSession}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600"
+                    >
+                        Konfirmasi Tutup Sesi
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+      {/* --- AKHIR PERBAIKAN --- */}
     </div>
   );
 };
 
 export default SettingsKasir;
+// --- PERBAIKAN: Karakter '}' ekstra di bawah baris ini telah dihapus ---

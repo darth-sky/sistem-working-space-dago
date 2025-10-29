@@ -15,7 +15,7 @@ import {
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import logo from "../../../assets/images/logo.png";
 import { AuthContext } from "../../../providers/AuthProvider";
-import { MdOutlineDiscount, MdOutlineMeetingRoom } from "react-icons/md";
+import { MdEvent, MdOutlineDiscount, MdOutlineMeetingRoom } from "react-icons/md";
 import { HiOutlineBuildingOffice2 } from "react-icons/hi2";
 
 const DashboardPengguna = ({ children }) => {
@@ -79,6 +79,12 @@ const DashboardPengguna = ({ children }) => {
       label: "Promo",
       icon: <MdOutlineDiscount size={18} />,
       path: "/promo-pelanggan",
+    },
+    {
+      key: "informasi-acara",
+      label: "Acara",
+      icon: <MdEvent size={18} />,
+      path: "/informasi-acara-pelanggan",
     },
     {
       key: "private-office",

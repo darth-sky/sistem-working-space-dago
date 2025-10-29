@@ -5,6 +5,171 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
+
+
+
+export const apiGetAllOpenSessions = async () => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/all-open`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error getting all open sessions:", error);
+        throw error;
+    }
+};
+
+
+export const apiGetRecentClosedSessions = async () => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/recent-closed`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error getting recent closed sessions:", error);
+        throw error;
+    }
+};
+
+
+export const apiTakeoverSession = async (id_sesi) => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/takeover`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id_sesi }),
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error taking over session:", error);
+        throw error;
+    }
+};
+
+
+
+
+
+const handleResponses = async (response) => {
+    if (!response.ok) {
+        const errorData = await response.json();
+        // Lemparkan error agar bisa ditangkap oleh .catch() di AuthProvider
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    // Jika ok, kembalikan data JSON
+    return response.json();
+};
+
+
+export const apiCheckActiveSession = async () => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/aktif`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error checking active session:", error);
+        throw error; // Lemparkan error ke AuthProvider
+    }
+};
+
+
+export const apiOpenSession = async (sessionData) => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/buka`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sessionData), // Kirim data sebagai JSON
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error opening session:", error);
+        throw error; // Lemparkan error ke AuthProvider
+    }
+};
+
+
+export const apiCloseSession = async (sessionData) => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/tutup`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sessionData), // Kirim data sebagai JSON
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error closing session:", error);
+        throw error; // Lemparkan error ke AuthProvider
+    }
+};
+
+export const apiGetLastSaldo = async () => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/saldo-terakhir`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error getting last saldo:", error);
+        throw error; // Lemparkan error ke AuthProvider
+    }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export const getSelf = async () => {
   try {
     const token = await jwtStorage.retrieveToken();
@@ -997,6 +1162,8 @@ export const getVOClientByUserId = async (userId, targetDate) => {
 
 
 // ---------- SERVICE LAPORAN ----------
+
+
 
 export const getTotalPendapatan = async () => {
   try {
@@ -2214,21 +2381,55 @@ export const deleteProduk = async (id) => {
 
 
 
+// export const getDataPrivate = async () => {
+//   try {
+//     const token = await jwtStorage.retrieveToken()
+//     const response = await fetch(`${baseUrl}/api/v1/protected/data`, {
+//       headers: {
+//         Authorization: `Bearer ${token}`
+//       }
+//     })
+//     if (!response.ok) throw new Error("failed to get data private")
+//     const result = await response.json()
+//     return result
+//   } catch (error) {
+//     throw error
+//   }
+// }
+
 export const getDataPrivate = async () => {
   try {
-    const token = await jwtStorage.retrieveToken()
+    // 1. Ambil token dari storage
+    const token = await jwtStorage.retrieveToken();
+    if (!token) {
+      throw new Error("Token tidak ditemukan");
+    }
+
+    // 2. Lakukan fetch DENGAN menyertakan token di header
     const response = await fetch(`${baseUrl}/api/v1/protected/data`, {
+      method: 'GET',
       headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    if (!response.ok) throw new Error("failed to get data private")
-    const result = await response.json()
-    return result
+        // 3. Ini adalah bagian yang paling penting
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+       // Ini akan melempar error ke 'catch' jika status 422
+       const errorData = await response.json();
+       throw new Error(errorData.error || "failed to get data private");
+    }
+
+    const result = await response.json();
+    return result;
+
   } catch (error) {
-    throw error
+    console.error("Error di dalam getDataPrivate:", error);
+    // Lempar ulang error agar AuthProvider bisa menangkapnya
+    throw error;
   }
-}
+};
 
 export const register = async (formData) => {
   try {

@@ -9,17 +9,31 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState(""); // state untuk error
   const navigate = useNavigate();
-  
-  const { login, isLoggedIn, userProfile } = useContext(AuthContext);
+
+  // --- PERUBAHAN: Ambil 'loading' dari context ---
+  // Kita juga butuh 'loading' untuk mencegah redirect prematur
+  const { login, isLoggedIn, userProfile, loading } = useContext(AuthContext);
 
   useEffect(() => {
-    if (isLoggedIn && userProfile) {
-      const role = userProfile.roles?.toLowerCase(); // normalisasi role
+    // --- PERUBAHAN: Tambahkan cek 'loading' ---
+    // Jangan lakukan apa-apa jika data profile/sesi masih dimuat
+    if (loading) {
+      return;
+    }
+    // --- AKHIR PERUBAHAN ---
+
+    if (isLoggedIn && userProfile?.roles) { // Cek userProfile.roles ada
+      const role = userProfile.roles.toLowerCase(); // normalisasi role
 
       if (role === "admin_dago") {
         navigate("/virtualofficeadmin", { replace: true });
       } else if (role === "kasir") {
-        navigate("/transaksikasir", { replace: true });
+        // --- PERUBAHAN INTI ---
+        // Arahkan kasir yang sudah login ke halaman Buka Sesi.
+        // Halaman BukaSesi.jsx akan menangani redirect
+        // ke POS jika sesi sudah aktif.
+        navigate("/kasir/buka-sesi", { replace: true });
+        // --- AKHIR PERUBAHAN ---
       } else if (role === "owner") {
         navigate("/laporan", { replace: true });
       } else if (role === "admin_tenant") {
@@ -28,7 +42,8 @@ const Login = () => {
         navigate("/informasi-ruangan", { replace: true });
       }
     }
-  }, [isLoggedIn, userProfile, navigate]);
+    // --- PERUBAHAN: Tambahkan 'loading' ke dependency array ---
+  }, [isLoggedIn, userProfile, navigate, loading]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,7 +55,10 @@ const Login = () => {
 
     try {
       const result = await loginProses(formData);
-      login(result.access_token); // update context & fetch profile
+      // Panggil 'login' dari AuthProvider.
+      // Fungsi 'login' ini (yang sudah kita ubah)
+      // akan otomatis mengarahkan kasir ke /kasir/buka-sesi.
+      login(result.access_token);
     } catch (error) {
       console.error("Login gagal:", error);
       setErrorMessage("Email atau password salah. Silakan coba lagi.");
@@ -99,7 +117,7 @@ const Login = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="********"
+              C placeholder="********"
               required
             />
           </div>

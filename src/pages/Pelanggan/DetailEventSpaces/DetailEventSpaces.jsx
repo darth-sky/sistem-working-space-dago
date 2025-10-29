@@ -281,7 +281,22 @@ const DetailEventSpaces = () => {
                       <Form.Item
                         name="jumlah_peserta"
                         label="Jumlah Peserta"
-                        rules={[{ required: true, message: "Wajib diisi" }]}
+                        rules={[ // <-- MODIFICATION START
+                          {
+                            required: true,
+                            message: "Jumlah peserta wajib diisi"
+                          },
+                          {
+                            type: 'number', // Ensure it's treated as a number
+                            max: roomData.kapasitas,
+                            message: `Jumlah peserta tidak boleh melebihi kapasitas (${roomData.kapasitas} orang)`,
+                          },
+                          {
+                            type: 'number',
+                            min: 1,
+                            message: 'Jumlah peserta minimal 1 orang',
+                          }
+                        ]} // <-- MODIFICATION END
                       >
                         <InputNumber
                           min={1}
