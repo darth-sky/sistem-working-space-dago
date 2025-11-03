@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Input, Button, Tag, Spin, Alert } from "antd";
+import { Input, Button, Tag, Spin, Alert, Collapse, Segmented } from "antd"; // 1. Import Segmented
 import { getKasirDashboardData } from "../../../services/service";
-import RentalTimer from "../../../components/RentalTimer"; // Pastikan path ini benar
+import RentalTimer from "../../../components/RentalTimer";
 
 const { Search } = Input;
+const { Panel } = Collapse;
 
-// Fungsi helper ini sudah benar, tidak perlu diubah
+// Helper: gabungkan unit (Tidak berubah)
 const getCombinedSpaceUnits = (availableUnits, activeRentals) => {
   const allUnits = [...availableUnits];
   const rentedUnits = activeRentals.map((r) => r.unit);
@@ -34,7 +35,11 @@ const getCombinedSpaceUnits = (availableUnits, activeRentals) => {
 };
 
 const SpaceKasir = () => {
-  const [status, setStatus] = useState("Active");
+  const [status, setStatus] = useState("Active"); // Filter status (existing)
+
+  // 2. Tambahkan state baru untuk filter sumber
+  const [sourceFilter, setSourceFilter] = useState("All"); // Filter source (new)
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState({
@@ -47,6 +52,7 @@ const SpaceKasir = () => {
   const [rentals, setRentals] = useState({ upcoming: [], active: [], finish: [] });
   const [combinedUnits, setCombinedUnits] = useState([]);
 
+  // useEffect untuk fetch data (Tidak berubah)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -67,6 +73,7 @@ const SpaceKasir = () => {
     fetchData();
   }, []);
 
+  // useEffect untuk update combined units (Tidak berubah)
   useEffect(() => {
     if (!loading) {
       const allUnits = getCombinedSpaceUnits(spaceUnitsAvailable, rentals.active);
@@ -74,12 +81,44 @@ const SpaceKasir = () => {
     }
   }, [rentals.active, spaceUnitsAvailable, loading]);
 
-  // Tentukan data sewa yang akan ditampilkan berdasarkan tab
+
+  // 3. Logika Filter Gabungan (Filter Status + Filter Sumber)
+  // Ini adalah blok logika utama yang diperbarui
   let displayedRentals = [];
   if (status === "Upcoming") displayedRentals = rentals.upcoming;
   else if (status === "Active") displayedRentals = rentals.active;
   else displayedRentals = rentals.finish;
 
+  // Sekarang, filter `displayedRentals` LEBIH LANJUT berdasarkan `sourceFilter`
+  const finalFilteredRentals = displayedRentals.filter(rental => {
+    if (sourceFilter === "All") {
+      return true; // Tampilkan semua
+    }
+    if (sourceFilter === "Online") {
+      return rental.booking_source === 'RoomDetail';
+    }
+    if (sourceFilter === "Private Office") {
+      return rental.booking_source === 'PrivateOffice';
+    }
+    if (sourceFilter === "Walk-In") {
+      return rental.booking_source === 'KasirWalkIn';
+    }
+    // Fallback jika ada sumber lain (misal: null atau belum diset)
+    if (sourceFilter === "Lainnya") {
+      return !['RoomDetail', 'PrivateOffice', 'KasirWalkIn'].includes(rental.booking_source);
+    }
+    return true;
+  });
+
+
+  // ✅ Kelompokkan per customer (Gunakan `finalFilteredRentals`)
+  const groupedByCustomer = finalFilteredRentals.reduce((acc, rental) => {
+    if (!acc[rental.client]) acc[rental.client] = [];
+    acc[rental.client].push(rental);
+    return acc;
+  }, {});
+
+  // Tampilan Loading (Tidak berubah)
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -88,6 +127,7 @@ const SpaceKasir = () => {
     );
   }
 
+  // Tampilan Error (Tidak berubah)
   if (error) {
     return (
       <div className="p-4">
@@ -98,37 +138,37 @@ const SpaceKasir = () => {
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen transition-all duration-300">
-      {/* Search bar */}
+      {/* 🔍 Search bar (Tidak berubah) */}
       <Search
         placeholder="Search"
         allowClear
         className="w-full rounded-lg shadow-sm focus:shadow-md transition-all"
       />
 
-      {/* Top Summary */}
+      {/* 📊 Top Summary (Tidak berubah) */}
       <div className="rounded-xl shadow-md p-6 border border-blue-100 bg-gradient-to-br from-blue-50 to-blue-100">
         <h3 className="text-lg font-semibold text-gray-700 mb-5 tracking-wide text-center">
           Space Summary
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-          <div className="flex flex-col items-center justify-center">
+          <div>
             <p className="text-sm text-gray-600 mb-1">Today Transaction</p>
             <p className="text-2xl font-bold text-blue-700">
               Rp {summary.todayTransaction.toLocaleString("id-ID")}
             </p>
           </div>
-          <div className="flex flex-col items-center justify-center">
+          <div>
             <p className="text-sm text-gray-600 mb-1">Space Rental</p>
             <p className="text-2xl font-bold text-blue-700">{summary.spaceRental}</p>
           </div>
-          <div className="flex flex-col items-center justify-center">
+          <div>
             <p className="text-sm text-gray-600 mb-1">Space Available</p>
             <p className="text-2xl font-bold text-blue-700">{summary.spaceAvailable}</p>
           </div>
         </div>
       </div>
 
-      {/* Section: Space Unit Type */}
+      {/* 🧩 Space Unit Type (Tidak berubah) */}
       <div>
         <h3 className="text-lg font-semibold text-gray-700 mb-3 tracking-wide">
           Space Unit Type
@@ -137,7 +177,7 @@ const SpaceKasir = () => {
           {spaceTypes.map((type, index) => (
             <div
               key={index}
-              className="flex flex-col items-center justify-center bg-white rounded-lg p-3 shadow-xs hover:shadow-sm border border-gray-100 transition-all duration-200"
+              className="flex flex-col items-center justify-center bg-white rounded-lg p-4 shadow-xs hover:shadow-md border border-gray-100 transition-all duration-300 hover:-translate-y-1"
             >
               <span className="text-sm font-semibold text-gray-600 mb-1">
                 {type.name}
@@ -155,7 +195,7 @@ const SpaceKasir = () => {
         </div>
       </div>
 
-      {/* Section: Space Units Available */}
+      {/* 🟩 Space Units (Tidak berubah) */}
       <div>
         <h3 className="text-lg font-semibold text-gray-700 mb-3 tracking-wide">
           Space Units Available
@@ -169,12 +209,10 @@ const SpaceKasir = () => {
             return (
               <div
                 key={index}
-                className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-sm hover:shadow-md border border-gray-200 relative ${unitClass}`}
+                className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-sm hover:shadow-md border border-gray-200 relative transition-all duration-300 hover:-translate-y-1 ${unitClass}`}
                 title={isRented ? "Sedang digunakan" : "Tersedia"}
               >
-                <span className="font-semibold text-center text-sm">
-                  {unit.name}
-                </span>
+                <span className="font-semibold text-center text-sm">{unit.name}</span>
                 {isRented && (
                   <span className="absolute top-1 right-1 text-xs">🔒</span>
                 )}
@@ -184,86 +222,116 @@ const SpaceKasir = () => {
         </div>
       </div>
 
-      {/* Section: Space Rental (Today) */}
+      {/* 🧾 Space Rental per Customer */}
       <div>
-        <div className="flex justify-between items-center mb-3">
+        {/* 4. Ganti UI Filter (Button menjadi Segmented) */}
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-3 gap-4">
           <h3 className="text-lg font-semibold text-gray-700 tracking-wide">
-            Space Rental (Today)
+            Space Booking per Customer
           </h3>
-          <div className="space-x-2">
-            <Button
-              type={status === "Upcoming" ? "primary" : "default"}
-              onClick={() => setStatus("Upcoming")}
-              className="rounded-lg"
-            >
-              Upcoming
-            </Button>
-            <Button
-              type={status === "Active" ? "primary" : "default"}
-              onClick={() => setStatus("Active")}
-              className="rounded-lg"
-            >
-              Active
-            </Button>
-            <Button
-              type={status === "Finish" ? "primary" : "default"}
-              onClick={() => setStatus("Finish")}
-              className="rounded-lg"
-            >
-              Finish
-            </Button>
+          {/* Buat grup untuk kedua filter */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Filter Status (Upcoming, Active, Finish) */}
+            <Segmented
+              options={["Upcoming", "Active", "Finish"]}
+              value={status}
+              onChange={(value) => setStatus(value)} // onChange mengembalikan value langsung
+            />
+            {/* Filter Source (All, Online, etc.) */}
+            <Segmented
+              options={["All", "Online", "Private Office", "Walk-In", "Lainnya"]}
+              value={sourceFilter}
+              onChange={(value) => setSourceFilter(value)} // onChange mengembalikan value langsung
+            />
           </div>
         </div>
 
-        <div className="space-y-4">
-          {displayedRentals.length > 0 ? (
-            displayedRentals.map((rental) => {
-              const isUpcoming = new Date(rental.waktu_mulai) > new Date();
-
-              return (
-                <div
-                  key={rental.id}
-                  className="flex justify-between items-center bg-white rounded-xl shadow-sm hover:shadow-md p-5 transition-all duration-300 border border-gray-100"
-                >
-                  <div className="space-y-1">
-                    <p className="font-semibold text-gray-800">{rental.client}</p>
-                    <p className="text-sm text-gray-600">{rental.unit.toUpperCase()}</p>
-                    <p className="text-xs text-gray-400">{rental.date}</p>
-
-                    <div className="flex gap-2 mt-2">
-                      {isUpcoming ? (
-                        <Tag color="orange">UPCOMING</Tag>
-                      ) : status === "Active" ? (
-                        <Tag color="green">ACTIVE</Tag>
-                      ) : (
-                        <Tag color="default">FINISHED</Tag>
-                      )}
-                    </div>
+        {Object.keys(groupedByCustomer).length > 0 ? (
+          <Collapse
+            bordered={false}
+            expandIconPosition="end"
+            className="bg-transparent space-y-4"
+          >
+            {Object.entries(groupedByCustomer).map(([client, bookings]) => (
+              <Panel
+                key={client}
+                header={
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-md font-semibold text-gray-800">{client}</h4>
+                    <Tag color="blue">{bookings.length} Booking</Tag>
                   </div>
+                }
+                className="bg-white rounded-xl shadow-md border border-gray-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 p-2"
+              >
+                <div className="space-y-4">
+                  {bookings.map((rental) => {
+                    const isUpcoming = new Date(rental.waktu_mulai) > new Date();
 
-                  <div className="text-right space-y-2">
-                    <p className="text-blue-600 font-bold">
-                      Rp {rental.price.toLocaleString("id-ID")}
-                    </p>
-                    {status === "Finish" ? (
-                      <Tag>Finished</Tag>
-                    ) : (
-                      <RentalTimer
-                        startTime={rental.waktu_mulai}
-                        endTime={rental.waktu_selesai}
-                        visualOnly={true}
-                      />
-                    )}
-                  </div>
+                    {/* --- Blok Tag Logika (Tidak berubah dari solusi Anda) --- */ }
+                    let sourceTag = null;
+                    if (rental.booking_source === 'PrivateOffice') {
+                      sourceTag = <Tag color="purple">Private Office</Tag>;
+                    } else if (rental.booking_source === 'RoomDetail') {
+                      sourceTag = <Tag color="cyan">Online</Tag>;
+                    } else if (rental.booking_source === 'KasirWalkIn') {
+                      sourceTag = <Tag color="gold">Walk-In</Tag>;
+                    } else if (rental.booking_source) {
+                      sourceTag = <Tag color="default">{rental.booking_source}</Tag>;
+                    } else {
+                      // Jika null atau undefined
+                      sourceTag = <Tag color="grey">Lainnya</Tag>;
+                    }
+                    {/* --- Akhir Blok Tag Logika --- */ }
+
+                    return (
+                      <div
+                        key={rental.id}
+                        className="flex justify-between items-center bg-gray-50 rounded-lg p-4 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300"
+                      >
+                        <div>
+                          <p className="font-semibold text-gray-800 text-base">
+                            {rental.unit.toUpperCase()}
+                          </p>
+                          <p className="text-xs text-gray-500">{rental.date}</p>
+                          {/* Grup Tag (Status + Sumber) */}
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {isUpcoming ? (
+                              <Tag color="orange">UPCOMING</Tag>
+                            ) : status === "Active" ? (
+                              <Tag color="green">ACTIVE</Tag>
+                            ) : (
+                              <Tag color="default">FINISHED</Tag>
+                            )}
+                            {/* Tampilkan tag sumber di sini */}
+                            {sourceTag}
+                          </div>
+                        </div>
+
+                        _                 <div className="text-right">
+                          <p className="text-blue-600 font-bold text-lg">
+                            Rp {rental.price.toLocaleString("id-ID")}
+                          </p>
+                          {status === "Finish" ? (
+                            <Tag>Finished</Tag>
+                          ) : (
+                            <RentalTimer
+                              startTime={rental.waktu_mulai}
+                              endTime={rental.waktu_selesai}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-10 text-gray-500">
-              Tidak ada data sewa untuk ditampilkan.
-            </div>
-          )}
-        </div>
+              </Panel>
+            ))}
+          </Collapse>
+        ) : (
+          <div className="text-center py-10 text-gray-500">
+            Tidak ada data sewa untuk ditampilkan.
+          </div>
+        )}
       </div>
     </div>
   );

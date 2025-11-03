@@ -31,7 +31,7 @@ const useWindowSize = () => {
 
 // === Komponen Jadwal ===
 const JadwalHariIni = ({ jadwalTerisi = [], isMobile }) => {
-  const jamOperasional = Array.from({ length: 14 }, (_, i) => 8 + i);
+  const jamOperasional = Array.from({ length: 15 }, (_, i) => 8 + i);
   const currentHour = new Date().getHours();
 
   return (

@@ -13,6 +13,8 @@ import {
   Divider,
   Space,
   Spin,
+  Collapse,
+  
 } from "antd";
 import {
   CalendarOutlined,
@@ -25,10 +27,12 @@ import {
 import dayjs from "dayjs";
 import { getRiwayatTransaksi } from "../../../services/service";
 import utc from "dayjs/plugin/utc";
+
 dayjs.extend(utc);
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
+const { Panel } = Collapse;
 
 // Hook sederhana untuk deteksi ukuran layar
 const useWindowSize = () => {
@@ -272,29 +276,75 @@ const RiwayatTransaksi = () => {
 
             <Title level={5} style={{ marginBottom: "16px" }}>Detail Item</Title>
 
-            {/* Bagian Booking Ruangan */}
-            {selectedTransaction.details.bookings.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Booking Ruangan</Text>
-                <List
-                  itemLayout="horizontal"
-                  dataSource={selectedTransaction.details.bookings}
-                  renderItem={(item, index) => (
-                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.bookings.length - 1 ? "none" : "1px solid #f0f0f0" }}>
-                      <List.Item.Meta
-                        title={<Text>{item.nama_ruangan}</Text>}
-                        description={
-                          <Text type="secondary">
-                            <CalendarOutlined style={{ marginRight: '6px' }} />
-                            {dayjs(item.waktu_mulai).format('DD MMM YYYY, HH:mm')} - {dayjs(item.waktu_selesai).format('HH:mm')}
+            {selectedTransaction.details.bookings.length > 0 && (() => {
+              // Kelompokkan bookings berdasarkan tanggal
+              const groupedBookings = selectedTransaction.details.bookings.reduce((acc, curr) => {
+                const dateKey = dayjs(curr.waktu_mulai).format("YYYY-MM-DD");
+                if (!acc[dateKey]) acc[dateKey] = [];
+                acc[dateKey].push(curr);
+                return acc;
+              }, {});
+
+              return (
+                <div style={{ marginBottom: "16px" }}>
+                  <Text strong style={{ display: "block", marginBottom: "8px" }}>
+                    Booking Ruangan
+                  </Text>
+
+                  <Collapse
+                    accordion
+                    bordered={false}
+                    style={{
+                      background: "transparent",
+                    }}
+                  >
+                    {Object.entries(groupedBookings).map(([date, bookings]) => (
+                      <Panel
+                        key={date}
+                        header={
+                          <Text strong style={{ fontSize: "15px" }}>
+                            {dayjs(date).format("DD MMMM YYYY")}
                           </Text>
                         }
-                      />
-                    </List.Item>
-                  )}
-                />
-              </div>
-            )}
+                        style={{
+                          background: "#fff",
+                          borderRadius: "8px",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                          marginBottom: "10px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <List
+                          itemLayout="horizontal"
+                          dataSource={bookings}
+                          renderItem={(item, index) => (
+                            <List.Item
+                              style={{
+                                padding: "6px 0",
+                                borderBottom:
+                                  index === bookings.length - 1 ? "none" : "1px solid #f0f0f0",
+                              }}
+                            >
+                              <List.Item.Meta
+                                title={<Text>{item.nama_ruangan}</Text>}
+                                description={
+                                  <Text type="secondary">
+                                    <CalendarOutlined style={{ marginRight: "6px" }} />
+                                    {dayjs(item.waktu_mulai).format("HH:mm")} -{" "}
+                                    {dayjs(item.waktu_selesai).format("HH:mm")}
+                                  </Text>
+                                }
+                              />
+                            </List.Item>
+                          )}
+                        />
+                      </Panel>
+                    ))}
+                  </Collapse>
+                </div>
+              );
+            })()}
+
 
             {/* Bagian Membership */}
             {selectedTransaction.details.memberships.length > 0 && (

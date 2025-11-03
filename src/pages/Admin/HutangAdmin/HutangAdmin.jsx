@@ -1,868 +1,714 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react"; // Tambahkan useEffect
+// HutangAdmin.jsx
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
-    ConfigProvider,
-    Row,
-    Col,
-    Card,
-    Statistic,
-    Form,
-    InputNumber,
-    Select,
-    Button,
-    Table,
-    Tag,
-    Modal,
-    Tooltip,
-    Divider,
-    DatePicker,
-    message,
-    Space,
-    Spin, // Tambahkan Spin
+  ConfigProvider,
+  Row,
+  Col,
+  Card,
+  Statistic,
+  Form,
+  InputNumber,
+  Select,
+  Button,
+  Table,
+  Tag,
+  Modal,
+  Tooltip,
+  Divider,
+  DatePicker,
+  message,
+  Space,
+  Input,
+  Spin,
+  Alert,
+  Popconfirm,
+  Switch, // Import Switch
 } from "antd";
 import {
-    DownloadOutlined,
-    EditOutlined,
-    PlusOutlined,
-    DeleteOutlined,
+  DollarOutlined,
+  TeamOutlined,
+  CrownOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  DeleteOutlined, // Import Delete
+  PlusOutlined,
+  BookOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import isBetween from 'dayjs/plugin/isBetween';
 import locale from "antd/locale/id_ID";
 import "dayjs/locale/id";
 
-// --- IMPORT API SERVICES ---
+// Import service API yang baru
 import {
-    fetchRekapData,
-    updateRekapData,
-    addUtangTenant,
-    deleteUtangTenant,
-    downloadRekapSemuaBulan,
-    downloadRekapBulanan, // Ganti dengan fungsi download lokal
+  getRekapLive,
+  addUtangTenant,
+  getActiveTenants,
+  getUtangLog,       // <- BARU
+  updateUtangLog,      // <- BARU
+  deleteUtangLog,      // <- BARU
 } from "../../../services/service"; // Sesuaikan path
 
 dayjs.locale("id");
-dayjs.extend(isBetween);
-
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-// helper rupiah
+// ... (helper formatRupiah dan formatNumberInput tetap sama) ...
 const formatRupiah = (amount = 0) =>
-    new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 0,
-    }).format(Math.round(Number(amount) || 0));
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(Math.round(Number(amount) || 0));
 
-// helper untuk format InputNumber dengan pemisah ribuan
 const formatNumberInput = (v) =>
-    v ? v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
+  v ? v.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "";
 const parseNumberInput = (v) => (v ? v.replace(/\./g, "") : 0);
 
-// --- HAPUS DEFAULT_GLOBAL_DATA ---
-
-// --- UTILITY FUNCTION UNTUK CSV (Export ke Excel) ---
-const convertToCSV = (headers, data) => {
-    const headerKeys = headers.map((h) => h.key);
-    const headerRow = headers.map((h) => `"${h.label}"`).join(",");
-
-    const csvRows = data.map((row) => {
-        return headerKeys
-            .map((key) => {
-                let value = row[key];
-                if (typeof value === "number") {
-                    value = String(value);
-                }
-                return `"${String(value).replace(/"/g, '""').replace(/,/g, "")}"`;
-            })
-            .join(",");
-    });
-
-    const BOM = "\uFEFF"; // Byte Order Mark
-    return BOM + [headerRow, ...csvRows].join("\r\n");
-};
-// --- END UTILITY CSV ---
 
 const HutangAdmin = () => {
-    const [modal, contextHolder] = Modal.useModal();
-    // State utama
-    const [tenants, setTenants] = useState([]); // Ganti globalData menjadi tenants
-    const [period, setPeriod] = useState(dayjs("2025-11-01"));
-    const [isLoading, setIsLoading] = useState(false); // State loading
+  // --- STATE MANAGEMENT ---
+  const [rekapData, setRekapData] = useState([]);
+  const [tenantList, setTenantList] = useState([]);
+  const [dateRange, setDateRange] = useState([
+    dayjs().startOf('month'), 
+    dayjs().endOf('month')
+  ]);
+  
+  // Loading states
+  const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  
+  // State untuk form utang (Modal Add)
+  const [utangForm] = Form.useForm();
+  const [utangModalVisible, setUtangModalVisible] = useState(false);
 
-    // Periode range
-    const [periode1Range, setPeriode1Range] = useState([
-        dayjs("2025-11-01"),
-        dayjs("2025-11-15"),
-    ]);
-    const [periode2Range, setPeriode2Range] = useState([
-        dayjs("2025-11-16"),
-        dayjs("2025-11-30"),
-    ]);
+  // --- STATE BARU UNTUK LOG CRUD UTANG ---
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [logLoading, setLogLoading] = useState(false);
+  const [logData, setLogData] = useState([]);
+  const [selectedTenantForLog, setSelectedTenantForLog] = useState(null); // { id, name }
+  
+  const [editUtangModalVisible, setEditUtangModalVisible] = useState(false);
+  const [editUtangForm] = Form.useForm();
+  const [editingUtangEntry, setEditingUtangEntry] = useState(null); // { id_utang, ... }
+  // ----------------------------------------
 
-    // Form & Modal state
-    const [addDebtForm] = Form.useForm();
-    const [editForm] = Form.useForm();
-    const [editModalVisible, setEditModalVisible] = useState(false);
-    const [editingTenant, setEditingTenant] = useState(null);
-    const [addDebtModalVisible, setAddDebtModalVisible] = useState(false);
-    const [selectedDebtDate, setSelectedDebtDate] = useState(dayjs());
-    const [manualPeriodChoice, setManualPeriodChoice] = useState("auto");
+  // --- FUNGSI PENGAMBILAN DATA ---
+  const fetchData = useCallback(async () => {
+    if (!dateRange || dateRange.length !== 2) {
+       message.warn("Silakan pilih rentang tanggal terlebih dahulu.");
+       return;
+    }
+    setLoading(true);
+    try {
+      const startDate = dateRange[0].format('YYYY-MM-DD');
+      const endDate = dateRange[1].format('YYYY-MM-DD');
+      
+      const [rekapResult, tenantsResult] = await Promise.all([
+         getRekapLive(startDate, endDate),
+         getActiveTenants()
+      ]);
 
-    // --- Fungsi Fetch Data ---
-    const loadData = useCallback(async () => {
-        if (!period || !periode1Range || !periode2Range || !periode1Range[0] || !periode2Range[0]) return;
+      const processedRekap = rekapResult.map(item => ({
+          ...item,
+          id: item.id_tenant,
+          name: item.nama_tenant,
+          totalSales: Number(item.totalSales) || 0,
+          debt: Number(item.totalUtang) || 0,
+          utangAwal: Number(item.utangAwal) || 0, // Pastikan number
+          utangMasukPeriode: Number(item.utangMasukPeriode) || 0, // Pastikan number
+      }));
+      
+      setRekapData(processedRekap);
+      setTenantList(tenantsResult);
+    } catch (error) {
+      message.error(`Gagal mengambil data: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange]);
 
-        setIsLoading(true);
-        try {
-            const params = {
-                tahun: period.year(),
-                bulan: period.month() + 1, // dayjs month() adalah 0-indexed
-                p1_start: periode1Range[0].format("YYYY-MM-DD"),
-                p1_end: periode1Range[1].format("YYYY-MM-DD"),
-                p2_start: periode2Range[0].format("YYYY-MM-DD"),
-                p2_end: periode2Range[1].format("YYYY-MM-DD"),
-            };
-            const data = await fetchRekapData(params);
-            // Konversi tanggal dari ISO string ke dayjs object
-            const processedData = data.map(tenant => ({
-                ...tenant,
-                debtHistory: tenant.debtHistory.map(debt => ({
-                    ...debt,
-                    date: dayjs(debt.date), // Ubah string ISO menjadi objek dayjs
-                }))
-            }));
-            setTenants(processedData);
-        } catch (error) {
-            message.error(`Gagal memuat data: ${error.message}`);
-            setTenants([]); // Kosongkan data jika error
-        } finally {
-            setIsLoading(false);
-        }
-    }, [period, periode1Range, periode2Range]); // Dependency
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-    // --- useEffect untuk memuat data saat periode berubah ---
-    useEffect(() => {
-        loadData();
-    }, [loadData]); // loadData sudah di-memoize dengan useCallback
+  // ... (computeShares dan totals tetap sama) ...
+  const computeShares = (tenantRekap) => {
+    const total = Number(tenantRekap.totalSales) || 0;
+    const ownerShare = Math.round(total * 0.3);
+    const rawTenantShare = total - ownerShare;
+    const debt = Number(tenantRekap.debt) || 0; 
+    const netTenantShare = Math.max(0, rawTenantShare - debt);
+    const remainingDebt = Math.max(0, debt - rawTenantShare);
+    return { total, rawTenantShare, ownerShare, debt, netTenantShare, remainingDebt };
+  };
 
-    // Fungsi untuk menentukan period berdasarkan tanggal + range manual
-    const getPaymentPeriod = useCallback((date) => {
-        const d = dayjs(date);
-        if (!d.isValid()) return "Luar Periode";
+  const totals = useMemo(() => {
+    const totalGross = rekapData.reduce((s, t) => s + (Number(t.totalSales) || 0), 0);
+    const totalTenantNetPayment = rekapData.reduce((s, t) => s + computeShares(t).netTenantShare, 0);
+    const totalOwnerShare = rekapData.reduce((s, t) => s + computeShares(t).ownerShare, 0);
+    return { totalGross, totalTenantNetPayment, totalOwnerShare };
+  }, [rekapData]);
 
-        if (
-            periode1Range &&
-            periode1Range[0] &&
-            d.isBetween(periode1Range[0].startOf('day'), periode1Range[1].endOf('day'), "day", "[]")
-        ) {
-            return "P1";
-        }
 
-        if (
-            periode2Range &&
-            periode2Range[0] &&
-            d.isBetween(periode2Range[0].startOf('day'), periode2Range[1].endOf('day'), "day", "[]")
-        ) {
-            return "P2";
-        }
+  // --- HANDLER AKSI ---
 
-        // Cek bulan yang sama
-        if (d.format('YYYY-MM') === period.format('YYYY-MM')) {
-            return "Luar Range";
-        }
+  // Form "Input Utang Tenant Baru"
+  const handleAddUtang = async (values) => {
+    setSubmitLoading(true);
+    try {
+      const tanggal_utang = values.tanggal_utang.format('YYYY-MM-DD');
+      await addUtangTenant(
+        values.id_tenant, 
+        values.jumlah, 
+        values.deskripsi || "Utang manual dari admin",
+        tanggal_utang
+      );
+      
+      const tenantName = tenantList.find(t => t.id_tenant === values.id_tenant)?.nama_tenant || '';
+      message.success(`Utang untuk ${tenantName} pada ${tanggal_utang} berhasil ditambahkan.`);
+      utangForm.resetFields();
+      setUtangModalVisible(false);
+      await fetchData(); // Refresh tabel utama
+    } catch (error) {
+       message.error(`Gagal menambah utang: ${error.message}`);
+    } finally {
+       setSubmitLoading(false);
+    }
+  };
 
-        return "Luar Periode";
-    }, [periode1Range, periode2Range, period]);
+  // --- HANDLER BARU UNTUK LOG CRUD UTANG ---
 
-    // Ketika bulan diganti, sesuaikan default periode untuk bulan itu
-    const handlePeriodChange = (d) => {
-        if (d) {
-            // Atur default range P1 = tgl 1 - 15, P2 = tgl 16 - akhir bulan
-            setPeriode1Range([d.startOf("month"), d.date(15)]);
-            setPeriode2Range([d.date(16), d.endOf("month")]);
-            setPeriod(d);
-            // Data akan otomatis ter-fetch oleh useEffect
-        }
-    };
+  // Buka Modal Log Utang (klik tombol <BookOutlined />)
+  const handleOpenLog = async (tenant) => {
+    setSelectedTenantForLog(tenant);
+    setLogModalVisible(true);
+    setLogLoading(true);
+    setLogData([]);
+    try {
+      // Ambil log utang HANYA untuk tenant ini
+      // Kita ambil semua log (tanpa filter tanggal) agar admin bisa lihat history
+      const logResult = await getUtangLog(tenant.id_tenant, null, null);
+      setLogData(logResult);
+    } catch (error) {
+       message.error(`Gagal mengambil log utang: ${error.message}`);
+    } finally {
+       setLogLoading(false);
+    }
+  };
 
-    // Total unpaid debt
-    const getTotalUnpaidDebt = (tenant) => {
-        // Pastikan debtHistory ada
-        const history = tenant.debtHistory || [];
-        const historyDebt = history
-            .filter((d) => !d.isPaidOut)
-            .reduce((sum, d) => sum + d.amount, 0);
-        return (Number(tenant.currentDebt) || 0) + historyDebt;
-    };
-
-    // Perhitungan bagi hasil (useCallback)
-    const computeShares = useCallback((tenant, targetPeriod = "total") => {
-        let totalSales;
-        let debtForCalculation;
-        const history = tenant.debtHistory || []; // Pastikan history ada
-
-        if (targetPeriod === "total") {
-            totalSales = (tenant.totalSales.p1 || 0) + (tenant.totalSales.p2 || 0);
-            debtForCalculation = getTotalUnpaidDebt(tenant);
-        } else {
-            totalSales = tenant.totalSales[targetPeriod] || 0;
-            const historyDebtInPeriod = history
-                .filter(
-                    (d) => {
-                        // Gunakan getPaymentPeriod untuk menentukan periode utang secara dinamis
-                        const debtPeriod = getPaymentPeriod(d.date);
-                        return !d.isPaidOut && debtPeriod.toLowerCase() === targetPeriod;
-                    }
-                )
-                .reduce((sum, d) => sum + d.amount, 0);
-
-            if (targetPeriod === "p1") {
-                debtForCalculation = (Number(tenant.currentDebt) || 0) + historyDebtInPeriod;
-            } else {
-                debtForCalculation = historyDebtInPeriod;
-            }
-        }
-
-        const rawTenantShare = totalSales * 0.7;
-        const ownerShare = Math.round(totalSales * 0.3);
-        const netTenantShare = Math.max(0, rawTenantShare - debtForCalculation);
-        const remainingDebt = Math.max(0, debtForCalculation - rawTenantShare);
-
-        return {
-            total: totalSales,
-            rawTenantShare: Math.round(rawTenantShare),
-            ownerShare,
-            debt: debtForCalculation,
-            netTenantShare: Math.round(netTenantShare),
-            remainingDebt: Math.round(remainingDebt),
-        };
-    }, [getPaymentPeriod]); // Tambahkan getPaymentPeriod sebagai dependency
-
-    // Totals
-    const totals = useMemo(() => {
-        const totalGross = tenants.reduce(
-            (s, t) => s + (t.totalSales.p1 || 0) + (t.totalSales.p2 || 0),
-            0
-        );
-        const totalTenantNetPayment = tenants.reduce(
-            (s, t) => s + computeShares(t, "total").netTenantShare,
-            0
-        );
-        const totalOwnerShare = Math.round(totalGross * 0.3);
-
-        return {
-            totalGross,
-            totalTenantNetPayment: Math.round(totalTenantNetPayment),
-            totalOwnerShare,
-        };
-    }, [tenants, computeShares]); // computeShares sudah di-memoize
-
-    // Hapus tenant (LOGIKA INI DIHAPUS, karena data dari DB)
-    // const handleDelete = ... (Dihapus)
-    // Kita ganti dengan HAPUS UTANG
-    const handleDeleteDebt = (id_utang) => {
-        modal.confirm({
-            title: "Hapus utang ini?",
-            content: "Utang akan dihapus permanen dari database. Lanjutkan?",
-            okText: "Ya, Hapus",
-            cancelText: "Batal",
-            onOk: async () => {
-                try {
-                    setIsLoading(true);
-                    await deleteUtangTenant(id_utang); // Panggil API
-                    message.success("Utang berhasil dihapus.");
-
-                    // --- START PERBAIKAN ---
-
-                    // 1. Buat riwayat utang baru tanpa ID yang dihapus
-                    const newDebtHistory = editingTenant.debtHistory.filter(
-                        (d) => d.id !== id_utang
-                    );
-
-                    // 2. Buat objek tenant yang sudah ter-update
-                    const updatedTenant = {
-                        ...editingTenant,
-                        debtHistory: newDebtHistory
-                    };
-
-                    // 3. Perbarui state modal agar langsung refresh
-                    setEditingTenant(updatedTenant);
-
-                    // 4. Perbarui juga state utama 'tenants' di latar belakang
-                    setTenants((prevTenants) =>
-                        prevTenants.map((t) =>
-                            t.id === editingTenant.id ? updatedTenant : t
-                        )
-                    );
-
-                    // loadData(); // <-- Hapus ini, tidak perlu lagi
-
-                    // --- END PERBAIKAN ---
-
-                } catch (error) {
-                    message.error(`Gagal menghapus utang: ${error.message}`);
-                } finally {
-                    setIsLoading(false);
-                }
-            },
-        });
-    };
-
-    // Edit tenant (simpan)
-    const handleUpdate = async (vals) => {
-        const dataToUpdate = {
-            id_tenant: editingTenant.id,
-            tahun: period.year(),
-            bulan: period.month() + 1,
-            totalSalesP1: Number(vals.totalSalesP1) || 0,
-            totalSalesP2: Number(vals.totalSalesP2) || 0,
-            currentDebt: Number(vals.currentDebt) || 0,
-        };
-
-        setIsLoading(true);
-        try {
-            await updateRekapData(dataToUpdate);
-            message.success("Perubahan tersimpan ke database.");
-            setEditModalVisible(false);
-            setEditingTenant(null);
-            loadData(); // Muat ulang data setelah update
-        } catch (error) {
-            message.error(`Gagal menyimpan: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Tambah utang (modal)
-    const handleAddDebt = async (values) => {
-        const { name, date, amount } = values;
-        const selectedTenant = tenants.find(t => t.name === name);
-
-        if (!selectedTenant || !date || !amount) {
-            message.error("Lengkapi semua field.");
-            return;
-        }
-
-        const dataToSave = {
-            id_tenant: selectedTenant.id,
-            date: dayjs(date).format("YYYY-MM-DD"), // Kirim format YYYY-MM-DD
-            amount: Number(amount) || 0,
-        };
-
-        // (Pengecekan periode sudah tidak relevan di sini, karena backend
-        // hanya menerima tanggal. Frontend akan mengkalkulasi periodenya saat `computeShares`)
-
-        setIsLoading(true);
-        try {
-            const result = await addUtangTenant(dataToSave);
-            message.success(`Utang ${formatRupiah(result.newDebt.amount)} untuk ${name} berhasil ditambahkan.`);
-
-            // Update state lokal secara optimis (atau panggil loadData())
-            setTenants(prevTenants => prevTenants.map(t => {
-                if (t.id === selectedTenant.id) {
-                    return {
-                        ...t,
-                        debtHistory: [
-                            ...t.debtHistory,
-                            { ...result.newDebt, date: dayjs(result.newDebt.date) } // konversi ke dayjs
-                        ]
-                    };
-                }
-                return t;
-            }));
-
-            addDebtForm.resetFields();
-            setSelectedDebtDate(dayjs());
-            setManualPeriodChoice("auto");
-            setAddDebtModalVisible(false);
-        } catch (error) {
-            message.error(`Gagal menambah utang: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Export helpers
-    const getExportData = (t, monthKey) => {
-        const s = computeShares(t, "total");
-        return {
-            month: dayjs(monthKey, "YYYY-MM").format("YYYY-MM"),
-            tenantName: t.name,
-            salesP1: t.totalSales.p1 || 0,
-            salesP2: t.totalSales.p2 || 0,
-            totalSales: s.total,
-            ownerShare: s.ownerShare,
-            tenantRawShare: s.rawTenantShare,
-            totalDebt: s.debt,
-            netTenantPayment: s.netTenantShare,
-            initialDebt: t.currentDebt || 0,
-            remainingDebt: s.remainingDebt,
-        };
-    };
-
-    // Fungsi export ini tetap di frontend, tapi datanya dari state
-    const exportMonthlyDataToCSV = () => {
-        const currentMonthKey = period.format("YYYY-MM");
-        const dataToExport = tenants.map((t) => getExportData(t, currentMonthKey));
-        const headers = [
-            { label: "Bulan", key: "month" },
-            { label: "Tenant", key: "tenantName" },
-            { label: "Sales P1", key: "salesP1" },
-            { label: "Sales P2", key: "salesP2" },
-            { label: "Total Sales", key: "totalSales" },
-            { label: "Hak Owner (30%)", key: "ownerShare" },
-            { label: "Hak Tenant (70%)", key: "tenantRawShare" },
-            { label: "Utang Awal Bulan", key: "initialDebt" },
-            { label: "Total Utang Dipotong", key: "totalDebt" },
-            { label: "Pembayaran NET", key: "netTenantPayment" },
-            { label: "Sisa Utang Bulan Ini", key: "remainingDebt" },
-        ];
-
-        const csvContent = convertToCSV(headers, dataToExport);
-        const filename = `data_rekap_bulanan_${period.format("YYYYMM")}.csv`;
-        downloadRekapBulanan(csvContent, filename); // Gunakan helper download
-        message.success(`Data rekap bulan ${period.format("MMMM YYYY")} telah di-download.`);
-    };
-
-    // Fungsi export semua bulan (panggil API)
-    const exportAllTimeDataToCSV = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            await downloadRekapSemuaBulan();
-            message.success("Data rekap semua bulan telah di-download.");
-        } catch (error) {
-            message.error(`Gagal download: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    // Fungsi export per tenant
-    const exportMonthlyDataPerTenantToCSV = (targetTenantName) => {
-        const currentMonthKey = period.format("YYYY-MM");
-        const dataToExport = tenants.filter((t) => t.name === targetTenantName).map((t) => getExportData(t, currentMonthKey));
-        const headers = [
-            // (headers sama seperti exportMonthlyDataToCSV)
-            { label: "Bulan", key: "month" },
-            { label: "Tenant", key: "tenantName" },
-            // ... (sisa headers)
-            { label: "Sisa Utang Bulan Ini", key: "remainingDebt" },
-        ];
-
-        const csvContent = convertToCSV(headers, dataToExport);
-        const filename = `data_bulanan_${targetTenantName.replace(/\s+/g, "_")}_${period.format("YYYYMM")}.csv`;
-        downloadRekapBulanan(csvContent, filename);
-        message.success(`Data ${targetTenantName} bulan ${period.format("MMMM YYYY")} telah di-download.`);
-    };
-
-    // Kolom aksi (Download per tenant, Edit)
-    // (Fungsi Hapus tenant dihilangkan dari sini)
-    const actionColumn = {
-        title: "Aksi",
-        key: "actions",
-        width: 100, // Lebar dikurangi
-        align: "center",
-        fixed: "right",
-        render: (_, record) => (
-            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                <Tooltip title={`Download ${record.name} bulan ini`}>
-                    <Button
-                        size="small"
-                        icon={<DownloadOutlined />}
-                        onClick={() => exportMonthlyDataPerTenantToCSV(record.name)}
-                        type="primary"
-                    />
-                </Tooltip>
-                <Tooltip title="Edit">
-                    <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => {
-                            setEditingTenant(record);
-                            setEditModalVisible(true);
-                            // set initial values
-                            editForm.setFieldsValue({
-                                name: record.name,
-                                totalSalesP1: record.totalSales.p1,
-                                totalSalesP2: record.totalSales.p2,
-                                currentDebt: record.currentDebt,
-                            });
-                        }}
-                    />
-                </Tooltip>
-                {/* Tombol Hapus tenant (record) dihilangkan karena tidak logis */}
-            </div>
-        ),
-    };
-
-    // Render generic column (Logika computeShares dipindah ke useCallback)
-    const renderColumn = (key, align, width, title, targetPeriod) => ({
-        title,
-        key,
-        align,
-        width,
-        render: (_, record) => {
-            const s = computeShares(record, targetPeriod);
-            // ... (sisa logika renderColumn tetap sama) ...
-            if (key === "totalSales") {
-                return <Tag color="blue">{formatRupiah(s.total)}</Tag>;
-            } else if (key === "ownerShare") {
-                return (
-                    <span style={{ color: "#722ed1", fontWeight: 700 }}>{formatRupiah(s.ownerShare)}</span>
-                );
-            } else if (key === "rawTenantShare") {
-                return (
-                    <span style={{ color: "#389e0d", fontWeight: 700 }}>{formatRupiah(s.rawTenantShare)}</span>
-                );
-            } else if (key === "debt") {
-                if (s.debt > 0) {
-                    let tooltipContent =
-                        targetPeriod === "total" ? "Utang Awal + Utang Baru" : targetPeriod === "p1" ? "Utang Awal + Utang P1" : "Utang P2";
-                    return (
-                        <Tooltip title={tooltipContent}>
-                            <Tag color="orange">-{formatRupiah(s.debt)}</Tag>
-                        </Tooltip>
-                    );
-                }
-                return <span>-</span>;
-            } else if (key === "netTenantShare") {
-                const paidOut = s.netTenantShare;
-                return (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <Tag color={paidOut > 0 ? "green" : "default"} style={{ fontSize: 13, padding: "4px 8px" }}>
-                            {formatRupiah(paidOut)}
-                        </Tag>
-                        {/* Logika sisa utang */}
-                        {s.remainingDebt > 0 && (
-                            <Tag color="red" style={{ marginTop: 4 }}>
-                                Sisa Utang: {formatRupiah(s.remainingDebt)}
-                            </Tag>
-                        )}
-                    </div>
-                );
-            }
-            return null;
-        },
+  // Buka Modal Edit Utang (dari dalam Modal Log)
+  const handleOpenEditUtang = (utangEntry) => {
+    setEditingUtangEntry(utangEntry);
+    editUtangForm.setFieldsValue({
+        ...utangEntry,
+        tanggal_utang: dayjs(utangEntry.tanggal_utang), // Konversi ke dayjs
+        status_lunas: utangEntry.status_lunas === 1, // Konversi 0/1 ke boolean
     });
+    setEditUtangModalVisible(true);
+  };
+  
+  // Submit Modal Edit Utang
+  const handleUpdateUtang = async (values) => {
+     setSubmitLoading(true);
+     try {
+       const updatedData = {
+         ...values,
+         tanggal_utang: values.tanggal_utang.format('YYYY-MM-DD'),
+         status_lunas: values.status_lunas, // Sudah boolean
+       };
+       await updateUtangLog(editingUtangEntry.id_utang, updatedData);
+       message.success("Entri utang berhasil diperbarui.");
+       setEditUtangModalVisible(false);
+       setEditingUtangEntry(null);
+       
+       // Refresh log modal DAN tabel utama
+       await handleOpenLog(selectedTenantForLog); // Refresh log
+       await fetchData(); // Refresh tabel utama
+     } catch (error) {
+        message.error(`Gagal update utang: ${error.message}`);
+     } finally {
+        setSubmitLoading(false);
+     }
+  };
 
-    // (Kolom tabel sisanya tetap sama)
-    const baseColumns = (targetPeriod) => [
-        {
-            title: "Tenant",
-            dataIndex: "name",
-            key: "name",
-            render: (v) => <strong>{v}</strong>,
-            fixed: "left",
-            width: 140,
-        },
-        {
-            title: targetPeriod === 'total' ? "Sales P1" : targetPeriod === 'p1' ? 'Sales P1' : 'Sales P2',
-            dataIndex: 'totalSales',
-            key: 'sales',
-            align: 'right',
-            width: 120,
-            render: (_, record) => {
-                const sales = targetPeriod === 'total' ? record.totalSales.p1 + record.totalSales.p2 : record.totalSales[targetPeriod] || 0;
-                return formatRupiah(sales);
-            },
-        },
-        renderColumn("totalSales", "right", 130, "Total Sales/Sales Periode", targetPeriod),
-        renderColumn("ownerShare", "right", 130, "Hak Owner (30%)", targetPeriod),
-        renderColumn("rawTenantShare", "right", 130, "Hak Tenant Murni (70%)", targetPeriod),
-        renderColumn("debt", "right", 130, targetPeriod === "total" ? "Total Utang Dipotong" : "Utang di Periode Ini", targetPeriod),
-    ];
+  // Hapus Entri Utang (dari Modal Log)
+  const handleDeleteUtang = async (id_utang) => {
+     setLogLoading(true); // Tampilkan loading di modal log
+     try {
+        await deleteUtangLog(id_utang);
+        message.success("Entri utang berhasil dihapus.");
+        // Refresh log modal DAN tabel utama
+        await handleOpenLog(selectedTenantForLog); // Refresh log
+        await fetchData(); // Refresh tabel utama
+     } catch (error) {
+        message.error(`Gagal hapus utang: ${error.message}`);
+     } finally {
+        setLogLoading(false);
+     }
+  };
+  // ------------------------------------------
+  
+  // ... (Fungsi exportTenant dan exportAll tetap sama) ...
+  const exportTenant = (t) => {
+    const s = computeShares(t);
+    const periodLabel = `${dateRange[0].format("DD MMM YYYY")} - ${dateRange[1].format("DD MMM YYYY")}`;
+    const text = `LAPORAN BAGI HASIL - ${
+      t.name
+    }\nPeriode: ${periodLabel}\n
+Total Penjualan: ${formatRupiah(s.total)}
+Hak Owner (30%): ${formatRupiah(s.ownerShare)}
+Hak Tenant Murni (70%): ${formatRupiah(s.rawTenantShare)}
+Total Utang Periode: ${formatRupiah(s.debt)}
+  (Utang Awal: ${formatRupiah(t.utangAwal)})
+  (Utang Baru: ${formatRupiah(t.utangMasukPeriode)})
+Total Pembayaran Tenant (Net): ${formatRupiah(s.netTenantShare)}
+Sisa Utang (Periode Berikutnya): ${formatRupiah(s.remainingDebt)}
+`;
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.download = `laporan_bagihasil_${t.name.replace(/\s+/g, "_")}_${dateRange[0].format("YYYYMMDD")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportAll = () => {
+    const periodLabel = `${dateRange[0].format("DD MMM YYYY")} - ${dateRange[1].format("DD MMM YYYY")}`;
+    const header = `LAPORAN BAGI HASIL - SEMUA TENANT\nPeriode: ${periodLabel}\n\n`;
+    const content = rekapData
+      .map((t) => {
+        const s = computeShares(t);
+        return `Tenant: ${t.name}
+  Total Penjualan: ${formatRupiah(s.total)}
+  Hak Owner (30%): ${formatRupiah(s.ownerShare)}
+  Hak Tenant (70%): ${formatRupiah(s.rawTenantShare)}
+  Total Utang: ${formatRupiah(s.debt)}
+  Pembayaran Tenant (Net): ${formatRupiah(s.netTenantShare)}
+  Sisa Utang: ${formatRupiah(s.remainingDebt)}
+-----------------------------`;
+      })
+      .join("\n\n");
+     const blob = new Blob([header + content], { type: "text/plain" });
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement("a");
+     a.download = `laporan_bagihasil_semua_${dateRange[0].format("YYYYMMDD")}.txt`;
+     a.click();
+     URL.revokeObjectURL(url);
+  };
 
-    const totalColumns = [
-        ...baseColumns("total"),
-        renderColumn("netTenantShare", "center", 180, "Pembayaran Tenant (Potong Utang)", "total"),
-        actionColumn,
-    ];
+  // --- DEFINISI KOLOM TABEL (Sederhana) ---
+  const columns = [
+    {
+      title: "Tenant",
+      dataIndex: "name",
+      key: "name",
+      render: (v) => <strong>{v}</strong>,
+      fixed: "left",
+      width: 150,
+    },
+    {
+      title: "Penjualan Total",
+      dataIndex: "totalSales",
+      key: "totalSales",
+      align: "right",
+      render: (v) => <Tag color={"blue"}>{formatRupiah(v)}</Tag>,
+      sorter: (a, b) => a.totalSales - b.totalSales,
+      responsive: ["md"],
+      width: 150,
+    },
+    {
+      title: "Hak Owner (30%)",
+      key: "ownerShare",
+      align: "right",
+      render: (_, record) => (
+        <span style={{ color: "#722ed1", fontWeight: 700 }}>
+          {formatRupiah(computeShares(record).ownerShare)}
+        </span>
+      ),
+      responsive: ["md"],
+      width: 150,
+    },
+    {
+      title: "Hak Tenant (70%)",
+      key: "tenantShare",
+      align: "right",
+      render: (_, record) => (
+        <span style={{ color: "#389e0d", fontWeight: 700 }}>
+          {formatRupiah(computeShares(record).rawTenantShare)}
+        </span>
+      ),
+      responsive: ["md"],
+      width: 160,
+    },
+    {
+      title: "Total Utang", // Judul disederhanakan
+      key: "debt",
+      align: "right",
+      render: (_, record) => {
+        const s = computeShares(record);
+        return s.debt > 0 ? (
+          <Tooltip title={`Utang Awal: ${formatRupiah(record.utangAwal)} | Utang Baru: ${formatRupiah(record.utangMasukPeriode)}`}>
+            <Tag color="orange">-{formatRupiah(s.debt)}</Tag>
+          </Tooltip>
+        ) : (
+          <span>-</span>
+        );
+      },
+      sorter: (a, b) => a.debt - b.debt,
+      width: 130,
+    },
+    {
+      title: "Pembayaran (Net)",
+      key: "payouts",
+      align: "right",
+      width: 160,
+      render: (_, record) => {
+        const s = computeShares(record);
+        return (
+          <Tag
+            color={s.netTenantShare > 0 ? "blue" : "default"}
+            style={{ fontSize: 13, padding: "4px 8px", margin: 0 }}
+          >
+            {formatRupiah(s.netTenantShare)}
+          </Tag>
+        );
+      },
+      sorter: (a, b) => computeShares(a).netTenantShare - computeShares(b).netTenantShare,
+    },
+    {
+      title: "Sisa Utang",
+      key: "remainingDebt",
+      align: "right",
+      render: (_, record) => {
+        const s = computeShares(record);
+        return s.remainingDebt > 0 ? (
+          <span style={{ color: "#d46b08", fontWeight: 700 }}>
+            {formatRupiah(s.remainingDebt)}
+          </span>
+        ) : (
+          <span>-</span>
+        );
+      },
+      width: 120,
+      responsive: ["lg"],
+      sorter: (a, b) => computeShares(a).remainingDebt - computeShares(b).remainingDebt,
+    },
+    {
+      title: "Aksi",
+      key: "actions",
+      width: 100,
+      align: "center",
+      fixed: "right",
+      render: (_, record) => (
+        <Space>
+          <Tooltip title="Lihat Log Utang">
+            <Button
+              size="small"
+              icon={<BookOutlined />}
+              onClick={() => handleOpenLog(record)} // <-- AKSI BARU
+            />
+          </Tooltip>
+          <Tooltip title="Export Laporan">
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={() => exportTenant(record)}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
 
-    const periodColumns = (p) => [
-        {
-            title: "Tenant",
-            dataIndex: "name",
-            key: "name",
-            render: (v) => <strong>{v}</strong>,
-            fixed: "left",
-            width: 140,
-        },
-        {
-            title: "Sales",
-            dataIndex: "totalSales",
-            key: "sales",
-            align: "right",
-            width: 120,
-            render: (_, record) => formatRupiah(record.totalSales[p] || 0),
-        },
-        renderColumn("ownerShare", "right", 130, "Hak Owner (30%)", p),
-        renderColumn("rawTenantShare", "right", 130, "Hak Tenant Murni (70%)", p),
-        renderColumn("debt", "right", 130, "Utang di Periode Ini", p),
-        renderColumn("netTenantShare", "center", 180, "Pembayaran ke Tenant (Net)", p),
-        actionColumn
-    ];
+  // --- KOLOM UNTUK MODAL LOG UTANG ---
+  const logColumns = [
+     {
+      title: "Tanggal",
+      dataIndex: "tanggal_utang",
+      key: "tanggal_utang",
+      render: (t) => dayjs(t).format("DD MMM YYYY"),
+      sorter: (a, b) => dayjs(a.tanggal_utang).unix() - dayjs(b.tanggal_utang).unix(),
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: "Deskripsi",
+      dataIndex: "deskripsi",
+      key: "deskripsi",
+    },
+    {
+      title: "Jumlah",
+      dataIndex: "jumlah",
+      key: "jumlah",
+      align: "right",
+      render: (v) => formatRupiah(v),
+      sorter: (a, b) => a.jumlah - b.jumlah,
+    },
+     {
+      title: "Status",
+      dataIndex: "status_lunas",
+      key: "status_lunas",
+      render: (lunas) => (
+        lunas ? <Tag color="green">Lunas</Tag> : <Tag color="red">Belum Lunas</Tag>
+      ),
+       filters: [
+        { text: 'Belum Lunas', value: 0 },
+        { text: 'Lunas', value: 1 },
+      ],
+      onFilter: (value, record) => record.status_lunas === value,
+      defaultFilteredValue: [0], // Default hanya tampilkan yg belum lunas
+    },
+    {
+      title: "Aksi",
+      key: "aksi",
+      align: "center",
+      render: (_, record) => (
+        <Space>
+           <Tooltip title="Edit Utang">
+            <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenEditUtang(record)} />
+          </Tooltip>
+          <Tooltip title="Hapus Utang">
+            <Popconfirm
+                title="Hapus entri utang ini?"
+                description={`Yakin ingin menghapus utang ${formatRupiah(record.jumlah)}?`}
+                onConfirm={() => handleDeleteUtang(record.id_utang)}
+                okText="Ya, Hapus"
+                cancelText="Batal"
+                okButtonProps={{ danger: true }}
+              >
+               <Button size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
+      )
+    }
+  ];
 
-    // (Helper formatRangeLabel tetap sama)
-    const formatRangeLabel = (range) => {
-        if (!range || !range[0] || !range[1]) return "-";
-        const start = dayjs(range[0]);
-        const end = dayjs(range[1]);
-        if (start.month() === end.month() && start.year() === end.year()) {
-            return `${start.format("DD")}–${end.format("DD MMMM YYYY")}`;
-        }
-        return `${start.format("DD MMM YYYY")} – ${end.format("DD MMM YYYY")}`;
-    };
-
-    // Tentukan periode yang terdeteksi otomatis
-    const autoDetectedPeriod = selectedDebtDate.isValid()
-        ? getPaymentPeriod(selectedDebtDate)
-        : "Luar Periode";
-
-    // (Logika displayedPeriodChoice tetap sama)
-    const displayedPeriodChoice = manualPeriodChoice === "auto" ? autoDetectedPeriod : manualPeriodChoice;
-    const isAutoPeriod = manualPeriodChoice === "auto";
-
-    return (
-        <ConfigProvider locale={locale}>
-            <Spin spinning={isLoading} tip="Memuat data...">
-                {contextHolder}
-                <div style={{ padding: 16 }}>
-                    {/* Header (Tombol Export Semua Bulan diupdate) */}
-                    <Row gutter={[16, 16]} style={{ marginBottom: 12 }}>
-                        <Col xs={24}>
-                            <Card>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                                    <div>
-                                        <h2 style={{ margin: 0 }}>Admin — Bagi Hasil</h2>
-                                        <div style={{ color: "#6b7280" }}>
-                                            Rekap pendapatan dan manajemen pembayaran tenant untuk periode <b>{period.format("MMMM YYYY")}</b>.
-                                        </div>
-                                    </div>
-                                    <Space wrap>
-                                        <DatePicker picker="month" value={period} onChange={handlePeriodChange} />
-                                        <Button type="primary" icon={<DownloadOutlined />} onClick={exportAllTimeDataToCSV}>
-                                            Export Semua Bulan
-                                        </Button>
-                                    </Space>
-                                </div>
-
-                                {/* (Sisa dari Header Card: Divider, Bar Periode, Statistik tetap sama) */}
-                                <Divider style={{ margin: "12px 0" }} />
-                                <Row gutter={[12, 12]} align="middle">
-                                    <Col xs={24} sm={8}>
-                                        <Form layout="vertical">
-                                            <Form.Item label={`Periode 1 (${formatRangeLabel(periode1Range)})`} style={{ marginBottom: 0 }}>
-                                                <RangePicker
-                                                    value={periode1Range}
-                                                    format="DD MMM YYYY"
-                                                    onChange={(val) => setPeriode1Range(val)}
-                                                    style={{ width: "100%" }}
-                                                />
-                                            </Form.Item>
-                                        </Form>
-                                    </Col>
-                                    <Col xs={24} sm={8}>
-                                        <Form layout="vertical">
-                                            <Form.Item label={`Periode 2 (${formatRangeLabel(periode2Range)})`} style={{ marginBottom: 0 }}>
-                                                <RangePicker
-                                                    value={periode2Range}
-                                                    format="DD MMM YYYY"
-                                                    onChange={(val) => setPeriode2Range(val)}
-                                                    style={{ width: "100%" }}
-                                                />
-                                            </Form.Item>
-                                        </Form>
-                                    </Col>
-                                    <Col xs={24} sm={8} style={{ display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
-                                        <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                                            setAddDebtModalVisible(true);
-                                            setSelectedDebtDate(dayjs());
-                                            addDebtForm.setFieldValue('date', dayjs());
-                                            addDebtForm.setFieldValue('periodChoice', 'auto');
-                                            setManualPeriodChoice("auto");
-                                        }}>
-                                            Tambah Utang Baru
-                                        </Button>
-                                    </Col>
-                                </Row>
-                                <Divider style={{ margin: "12px 0" }} />
-                                <Row gutter={[16, 16]}>
-                                    <Col xs={24} sm={8}>
-                                        <Statistic title="Total Penjualan Kotor" value={formatRupiah(totals.totalGross)} />
-                                    </Col>
-                                    <Col xs={12} sm={8}>
-                                        <Statistic title="Total Hak Owner (30%)" value={formatRupiah(totals.totalOwnerShare)} />
-                                    </Col>
-                                    <Col xs={12} sm={8}>
-                                        <Statistic title="Total Pembayaran Tenant NET" value={formatRupiah(totals.totalTenantNetPayment)} />
-                                    </Col>
-                                </Row>
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    {/* Tabel Periode 1, Periode 2, Total Keseluruhan (Struktur HTML tetap sama) */}
-                    <Row gutter={[16, 16]}>
-                        <Col xs={24}>
-                            <Card title={`DETAIL P1 (${formatRangeLabel(periode1Range)})`}>
-                                <Table columns={periodColumns("p1")} dataSource={tenants} rowKey="id" pagination={false} scroll={{ x: 1200 }} size="small" />
-                            </Card>
-                        </Col>
-                        {/* (Tabel P2 dan Tabel Total tetap sama) */}
-                        <Col xs={24}>
-                            <Card title={`DETAIL P2 (${formatRangeLabel(periode2Range)})`}>
-                                <Table columns={periodColumns("p2")} dataSource={tenants} rowKey="id" pagination={false} scroll={{ x: 1200 }} size="small" />
-                            </Card>
-                        </Col>
-                        <Col xs={24}>
-                            <Card
-                                title={`REKAP TOTAL BULANAN - ${period.format("MMMM YYYY")}`}
-                                extra={
-                                    <Button type="primary" icon={<DownloadOutlined />} onClick={exportMonthlyDataToCSV} disabled={tenants.length === 0}>
-                                        Download Bulan Ini
-                                    </Button>
-                                }
-                            >
-                                <Table columns={totalColumns} dataSource={tenants} rowKey="id" pagination={false} scroll={{ x: 1300 }} size="small" />
-                                {/* (Footer rekap tetap sama) */}
-                            </Card>
-                        </Col>
-                    </Row>
-
-                    {/* Modal Tambah Utang (Logika Form diupdate) */}
-                    <Modal
-                        open={addDebtModalVisible}
-                        title="Tambah Utang Baru Tenant"
-                        onCancel={() => {
-                            setAddDebtModalVisible(false);
-                            addDebtForm.resetFields();
-                            setSelectedDebtDate(dayjs());
-                            setManualPeriodChoice("auto");
-                        }}
-                        footer={null}
-                        destroyOnClose
+  return (
+    <ConfigProvider locale={locale}>
+      <Spin spinning={loading} tip="Memuat data...">
+        <div style={{ padding: 16 }}>
+          {/* Header & Global Stats */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24}>
+              <Card>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ margin: 0 }}>Admin — Laporan Bagi Hasil</h2>
+                    <div style={{ color: "#6b7280" }}>
+                      Laporan live pendapatan dan utang tenant.
+                    </div>
+                  </div>
+                  <Space wrap>
+                    <RangePicker
+                      value={dateRange}
+                      onChange={(dates) => dates && setDateRange(dates)}
+                      disabled={loading}
+                      allowClear={false}
+                    />
+                    <Button
+                      type="primary"
+                      onClick={exportAll}
+                      icon={<DownloadOutlined />}
+                      disabled={rekapData.length === 0 || loading}
                     >
-                        <Form form={addDebtForm} onFinish={handleAddDebt} layout="vertical">
-                            <Form.Item name="name" label="Pilih Nama Tenant" rules={[{ required: true, message: "Pilih nama tenant" }]}>
-                                <Select placeholder="Pilih nama tenant" showSearch>
-                                    {tenants.map((t) => (
-                                        <Option key={t.id} value={t.name}>
-                                            {t.name}
-                                        </Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-
-                            {/* Row: DatePicker + Pilih Periode (Logika tampilan diupdate) */}
-                            <Row gutter={8}>
-                                <Col span={14}>
-                                    <Form.Item name="date" label="Tanggal Pemberian Utang" rules={[{ required: true, message: "Pilih tanggal" }]}>
-                                        <DatePicker
-                                            style={{ width: "100%" }}
-                                            placeholder="Pilih tanggal"
-                                            defaultValue={dayjs()}
-                                            format="DD MMMM YYYY"
-                                            onChange={(d) => {
-                                                setSelectedDebtDate(d || dayjs());
-                                            }}
-                                        />
-                                    </Form.Item>
-                                </Col>
-                                <Col span={10}>
-                                    {/* Select Periode ini sekarang hanya kosmetik, backend tidak menggunakannya */}
-                                    <Form.Item name="periodChoice" label="Deteksi Periode">
-                                        <Select
-                                            value={autoDetectedPeriod} // Tampilkan hanya deteksi otomatis
-                                            disabled // Nonaktifkan
-                                        >
-                                            <Option value={autoDetectedPeriod}>
-                                                {autoDetectedPeriod}
-                                            </Option>
-                                        </Select>
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-
-                            <Form.Item name="amount" label="Jumlah Utang (Rp)" rules={[{ required: true, message: "Masukkan jumlah utang" }]}>
-                                <InputNumber style={{ width: "100%" }} min={1} formatter={formatNumberInput} parser={parseNumberInput} placeholder="Misalnya: 150.000" />
-                            </Form.Item>
-
-                            <Form.Item style={{ marginBottom: 0 }}>
-                                <Button type="primary" htmlType="submit" block icon={<PlusOutlined />}>
-                                    Tambahkan Utang
-                                </Button>
-                            </Form.Item>
-                        </Form>
-                    </Modal>
-
-                    {/* Modal Edit Tenant (Tambahkan list utang + tombol hapus) */}
-                    <Modal
-                        open={editModalVisible}
-                        title={`Edit Data Tenant: ${editingTenant?.name}`}
-                        onCancel={() => {
-                            setEditModalVisible(false);
-                            setEditingTenant(null);
-                        }}
-                        footer={null}
-                        destroyOnClose
-                    >
-                        {editingTenant && (
-                            <Form
-                                form={editForm}
-                                onFinish={handleUpdate}
-                                layout="vertical"
-                            // initialValues ditangani oleh onClick di tombol Edit
-                            >
-                                <Form.Item name="name" label="Nama Tenant" rules={[{ required: true }]}>
-                                    <Select disabled> {/* Nama tenant tidak boleh diubah */}
-                                        <Option key={editingTenant.name} value={editingTenant.name}>
-                                            {editingTenant.name}
-                                        </Option>
-                                    </Select>
-                                </Form.Item>
-
-                                
-
-                                <Form.Item name="currentDebt" label="Sisa Utang Periode Sebelumnya">
-                                    <InputNumber style={{ width: "100%" }} min={0} formatter={formatNumberInput} parser={parseNumberInput} />
-                                </Form.Item>
-
-                                <Card size="small" title="Riwayat Utang Periode Berjalan" style={{ marginBottom: 16 }}>
-                                    <div style={{ maxHeight: 150, overflowY: 'auto' }}>
-                                        {editingTenant.debtHistory.filter((d) => !d.isPaidOut).map((d) => (
-                                            <div key={d.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px dotted #f0f0f0" }}>
-                                                <div>
-                                                    <span>{dayjs(d.date).format("DD/MM/YYYY")} (<Tag color='default' style={{ margin: 0 }}>{getPaymentPeriod(d.date)}</Tag>)</span>
-                                                    <br />
-                                                    <Tag color="orange">{formatRupiah(d.amount)}</Tag>
-                                                </div>
-                                                <Button
-                                                    icon={<DeleteOutlined />}
-                                                    danger
-                                                    size="small"
-                                                    onClick={() => handleDeleteDebt(d.id)}
-                                                />
-                                            </div>
-                                        ))}
-                                        {editingTenant.debtHistory.filter((d) => !d.isPaidOut).length === 0 && (
-                                            <div style={{ color: "#999" }}>Tidak ada utang di periode ini.</div>
-                                        )}
-                                    </div>
-                                </Card>
-
-                                <Form.Item>
-                                    <Button type="primary" htmlType="submit" block>
-                                        Simpan Perubahan
-                                    </Button>
-                                </Form.Item>
-                            </Form>
-                        )}
-                    </Modal>
+                      Export Semua
+                    </Button>
+                  </Space>
                 </div>
-            </Spin>
-        </ConfigProvider>
-    );
+                <Divider style={{ margin: "16px 0" }} />
+                <Row gutter={[16, 16]}>
+                  <Col xs={24} sm={8}>
+                    <Statistic title="Total Penjualan Kotor" value={formatRupiah(totals.totalGross)} prefix={<DollarOutlined />} />
+                  </Col>
+                  <Col xs={12} sm={8}>
+                    <Statistic title="Total Hak Owner (30%)" value={formatRupiah(totals.totalOwnerShare)} prefix={<CrownOutlined />} />
+                  </Col>
+                  <Col xs={12} sm={8}>
+                    <Statistic title="Total Pembayaran Tenant (Net)" value={formatRupiah(totals.totalTenantNetPayment)} prefix={<TeamOutlined />} />
+                  </Col>
+                </Row>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* Table Rekap Pembayaran */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24}>
+              <Card
+                title={`Rekap Bagi Hasil: ${dateRange[0].format("DD MMM YYYY")} - ${dateRange[1].format("DD MMM YYYY")}`}
+                bodyStyle={{ padding: 0 }}
+                extra={
+                  <Button
+                     type="primary"
+                     icon={<PlusOutlined />}
+                     onClick={() => setUtangModalVisible(true)}
+                  >
+                     Input Utang Baru
+                  </Button>
+                }
+              >
+                <Table
+                  columns={columns}
+                  dataSource={rekapData}
+                  rowKey="id"
+                  pagination={false}
+                  scroll={{ x: 1200 }}
+                  size="small"
+                  loading={loading}
+                  locale={{ emptyText: "Tidak ada data penjualan untuk rentang tanggal ini." }}
+                />
+                <div style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #f0f0f0", flexWrap: 'wrap', gap: 16 }}>
+                  <Statistic title="Total Hak Owner (30%)" value={formatRupiah(totals.totalOwnerShare)} />
+                  <Statistic title="Total Pembayaran Tenant (Net)" value={formatRupiah(totals.totalTenantNetPayment)} style={{textAlign: 'right'}} />
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* Modal "Input Utang Baru" */}
+          <Modal
+            open={utangModalVisible}
+            title="Input Utang Tenant Baru"
+            onCancel={() => {
+              setUtangModalVisible(false);
+              utangForm.resetFields();
+            }}
+            footer={null}
+            destroyOnClose
+          >
+            <Form form={utangForm} onFinish={handleAddUtang} layout="vertical" style={{marginTop: 20}}>
+              <Form.Item
+                name="id_tenant"
+                label="Pilih Nama Tenant"
+                rules={[{ required: true, message: "Pilih nama tenant" }]}
+              >
+                <Select
+                  placeholder="Pilih nama tenant"
+                  allowClear showSearch
+                  loading={tenantList.length === 0}
+                  filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+                >
+                  {tenantList.map((tenant) => (
+                    <Option key={tenant.id_tenant} value={tenant.id_tenant}>
+                      {tenant.nama_tenant}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              
+              <Form.Item
+                name="tanggal_utang"
+                label="Tanggal Utang"
+                rules={[{ required: true, message: "Pilih tanggal utang" }]}
+                initialValue={dayjs()} // Default hari ini
+              >
+                 <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+              </Form.Item>
+              
+              <Form.Item
+                name="jumlah"
+                label="Jumlah Utang (Rp)"
+                rules={[{ required: true, message: "Jumlah tidak boleh kosong" }]}
+                initialValue={0}
+              >
+                <InputNumber
+                  style={{ width: "100%" }} min={0}
+                  formatter={formatNumberInput} parser={parseNumberInput}
+                  placeholder="Misalnya: 150.000"
+                />
+              </Form.Item>
+              
+               <Form.Item
+                  name="deskripsi"
+                  label="Deskripsi Utang"
+                  rules={[{ required: true, message: "Deskripsi wajib diisi" }]}
+                >
+                  <Input.TextArea rows={2} placeholder="Contoh: Kasbon, dll." />
+                </Form.Item>
+              
+              <Form.Item style={{marginTop: 20}}>
+                <Button type="primary" htmlType="submit" block icon={<PlusOutlined />} loading={submitLoading}>
+                  Simpan Utang
+                </Button>
+              </Form.Item>
+            </Form>
+          </Modal>
+
+          {/* --- MODAL BARU: Log Utang --- */}
+          <Modal
+             open={logModalVisible}
+             title={`Log Utang untuk: ${selectedTenantForLog?.name}`}
+             onCancel={() => {
+                setLogModalVisible(false);
+                setSelectedTenantForLog(null);
+                setLogData([]);
+             }}
+             footer={null} // Tidak perlu footer OK/Cancel
+             width={800}
+             destroyOnClose
+          >
+             <Spin spinning={logLoading}>
+                <Alert
+                  message="Log Utang"
+                  description="Daftar ini berisi semua catatan utang untuk tenant ini (belum lunas dan sudah lunas) dari semua periode. Mengedit atau menghapus entri di sini akan memengaruhi perhitungan utang di tabel utama."
+                  type="info"
+                  showIcon
+                  style={{marginBottom: 16}}
+                />
+                <Table
+                  columns={logColumns} // Kolom khusus untuk log
+                  dataSource={logData}
+                  rowKey="id_utang"
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  scroll={{ y: 300 }} // Scroll internal jika log panjang
+                />
+             </Spin>
+          </Modal>
+
+          {/* --- MODAL BARU: Edit Entri Utang --- */}
+          <Modal
+             open={editUtangModalVisible}
+             title="Edit Entri Utang"
+             onCancel={() => setEditUtangModalVisible(false)}
+             footer={null} // Footer akan di-handle oleh Form
+             destroyOnClose
+          >
+             {editingUtangEntry && ( // Hanya render jika ada data
+                <Form
+                  form={editUtangForm}
+                  layout="vertical"
+                  onFinish={handleUpdateUtang}
+                  style={{marginTop: 20}}
+                >
+                  <Form.Item name="tanggal_utang" label="Tanggal" rules={[{ required: true }]}>
+                     <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                  </Form.Item>
+                  <Form.Item name="jumlah" label="Jumlah (Rp)" rules={[{ required: true }]}>
+                      <InputNumber
+                        style={{ width: "100%" }} min={0}
+                        formatter={formatNumberInput} parser={parseNumberInput}
+                      />
+                  </Form.Item>
+                  <Form.Item name="deskripsi" label="Deskripsi" rules={[{ required: true }]}>
+                       <Input.TextArea rows={2} />
+                  </Form.Item>
+                  <Form.Item name="status_lunas" label="Status" valuePropName="checked">
+                       <Switch checkedChildren="Lunas" unCheckedChildren="Belum Lunas" />
+                  </Form.Item>
+                  <Form.Item style={{marginTop: 20}}>
+                    <Button type="primary" htmlType="submit" block loading={submitLoading}>
+                       Update Entri Utang
+                    </Button>
+                  </Form.Item>
+                </Form>
+             )}
+          </Modal>
+
+        </div>
+      </Spin>
+    </ConfigProvider>
+  );
 };
 
 export default HutangAdmin;

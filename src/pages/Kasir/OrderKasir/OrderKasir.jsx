@@ -111,7 +111,7 @@ const OrderKasir = () => {
     const [editingOrderId, setEditingOrderId] = useState(null); // Track ID of the saved order being edited
 
 
-        const resetOrderState = () => {
+    const resetOrderState = () => {
         setSelectedItems([]);
         setDiscountPercentage(0);
         setCashInput(0);
@@ -702,7 +702,14 @@ const OrderKasir = () => {
         const matchesSearch = product.name
             .toLowerCase()
             .includes(searchProductQuery.toLowerCase());
-        return matchesMerchant && matchesProductType && matchesSearch;
+
+        // --- TAMBAHKAN BARIS INI ---
+        // (Asumsi nama propertinya 'status_visibilitas' dan nilainya 'non aktif'
+        // Jika nama properti/nilai beda, sesuaikan di sini)
+        const matchesVisibility = product.status_visibilitas !== 'Nonaktif';
+        // --- SELESAI TAMBAHAN ---
+
+        return matchesMerchant && matchesProductType && matchesSearch && matchesVisibility; // <-- TAMBAHKAN matchesVisibility DI SINI
     });
 
 

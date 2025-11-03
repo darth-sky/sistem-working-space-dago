@@ -6,6 +6,251 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
 
+export const apiGetSessionHistory = async () => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/history`, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error getting session history:", error);
+        throw error;
+    }
+};
+
+export const getRekapLive = async (startDate, endDate) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const url = `${baseUrl}/api/v1/admin/rekap-live?start_date=${startDate}&end_date=${endDate}`;
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Gagal mengambil data rekap');
+    return result.datas;
+  } catch (error) {
+    console.error("Error fetching rekap live:", error);
+    throw error;
+  }
+};
+
+// 2. (DIMODIFIKASI) Menambah utang ad-hoc (dari form)
+export const addUtangTenant = async (id_tenant, jumlah, deskripsi, tanggal_utang) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    // Pastikan 'tanggal_utang' dikirim
+    const body = { id_tenant, jumlah, deskripsi, tanggal_utang }; 
+    const response = await fetch(`${baseUrl}/api/v1/admin/utang-tenant`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Gagal menambah utang');
+    return result;
+  } catch (error) {
+    console.error("Error adding tenant debt:", error);
+    throw error;
+  }
+};
+
+export const getActiveTenants = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/admin/tenants-active`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) throw new Error('Gagal mengambil daftar tenant');
+    return result.datas;
+  } catch (error) {
+    console.error("Error fetching active tenants:", error);
+    throw error;
+  }
+};
+
+
+export const getUtangLog = async (tenantId, startDate, endDate) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    // Buat URL dengan query params
+    let url = `${baseUrl}/api/v1/admin/utang-log?tenant_id=${tenantId}`;
+    if (startDate && endDate) {
+      url += `&start_date=${startDate}&end_date=${endDate}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Gagal mengambil log utang');
+    return result.datas;
+  } catch (error) {
+    console.error("Error fetching tenant debt log:", error);
+    throw error;
+  }
+};
+
+// 8. (BARU) UPDATE Entri Utang (dari Modal Edit Log)
+export const updateUtangLog = async (id_utang, data) => {
+  // 'data' harus berupa objek: { tanggal_utang, jumlah, deskripsi, status_lunas (bool) }
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/admin/utang-log/${id_utang}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Gagal update entri utang');
+    return result;
+  } catch (error) {
+    console.error("Error updating debt log entry:", error);
+    throw error;
+  }
+};
+
+// 9. (BARU) DELETE Entri Utang (dari Modal Log)
+export const deleteUtangLog = async (id_utang) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/admin/utang-log/${id_utang}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Gagal menghapus entri utang');
+    return result;
+  } catch (error) {
+    console.error("Error deleting debt log entry:", error);
+    throw error;
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const apiGetLaporanPajakData = async (startDate, endDate) => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        // Bangun URL dengan query parameters
+        const url = new URL(`${baseUrl}/api/v1/owner/laporan-pajak-data`);
+        url.searchParams.append('start_date', startDate);
+        url.searchParams.append('end_date', endDate);
+
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        return handleResponse(response); // handleResponse harus bisa melempar error
+    } catch (error) {
+        console.error("Error getting Laporan Pajak data:", error);
+        throw error; // Lemparkan error ke komponen
+    }
+};
+
+export const apiSaveTaxPayment = async (paymentData) => {
+    try {
+        const token = await jwtStorage.retrieveToken();
+        if (!token) throw new Error("Token tidak ditemukan");
+
+        const payload = {
+            start_date: paymentData.startDate, // YYYY-MM-DD
+            end_date: paymentData.endDate,     // YYYY-MM-DD
+            paidAmount: paymentData.paidAmount,
+            paymentDate: paymentData.paymentDate.toISOString(), // Kirim sebagai ISO string
+        };
+
+        const response = await fetch(`${baseUrl}/api/v1/owner/catat-pajak`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        return handleResponse(response);
+    } catch (error) {
+        console.error("Error saving tax payment:", error);
+        throw error;
+    }
+};
+
+
+
+
+
+
+export const checkBulkAvailability = async (payload) => {
+  try {
+    const token = await jwtStorage.retrieveToken(); // Perlu token jika endpoint dijaga
+    const response = await fetch(`${baseUrl}/api/v1/ruangan/check-availability-bulk`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`, // Sertakan jika endpoint memerlukan auth
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload), // Payload sama dengan createBulkBooking
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+       // Lempar error dengan pesan dari backend jika ada
+       throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    // Kembalikan data dari backend { message: "OK", available: bool, unavailable_slots: [...] }
+    return responseData;
+
+  } catch (error) {
+    console.error("Error checkBulkAvailability:", error);
+    throw error; // Lempar error agar bisa ditangkap di komponen
+  }
+};
+
+
 
 
 export const apiGetAllOpenSessions = async () => {
@@ -213,13 +458,14 @@ export const getPrivateOfficeRooms = async () => {
 export const createBulkBooking = async (payload) => {
   try {
     const token = await jwtStorage.retrieveToken();
+    const payloadWithSource = { ...payload, booking_source: 'PrivateOffice' };
     const response = await fetch(`${baseUrl}/api/v1/ruangan/bookRuanganBulk`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payloadWithSource),
     });
 
     const responseData = await response.json();
@@ -329,19 +575,19 @@ export const updateRekapData = async (data) => {
   }
 };
 
-export const addUtangTenant = async (data) => {
-  try {
-    const response = await fetch(`${baseUrl}/api/v1/admin/utang-tenant`, {
-      method: "POST",
-      headers: await getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Error adding utang tenant:", error);
-    throw error;
-  }
-};
+// export const addUtangTenant = async (data) => {
+//   try {
+//     const response = await fetch(`${baseUrl}/api/v1/admin/utang-tenant`, {
+//       method: "POST",
+//       headers: await getAuthHeaders(),
+//       body: JSON.stringify(data),
+//     });
+//     return handleResponse(response);
+//   } catch (error) {
+//     console.error("Error adding utang tenant:", error);
+//     throw error;
+//   }
+// };
 
 
 export const deleteUtangTenant = async (id_utang) => {
@@ -1801,13 +2047,14 @@ export const getRoomsToday = async () => {
 export const createRoomBookingKasir = async (bookingData) => {
   try {
     const token = await jwtStorage.retrieveToken();
+    const dataWithSource = { ...bookingData, booking_source: 'KasirWalkIn' };
     const response = await fetch(`${baseUrl}/api/v1/kasir/book-room`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(bookingData), // Mengirim data booking dalam format JSON
+      body: JSON.stringify(dataWithSource), // Mengirim data booking dalam format JSON
     });
 
     if (!response.ok) {
@@ -2598,13 +2845,14 @@ export const postTransaksiRuangan = async (
 ) => {
   try {
     const token = await jwtStorage.retrieveToken();
+    const dataWithSource = { ...bookingData, booking_source: 'RoomDetail' };
     const response = await fetch(`${baseUrl}/api/v1/ruangan/bookRuangan`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(bookingData), // Langsung kirim objek
+      body: JSON.stringify(dataWithSource), // Langsung kirim objek
     });
 
     return await response.json();
