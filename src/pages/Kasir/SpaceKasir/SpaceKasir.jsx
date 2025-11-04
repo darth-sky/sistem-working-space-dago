@@ -36,10 +36,7 @@ const getCombinedSpaceUnits = (availableUnits, activeRentals) => {
 
 const SpaceKasir = () => {
   const [status, setStatus] = useState("Active"); // Filter status (existing)
-
-  // 2. Tambahkan state baru untuk filter sumber
   const [sourceFilter, setSourceFilter] = useState("All"); // Filter source (new)
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState({
@@ -81,44 +78,31 @@ const SpaceKasir = () => {
     }
   }, [rentals.active, spaceUnitsAvailable, loading]);
 
-
-  // 3. Logika Filter Gabungan (Filter Status + Filter Sumber)
-  // Ini adalah blok logika utama yang diperbarui
+  // Filter utama
   let displayedRentals = [];
   if (status === "Upcoming") displayedRentals = rentals.upcoming;
   else if (status === "Active") displayedRentals = rentals.active;
   else displayedRentals = rentals.finish;
 
-  // Sekarang, filter `displayedRentals` LEBIH LANJUT berdasarkan `sourceFilter`
+  // Filter source tambahan
   const finalFilteredRentals = displayedRentals.filter(rental => {
-    if (sourceFilter === "All") {
-      return true; // Tampilkan semua
-    }
-    if (sourceFilter === "Online") {
-      return rental.booking_source === 'RoomDetail';
-    }
-    if (sourceFilter === "Private Office") {
-      return rental.booking_source === 'PrivateOffice';
-    }
-    if (sourceFilter === "Walk-In") {
-      return rental.booking_source === 'KasirWalkIn';
-    }
-    // Fallback jika ada sumber lain (misal: null atau belum diset)
+    if (sourceFilter === "All") return true;
+    if (sourceFilter === "Online") return rental.booking_source === 'RoomDetail';
+    if (sourceFilter === "Private Office") return rental.booking_source === 'PrivateOffice';
+    if (sourceFilter === "Walk-In") return rental.booking_source === 'KasirWalkIn';
     if (sourceFilter === "Lainnya") {
       return !['RoomDetail', 'PrivateOffice', 'KasirWalkIn'].includes(rental.booking_source);
     }
     return true;
   });
 
-
-  // ✅ Kelompokkan per customer (Gunakan `finalFilteredRentals`)
+  // Kelompokkan per customer
   const groupedByCustomer = finalFilteredRentals.reduce((acc, rental) => {
     if (!acc[rental.client]) acc[rental.client] = [];
     acc[rental.client].push(rental);
     return acc;
   }, {});
 
-  // Tampilan Loading (Tidak berubah)
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-50">
@@ -127,7 +111,6 @@ const SpaceKasir = () => {
     );
   }
 
-  // Tampilan Error (Tidak berubah)
   if (error) {
     return (
       <div className="p-4">
@@ -138,14 +121,14 @@ const SpaceKasir = () => {
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen transition-all duration-300">
-      {/* 🔍 Search bar (Tidak berubah) */}
+      {/* 🔍 Search bar */}
       <Search
         placeholder="Search"
         allowClear
         className="w-full rounded-lg shadow-sm focus:shadow-md transition-all"
       />
 
-      {/* 📊 Top Summary (Tidak berubah) */}
+      {/* 📊 Top Summary */}
       <div className="rounded-xl shadow-md p-6 border border-blue-100 bg-gradient-to-br from-blue-50 to-blue-100">
         <h3 className="text-lg font-semibold text-gray-700 mb-5 tracking-wide text-center">
           Space Summary
@@ -168,7 +151,7 @@ const SpaceKasir = () => {
         </div>
       </div>
 
-      {/* 🧩 Space Unit Type (Tidak berubah) */}
+      {/* 🧩 Space Unit Type */}
       <div>
         <h3 className="text-lg font-semibold text-gray-700 mb-3 tracking-wide">
           Space Unit Type
@@ -195,7 +178,7 @@ const SpaceKasir = () => {
         </div>
       </div>
 
-      {/* 🟩 Space Units (Tidak berubah) */}
+      {/* 🟩 Space Units */}
       <div>
         <h3 className="text-lg font-semibold text-gray-700 mb-3 tracking-wide">
           Space Units Available
@@ -224,26 +207,25 @@ const SpaceKasir = () => {
 
       {/* 🧾 Space Rental per Customer */}
       <div>
-        {/* 4. Ganti UI Filter (Button menjadi Segmented) */}
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-3 gap-4">
-          <h3 className="text-lg font-semibold text-gray-700 tracking-wide">
-            Space Booking per Customer
-          </h3>
-          {/* Buat grup untuk kedua filter */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Filter Status (Upcoming, Active, Finish) */}
-            <Segmented
-              options={["Upcoming", "Active", "Finish"]}
-              value={status}
-              onChange={(value) => setStatus(value)} // onChange mengembalikan value langsung
-            />
-            {/* Filter Source (All, Online, etc.) */}
-            <Segmented
-              options={["All", "Online", "Private Office", "Walk-In", "Lainnya"]}
-              value={sourceFilter}
-              onChange={(value) => setSourceFilter(value)} // onChange mengembalikan value langsung
-            />
-          </div>
+        <h3 className="text-lg font-semibold text-gray-700 tracking-wide mb-3">
+          Space Booking per Customer
+        </h3>
+
+        {/* 🔹 Filter Bar - kiri & kanan */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
+          {/* Kiri: Upcoming, Active, Finish */}
+          <Segmented
+            options={["Upcoming", "Active", "Finish"]}
+            value={status}
+            onChange={(value) => setStatus(value)}
+          />
+
+          {/* Kanan: All, Online, Private Office, Walk-In, Lainnya */}
+          <Segmented
+            options={["All", "Online", "Private Office", "Walk-In", "Lainnya"]}
+            value={sourceFilter}
+            onChange={(value) => setSourceFilter(value)}
+          />
         </div>
 
         {Object.keys(groupedByCustomer).length > 0 ? (
@@ -267,7 +249,6 @@ const SpaceKasir = () => {
                   {bookings.map((rental) => {
                     const isUpcoming = new Date(rental.waktu_mulai) > new Date();
 
-                    {/* --- Blok Tag Logika (Tidak berubah dari solusi Anda) --- */ }
                     let sourceTag = null;
                     if (rental.booking_source === 'PrivateOffice') {
                       sourceTag = <Tag color="purple">Private Office</Tag>;
@@ -278,10 +259,8 @@ const SpaceKasir = () => {
                     } else if (rental.booking_source) {
                       sourceTag = <Tag color="default">{rental.booking_source}</Tag>;
                     } else {
-                      // Jika null atau undefined
                       sourceTag = <Tag color="grey">Lainnya</Tag>;
                     }
-                    {/* --- Akhir Blok Tag Logika --- */ }
 
                     return (
                       <div
@@ -293,7 +272,6 @@ const SpaceKasir = () => {
                             {rental.unit.toUpperCase()}
                           </p>
                           <p className="text-xs text-gray-500">{rental.date}</p>
-                          {/* Grup Tag (Status + Sumber) */}
                           <div className="mt-1 flex flex-wrap gap-1">
                             {isUpcoming ? (
                               <Tag color="orange">UPCOMING</Tag>
@@ -302,12 +280,11 @@ const SpaceKasir = () => {
                             ) : (
                               <Tag color="default">FINISHED</Tag>
                             )}
-                            {/* Tampilkan tag sumber di sini */}
                             {sourceTag}
                           </div>
                         </div>
 
-                        _                 <div className="text-right">
+                        <div className="text-right">
                           <p className="text-blue-600 font-bold text-lg">
                             Rp {rental.price.toLocaleString("id-ID")}
                           </p>

@@ -77,10 +77,6 @@ const BuatOrderKasir = () => {
                         </Form.Item>
                     )}
 
-                    <Form.Item label="Kasir">
-                        <Input value={cashierName} disabled prefix={<UserOutlined />} />
-                    </Form.Item>
-
                     <Form.Item className="mt-6">
                         <Button
                             type="primary"

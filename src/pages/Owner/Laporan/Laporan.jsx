@@ -73,9 +73,6 @@ const maskExceptIndices = (arr, indices) => {
   const keep = new Set(indices);
   return arr.map((v, i) => (keep.has(i) ? v : null)); // null => Chart.js tidak menggambar batang
 };
-const getTenantName = (record) => {
-  return record.tenant_name || "—";
-};
 
 const Laporan = () => {
   const [dateRange, setDateRange] = useState([
@@ -91,12 +88,12 @@ const Laporan = () => {
     total_ws: 0,
     total_sales: 0,
     total_transactions: 0,
+    total_visitors: 0, // <-- PERUBAHAN DI SINI (1): Ditambahkan
     avg_daily: 0,
     total_days: 0,
   });
   const [dailySales, setDailySales] = useState([]);
   const [visitorsByHour, setVisitorsByHour] = useState([]);
-  const [bookingsByHour, setBookingsByHour] = useState([]);
   const [topFnb, setTopFnb] = useState([]);
   const [topWs, setTopWs] = useState([]);
 
@@ -114,6 +111,7 @@ const Laporan = () => {
           total_ws: Number(d?.totals?.total_ws || 0),
           total_sales: Number(d?.totals?.total_sales || 0),
           total_transactions: Number(d?.totals?.total_transactions || 0),
+          total_visitors: Number(d?.totals?.total_visitors || 0), // <-- PERUBAHAN DI SINI (2): Ditambahkan
           avg_daily: Number(d?.totals?.avg_daily || 0),
           total_days: Number(d?.totals?.total_days || 0),
         });
@@ -121,15 +119,12 @@ const Laporan = () => {
         setVisitorsByHour(
           Array.isArray(d?.visitors_by_hour) ? d.visitors_by_hour : []
         );
-        setBookingsByHour(
-          Array.isArray(d?.bookings_by_hour) ? d.bookings_by_hour : []
-        );
         setTopFnb(Array.isArray(d?.top_fnb) ? d.top_fnb : []);
         setTopWs(
           Array.isArray(d?.top_ws)
             ? [...d.top_ws].sort(
-                (a, b) => Number(b.qty || 0) - Number(a.qty || 0)
-              )
+              (a, b) => Number(b.qty || 0) - Number(a.qty || 0)
+            )
             : []
         );
       } catch (e) {
@@ -193,47 +188,21 @@ const Laporan = () => {
   const hourLabels = Array.from({ length: 15 }, (_, i) => `${8 + i}:00`);
   const hours = Array.from({ length: 15 }, (_, i) => 8 + i); // [8,9,10,...,22]
 
-  // buat map dari data API
+  // map visitors_by_hour -> gabungan FNB+WS
   const visitorsMap = new Map(
     visitorsByHour.map((r) => [Number(r.hour), Number(r.count)])
   );
-  const bookingsMap = new Map(
-    bookingsByHour.map((r) => [Number(r.hour), Number(r.count)])
-  );
-
-  // ambil data sesuai jam sebenarnya
   const visitorsData = hours.map((H) => visitorsMap.get(H) || 0);
-  const bookingsDataRaw = hours.map((H) => bookingsMap.get(H) || 0);
 
+  // Peak hours visiting (Top 3 dari visitorsData)
   const topPeakIdx = useMemo(
-    () => getTopNIndices(bookingsDataRaw, 3),
-    [bookingsDataRaw]
+    () => getTopNIndices(visitorsData, 3),
+    [visitorsData]
   );
-  const bookingsDataTop3 = useMemo(
-    () => maskExceptIndices(bookingsDataRaw, topPeakIdx),
-    [bookingsDataRaw, topPeakIdx]
+  const peakOnly = useMemo(
+    () => maskExceptIndices(visitorsData, topPeakIdx),
+    [visitorsData, topPeakIdx]
   );
-
-  const trafficBarData = {
-    labels: hourLabels,
-    datasets: [
-      {
-        label: "Pengunjung (jumlah transaksi)",
-        data: visitorsData,
-        backgroundColor: "#2563eb",
-      },
-    ],
-  };
-  const peakBarData = {
-    labels: hourLabels,
-    datasets: [
-      {
-        label: "Booking (Top 3)",
-        data: bookingsDataTop3,
-        backgroundColor: "#10B981",
-      },
-    ],
-  };
 
   const chartOptionsNoDatalabels = {
     responsive: true,
@@ -258,9 +227,11 @@ const Laporan = () => {
         beginAtZero: true,
         ticks: { callback: (v) => `Rp ${formatRupiah(v)}` },
       },
+      x: { title: { display: true, text: "Tanggal" } },
     },
   };
   const lineChartOptions = { ...chartOptionsNoDatalabels };
+
   const trafficBarOptions = {
     maintainAspectRatio: false,
     plugins: {
@@ -272,22 +243,27 @@ const Laporan = () => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
             if (ctx.parsed?.y != null)
-              label += `${formatRupiah(ctx.parsed.y)} pengunjung`;
+              label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
             return label;
           },
         },
       },
     },
     scales: {
-      y: { beginAtZero: true, ticks: { callback: (v) => formatRupiah(v) } },
+      y: {
+        beginAtZero: true,
+        ticks: { callback: (v) => formatRupiah(v) },
+        title: { display: true, text: "Jumlah Kunjungan" },
+      },
+      x: { title: { display: true, text: "Jam" } },
     },
   };
+
   const peakBarOptions = {
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       datalabels: { display: false },
-      // Tooltip hanya untuk batang yang ada (bukan null)
       tooltip: {
         filter: (ctx) => ctx.parsed?.y != null,
         callbacks: {
@@ -295,61 +271,21 @@ const Laporan = () => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
             if (ctx.parsed?.y != null)
-              label += `${formatRupiah(ctx.parsed.y)} booking`;
+              label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
             return label;
           },
         },
       },
     },
     scales: {
-      y: { beginAtZero: true, ticks: { callback: (v) => formatRupiah(v) } },
+      y: {
+        beginAtZero: true,
+        ticks: { callback: (v) => formatRupiah(v) },
+        title: { display: true, text: "Jumlah Kunjungan" },
+      },
+      x: { title: { display: true, text: "Jam" } },
     },
   };
-  const doughnutOptions = {
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { position: "bottom" },
-      datalabels: {
-        color: "#fff",
-        formatter: (value, context) => {
-          const total = context.chart.data.datasets[0].data.reduce(
-            (a, b) => a + b,
-            0
-          );
-          return total ? ((value / total) * 100).toFixed(1) + "%" : "0%";
-        },
-        font: { weight: "bold", size: 14 },
-      },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => {
-            const value = ctx.parsed || 0;
-            const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
-            const pct = total ? ((value / total) * 100).toFixed(1) : 0;
-            return `${ctx.label}: Rp ${formatRupiah(value)} (${pct}%)`;
-          },
-        },
-      },
-    },
-  };
-
-  const columns = [
-    { title: "Menu/Item", dataIndex: "item", key: "item" },
-    {
-      title: "Jumlah Terjual",
-      dataIndex: "qty",
-      key: "qty",
-      align: "right",
-      render: (v) => formatRupiah(v),
-    },
-    {
-      title: "Total Penjualan (Rp)",
-      dataIndex: "total",
-      key: "total",
-      align: "right",
-      render: (t) => `Rp ${formatRupiah(t)}`,
-    },
-  ];
 
   const totalDays =
     totals.total_days ||
@@ -366,11 +302,7 @@ const Laporan = () => {
         message.error("Area laporan tidak ditemukan.");
         return;
       }
-      console.log("[capture] node found:", node);
-
-      // Pastikan layout settle (tetap dalam user gesture)
       await new Promise((r) => requestAnimationFrame(r));
-      console.log("[capture] layout settled");
 
       // Clone offscreen
       const clone = node.cloneNode(true);
@@ -388,7 +320,6 @@ const Laporan = () => {
         zIndex: "-1",
       });
 
-      // Paksa background putih untuk komponen Ant Design
       clone
         .querySelectorAll(
           ".ant-card, .ant-card-body, .ant-statistic, .ant-space, .ant-row, .ant-col"
@@ -397,10 +328,9 @@ const Laporan = () => {
           el.style.background = "#ffffff";
         });
 
-      // === Salin setiap <canvas> (Chart.js) menjadi <img> pada CLONE
+      // Salin <canvas> di CLONE jadi <img>
       const originalCanvases = node.querySelectorAll("canvas");
       const clonedCanvases = clone.querySelectorAll("canvas");
-      console.log("[capture] canvases:", originalCanvases.length);
 
       originalCanvases.forEach((orig, idx) => {
         try {
@@ -411,13 +341,10 @@ const Laporan = () => {
           img.style.height = orig.style.height || `${orig.height}px`;
           const cloned = clonedCanvases[idx];
           if (cloned?.parentNode) cloned.parentNode.replaceChild(img, cloned);
-        } catch (err) {
-          console.warn("[capture] gagal salin canvas:", err);
-        }
+        } catch (_) { }
       });
 
       document.body.appendChild(clone);
-      console.log("[capture] clone appended", { w, h });
 
       const canvas = await html2canvas(clone, {
         scale: Math.max(2, window.devicePixelRatio || 1),
@@ -429,23 +356,19 @@ const Laporan = () => {
         windowWidth: w,
         windowHeight: h,
         logging: false,
-        foreignObjectRendering: false, // kalau hasil tetap blank, coba true
       });
 
       document.body.removeChild(clone);
-      console.log("[capture] html2canvas done", canvas?.width, canvas?.height);
 
       if (!canvas) {
         message.error("Gagal menangkap canvas.");
         return;
       }
 
-      // Tampilkan preview dulu (membantu debugging kalau blank)
       const dataUrlPreview = canvas.toDataURL("image/png");
       setPreviewSrc(dataUrlPreview);
       setPreviewOpen(true);
 
-      // 1) Coba Blob + ObjectURL (paling stabil)
       const blob = await new Promise((resolve) =>
         canvas.toBlob(resolve, "image/png", 1.0)
       );
@@ -462,11 +385,9 @@ const Laporan = () => {
           URL.revokeObjectURL(url);
           a.remove();
         }, 0);
-        console.log("[download] via blob+objectURL OK");
         return;
       }
 
-      // 2) Fallback: dataURL
       const a2 = document.createElement("a");
       a2.href = dataUrlPreview;
       a2.download = `laporan-${dateRange[0].format(
@@ -475,11 +396,9 @@ const Laporan = () => {
       document.body.appendChild(a2);
       a2.click();
       a2.remove();
-      console.log("[download] via dataURL OK");
     } catch (e) {
       console.error(e);
       message.error("Gagal membuat gambar laporan. Cek console untuk detail.");
-      // 3) Fallback terakhir: buka di tab baru (kalau downloader diblokir)
       try {
         const node = reportRef.current;
         if (!node) return;
@@ -491,7 +410,7 @@ const Laporan = () => {
             `<img src="${dataUrl}" style="max-width:100%"/>`
           );
         }
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -499,41 +418,78 @@ const Laporan = () => {
     try {
       const startStr = dateRange[0].format("YYYY-MM-DD");
       const endStr = dateRange[1].format("YYYY-MM-DD");
-      const tanggalLabel = `${startStr} s.d. ${endStr}`;
 
-      const rows = (topFnb || []).map((r) => {
-        const gross = Number(r.gross ?? r.total ?? 0);
-        const disc = Number(r.discount ?? 0);
-        const nett = Number(r.nett ?? gross - disc);
-        return {
-          Tanggal: tanggalLabel,
-          Product: r.item || "-",
+      // --- build sheets
+      const wsSummary = XLSX.utils.json_to_sheet([
+        {
+          "Total FNB": totals.total_fnb,
+          "Total WS": totals.total_ws,
+          "Total Sales": totals.total_sales,
+          "Jumlah Transaksi (FNB + Booking WS)": totals.total_transactions,
+          "Total Pengunjung (FNB + WS)": totals.total_visitors, // <-- Saya tambahkan di Excel juga
+          "Rata-rata Harian": totals.avg_daily,
+          "Total Hari": totals.total_days,
+          Periode: `${startStr} s.d. ${endStr}`,
+        },
+      ]);
+
+      const wsDaily = XLSX.utils.json_to_sheet(
+        (dailySales || []).map((d) => ({
+          Tanggal: dayjs(d.tanggal).format("YYYY-MM-DD"),
+          FNB: Number(d.fnb || 0),
+          "Working Space": Number(d.ws || 0),
+          Total: Number(d.all || 0),
+        }))
+      );
+
+      // Visitors per jam
+      const wsVisitors = XLSX.utils.json_to_sheet(
+        hourLabels.map((label, i) => ({
+          Jam: label,
+          Kunjungan: Number(visitorsData[i] || 0),
+        }))
+      );
+
+      // Peak (top3 jam)
+      const wsPeak = XLSX.utils.json_to_sheet(
+        hourLabels
+          .map((label, i) => ({
+            Jam: label,
+            Kunjungan: peakOnly[i] == null ? "" : Number(peakOnly[i]),
+          }))
+          .filter((r) => r.Kunjungan !== "")
+      );
+
+      const wsTopFnb = XLSX.utils.json_to_sheet(
+        (topFnb || []).map((r) => ({
+          Menu: r.item || "-",
           Tenant: r.tenant || "-",
-          "Jumlah Qty": Number(r.qty || 0),
-          "Total Penjualan (Gross)": gross,
-          "Total Discount": disc,
-          "Total Penjualan (Nett)": nett,
-        };
-      });
+          "Jumlah Terjual": Number(r.qty || 0),
+          "Total Penjualan (Gross)": Number(r.gross ?? r.total ?? 0),
+          "Total Discount": Number(r.discount ?? 0),
+          "Total Penjualan (Nett)": Number(
+            r.nett ?? Number(r.gross ?? r.total ?? 0) - Number(r.discount ?? 0)
+          ),
+        }))
+      );
 
-      if (!rows.length) {
-        message.warning("Tidak ada data untuk diekspor.");
-        return;
-      }
+      const wsTopWs = XLSX.utils.json_to_sheet(
+        (topWs || []).map((r) => ({
+          "Space (Kategori - Durasi)": r.item || "-",
+          "Jumlah Terjual": Number(r.qty || 0),
+          "Total Penjualan (Rp)": Number(r.total || 0),
+        }))
+      );
 
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws["!cols"] = [
-        { wch: 20 },
-        { wch: 30 },
-        { wch: 22 },
-        { wch: 12 },
-        { wch: 24 },
-        { wch: 18 },
-        { wch: 24 },
-      ];
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Laporan FNB");
-      XLSX.writeFile(wb, `laporan-fnb-${startStr}_to_${endStr}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+      XLSX.utils.book_append_sheet(wb, wsDaily, "Daily Selling");
+      XLSX.utils.book_append_sheet(wb, wsVisitors, "Visitors per Jam");
+      XLSX.utils.book_append_sheet(wb, wsPeak, "Peak Hours (Top3)");
+      XLSX.utils.book_append_sheet(wb, wsTopFnb, "Top 10 FNB");
+      XLSX.utils.book_append_sheet(wb, wsTopWs, "Top 5 WS");
+
+      XLSX.writeFile(wb, `laporan-${startStr}_to_${endStr}.xlsx`);
       message.success("✅ Laporan berhasil diekspor ke Excel!");
     } catch (e) {
       console.error(e);
@@ -585,6 +541,7 @@ const Laporan = () => {
           </Col>
         </Row>
 
+        {/* Quick links */}
         <div className="flex justify-start gap-2 mb-4">
           <a
             href="/laporan"
@@ -608,11 +565,11 @@ const Laporan = () => {
             href="/laporanpajak"
             className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
           >
-            {" "}
-            PAJAK{" "}
+            Pajak
           </a>
         </div>
 
+        {/* KPI cards */}
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} sm={12} md={6}>
             <Card loading={loading}>
@@ -627,9 +584,7 @@ const Laporan = () => {
             <Card loading={loading}>
               <Statistic
                 title="Total Pengunjung"
-                value={formatRupiah(
-                  visitorsByHour.reduce((s, r) => s + (r.count || 0), 0)
-                )}
+                value={totals.total_visitors} // <-- PERUBAHAN DI SINI (3): Diganti
                 prefix={<UsergroupAddOutlined />}
               />
             </Card>
@@ -654,6 +609,7 @@ const Laporan = () => {
           </Col>
         </Row>
 
+        {/* Charts */}
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={16}>
             <Card style={{ marginBottom: 16 }} loading={loading}>
@@ -683,9 +639,9 @@ const Laporan = () => {
             </Card>
 
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Trafic Pengunjung</Title>
+              <Title level={5}>Trafik Pengunjung per Jam</Title>
               <Text type="secondary">
-                Akumulasi transaksi per jam dalam periode {totalDays} hari.
+                Akumulasi kunjungan selama periode {totalDays}{" "} hari.
               </Text>
               <div style={{ height: 300, marginTop: 10 }}>
                 <Bar
@@ -705,22 +661,73 @@ const Laporan = () => {
             </Card>
 
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Peak Hours Booking</Title>
+              <Title level={5}>Peak Hours Visiting</Title>
               <Text type="secondary">
-                Akumulasi ruangan yang dipesan per jam dalam periode {totalDays}{" "}
-                hari.
+                Akumulasi tiga waktu puncak selama periode {totalDays} hari.
               </Text>
               <div style={{ height: 220, marginTop: 10 }}>
-                <Bar data={peakBarData} options={peakBarOptions} />
+                <Bar
+                  data={{
+                    labels: hourLabels,
+                    datasets: [
+                      {
+                        label: "Kunjungan (Top 3 Jam)",
+                        data: peakOnly,
+                        backgroundColor: "#10B981",
+                      },
+                    ],
+                  }}
+                  options={peakBarOptions}
+                />
               </div>
             </Card>
           </Col>
 
           <Col xs={24} lg={8}>
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Kontribusi Space </Title>
+              <Title level={5}>Kontribusi Space</Title>
               <div style={{ height: 220 }}>
-                <Doughnut data={doughnutData} options={doughnutOptions} />
+                <Doughnut
+                  data={doughnutData}
+                  options={{
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: "bottom" },
+                      datalabels: {
+                        color: "#fff",
+                        formatter: (value, context) => {
+                          const total =
+                            context.chart.data.datasets[0].data.reduce(
+                              (a, b) => a + b,
+                              0
+                            );
+                          return total
+                            ? ((value / total) * 100).toFixed(1) + "%"
+                            : "0%";
+                        },
+                        font: { weight: "bold", size: 14 },
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) => {
+                            const value = ctx.parsed || 0;
+                            const total = ctx.dataset.data.reduce(
+                              (s, v) => s + v,
+                              0
+                            );
+                            const pct = total
+                              ? ((value / total) * 100).toFixed(1)
+                              : 0;
+                            return `${ctx.label}: Rp ${formatRupiah(
+                              value
+                            )} (${pct}%)`;
+                          },
+                          
+                        },
+                      },
+                    },
+                  }}
+                />
               </div>
             </Card>
 
@@ -741,10 +748,10 @@ const Laporan = () => {
                     📄 Cetak Laporan (Gambar)
                   </button>
                 </Tooltip>
-                <Tooltip title="Unduh data FNB yang tampil dalam format Excel">
+                <Tooltip title="Unduh seluruh data yang tampil ke Excel (multi-sheet)">
                   <button
                     onClick={handleExportExcel}
-                    style={{
+                    s style={{
                       width: "100%",
                       padding: 10,
                       borderRadius: 8,
@@ -752,10 +759,10 @@ const Laporan = () => {
                       cursor: "pointer",
                     }}
                   >
-                    ⬇ Cetak Laporan (Excel)
+                    ⬇ Export Data (Excel)
                   </button>
                 </Tooltip>
-              </Space>
+                s </Space>
             </Card>
           </Col>
         </Row>
@@ -771,7 +778,7 @@ const Laporan = () => {
                     title: "Tenant",
                     dataIndex: "tenant",
                     key: "tenant",
-                    width: 120,
+                    width: 140,
                   },
                   {
                     title: "Jumlah Terjual",
@@ -800,7 +807,11 @@ const Laporan = () => {
             <Card title="Top 5 Working Space" loading={loading}>
               <Table
                 columns={[
-                  { title: "Space", dataIndex: "item", key: "item" },
+                  {
+                    title: "Kategori - Durasi",
+                    dataIndex: "item",
+                    key: "item",
+                  },
                   {
                     title: "Jumlah Terjual",
                     dataIndex: "qty",
@@ -826,6 +837,8 @@ const Laporan = () => {
           </Col>
         </Row>
       </div>
+
+      {/* Preview modal sederhana */}
       {previewSrc && (
         <div>
           <div
@@ -872,6 +885,7 @@ const Laporan = () => {
                   border: "1px solid #ddd",
                   borderRadius: 6,
                   cursor: "pointer",
+                  section
                 }}
               >
                 Tutup

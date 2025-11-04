@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   ConfigProvider,
   DatePicker,
@@ -14,11 +14,15 @@ import {
   Empty,
   Spin,
   Alert,
+  Tooltip,
+  message,
+  Modal,
+  Image,
 } from "antd";
 import locale from "antd/locale/id_ID";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
-import { Line, Doughnut, Bar } from "react-chartjs-2";
+import { Line, Doughnut, Bar, Radar } from "react-chartjs-2";
 import { getWorkingSpaceDashboardData } from "../../../services/service";
 import {
   Chart as ChartJS,
@@ -30,6 +34,8 @@ import {
   ArcElement,
   Tooltip as ChartTooltip,
   Legend,
+  RadialLinearScale,
+  Filler,
 } from "chart.js";
 import { motion } from "framer-motion";
 import {
@@ -38,6 +44,8 @@ import {
   UsergroupAddOutlined,
   DollarCircleOutlined,
 } from "@ant-design/icons";
+import html2canvas from "html2canvas";
+import * as XLSX from "xlsx";
 
 dayjs.locale("id");
 
@@ -52,18 +60,20 @@ ChartJS.register(
   BarElement,
   ArcElement,
   ChartTooltip,
-  Legend
+  Legend,
+  RadialLinearScale,
+  Filler
 );
 
 const { RangePicker } = DatePicker;
 const { Title, Text } = Typography;
 
 const formatRupiah = (num) => {
-  if (num === null || num === undefined || Number.isNaN(Number(num))) return "0";
+  if (num === null || num === undefined || Number.isNaN(Number(num)))
+    return "0";
   return new Intl.NumberFormat("id-ID").format(Math.round(Number(num)));
 };
 
-// util untuk Peak Durations
 const getTopNIndices = (arr, n = 3) =>
   arr
     .map((v, i) => ({ v: Number(v) || 0, i }))
@@ -72,16 +82,27 @@ const getTopNIndices = (arr, n = 3) =>
     .slice(0, n)
     .map((o) => o.i);
 
-const maskExceptIndices = (arr, indices) => {
-  const keep = new Set(indices);
-  return arr.map((v, i) => (keep.has(i) ? v : null)); // null = bar lain disembunyikan
+const normalizeCategory = (name = "") => {
+  const n = String(name).toLowerCase();
+  if (n.includes("monitor")) return "Space Monitor";
+  if (n.includes("open")) return "Open Space";
+  if (n.includes("meeting")) return "Meeting Room";
+  return "Lainnya";
 };
 
 const WorkingSpace = () => {
-  const [dateRange, setDateRange] = useState([dayjs().startOf("month"), dayjs()]);
+  const [dateRange, setDateRange] = useState([
+    dayjs().startOf("month"),
+    dayjs(),
+  ]);
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [topWs, setTopWs] = useState([]);
+
+  const reportRef = useRef(null);
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -90,11 +111,26 @@ const WorkingSpace = () => {
       try {
         const startDate = dateRange[0].format("YYYY-MM-DD");
         const endDate = dateRange[1].format("YYYY-MM-DD");
-        const data = await getWorkingSpaceDashboardData(startDate, endDate);
-        setDashboardData(data);
+        const res = await getWorkingSpaceDashboardData(startDate, endDate);
+        const d = res?.datas ?? res ?? {};
+        setDashboardData(d);
+
+        const top = Array.isArray(d.top_ws)
+          ? d.top_ws
+          : Array.isArray(d.topSpaces)
+          ? d.topSpaces
+          : [];
+
+        setTopWs(
+          [...top].sort(
+            (a, b) =>
+              Number(b?.qty || 0) - Number(a?.qty || 0) ||
+              Number(b?.total || 0) - Number(a?.total || 0)
+          )
+        );
       } catch (err) {
-        setError(err.message || "Gagal memuat data. Coba lagi nanti.");
         console.error(err);
+        setError(err?.message || "Gagal memuat data. Coba lagi nanti.");
       } finally {
         setLoading(false);
       }
@@ -102,7 +138,7 @@ const WorkingSpace = () => {
     fetchData();
   }, [dateRange]);
 
-  // Stats
+  // ===== Stats =====
   const stats = useMemo(
     () =>
       dashboardData?.stats || {
@@ -112,10 +148,202 @@ const WorkingSpace = () => {
       },
     [dashboardData]
   );
+
+  // ===== Performance Overview per Category =====
+  const categoryPerf = useMemo(() => {
+    if (Array.isArray(dashboardData?.categoryPerformance)) {
+      return dashboardData.categoryPerformance.map((r) => ({
+        category: r.category,
+        bookings: Number(r.bookings || 0),
+        revenue: Number(r.revenue || 0),
+        avgDuration: Number(r.avg_duration_jam || r.avgDuration || 0),
+      }));
+    }
+    const byCat = dashboardData?.packageByDurationByCategory;
+    const contr = dashboardData?.categoryContribution || [];
+    const bookingsMap = {
+      "Open Space": 0,
+      "Space Monitor": 0,
+      "Meeting Room": 0,
+    };
+    if (byCat) {
+      Object.keys(bookingsMap).forEach((cat) => {
+        bookingsMap[cat] = (byCat[cat] || []).reduce(
+          (s, r) => s + Number(r.total_booking || 0),
+          0
+        );
+      });
+    }
+    const revenueMap = contr.reduce((acc, r) => {
+      const cat = r.name.includes("Meeting") ? "Meeting Room" : r.name;
+      acc[cat] = (acc[cat] || 0) + Number(r.value || 0);
+      return acc;
+    }, {});
+    const avgMap = { "Open Space": 0, "Space Monitor": 0, "Meeting Room": 0 };
+    if (byCat) {
+      Object.keys(avgMap).forEach((cat) => {
+        const arr = byCat[cat] || [];
+        const totalBk = arr.reduce(
+          (s, r) => s + Number(r.total_booking || 0),
+          0
+        );
+        const weighted = arr.reduce(
+          (s, r) =>
+            s + Number(r.durasi_jam || 0) * Number(r.total_booking || 0),
+          0
+        );
+        avgMap[cat] = totalBk ? weighted / totalBk : 0;
+      });
+    }
+    return Object.keys(bookingsMap).map((cat) => ({
+      category: cat,
+      bookings: bookingsMap[cat],
+      revenue: Number(revenueMap[cat] || 0),
+      avgDuration: avgMap[cat],
+    }));
+  }, [dashboardData]);
+
+  // === RADAR (Booking Pattern by Day per Minggu) ===
+  const WEEK_COLORS = [
+    { border: "rgba(37,99,235,1)", bg: "rgba(37,99,235,0.18)" },
+    { border: "rgba(16,185,129,1)", bg: "rgba(16,185,129,0.18)" },
+    { border: "rgba(245,158,11,1)", bg: "rgba(245,158,11,0.18)" },
+    { border: "rgba(239,68,68,1)", bg: "rgba(239,68,68,0.18)" },
+    { border: "rgba(99,102,241,1)", bg: "rgba(99,102,241,0.18)" },
+  ];
+
+  const startOfIsoWeek = (d) => {
+    const day = d.day();
+    const diff = day === 0 ? -6 : 1 - day;
+    return d.add(diff, "day").startOf("day");
+  };
+
+  const { radarData, radarOptions } = useMemo(() => {
+    const labels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+    const detailed = dashboardData?.bookingsByDateDetailed || {};
+    const start = dateRange[0].clone().startOf("day");
+    const end = dateRange[1].clone().startOf("day");
+
+    const weeks = [];
+    let cursor = startOfIsoWeek(start.clone());
+    while (cursor.isBefore(end) || cursor.isSame(end, "day")) {
+      weeks.push(cursor.clone());
+      cursor = cursor.add(1, "week");
+    }
+
+    const breakdownByDate = {};
+    Object.keys(detailed).forEach((dstr) => {
+      breakdownByDate[dstr] = detailed[dstr];
+    });
+
+    const datasets = weeks.map((weekStart, idx) => {
+      const points = Array.from({ length: 7 }, (_, wday) => {
+        const d = weekStart.clone().add(wday, "day");
+        if (d.isBefore(start) || d.isAfter(end)) return 0;
+        const key = d.format("YYYY-MM-DD");
+        return Number(breakdownByDate[key]?.total || 0);
+      });
+
+      const color = WEEK_COLORS[idx % WEEK_COLORS.length];
+      const label = `Minggu ${idx + 1} (${weekStart.format("D MMM")}–${weekStart
+        .clone()
+        .add(6, "day")
+        .format("D MMM")})`;
+
+      return {
+        label,
+        data: points,
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        fill: true,
+        tension: 0.2,
+      };
+    });
+
+    const dateIndexResolver = (datasetIndex, dataIndex) => {
+      const weekStart = weeks[datasetIndex];
+      return weekStart.clone().add(dataIndex, "day");
+    };
+
+    const maxVal = Math.max(0, ...datasets.flatMap((ds) => ds.data));
+
+    const options = {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: true,
+          position: "left",
+          onClick: (e, legendItem, legend) => {
+            const chart = legend.chart;
+            const index = legendItem.datasetIndex;
+            const meta = chart.getDatasetMeta(index);
+
+            meta.hidden =
+              meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+
+            const visibleData = chart.data.datasets
+              .filter((ds, i) => !chart.getDatasetMeta(i).hidden)
+              .flatMap((ds) => ds.data);
+            const maxVisible = Math.max(0, ...visibleData);
+
+            chart.options.scales.r.suggestedMax = Math.max(
+              5,
+              Math.ceil(maxVisible * 1.2)
+            );
+            chart.update();
+          },
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const it = items[0];
+              const d = dateIndexResolver(it.datasetIndex, it.dataIndex);
+              const hari = labels[it.dataIndex];
+              return `${hari}, ${d.format("D/M")}`;
+            },
+            label: (it) => `Booking: ${it.parsed.r ?? it.parsed}`,
+            afterLabel: (it) => {
+              const d = dateIndexResolver(it.datasetIndex, it.dataIndex);
+              const key = d.format("YYYY-MM-DD");
+              const node = breakdownByDate[key];
+              if (!node?.breakdown) return undefined;
+
+              const lines = [];
+              Object.entries(node.breakdown).forEach(([cat, durMap]) => {
+                Object.entries(durMap)
+                  .map(([dur, cnt]) => ({
+                    cat,
+                    dur: Number(dur),
+                    cnt: Number(cnt),
+                  }))
+                  .sort((a, b) => b.cnt - a.cnt)
+                  .forEach(({ cat, dur, cnt }) => {
+                    lines.push(`${cat} (${dur} Jam): ${cnt}`);
+                  });
+              });
+              return lines.length ? ["", ...lines] : undefined;
+            },
+          },
+        },
+      },
+      scales: {
+        r: {
+          beginAtZero: true,
+          ticks: { precision: 0 },
+          suggestedMax: Math.max(5, Math.ceil(maxVal * 1.2)),
+        },
+      },
+    };
+
+    return { radarData: { labels, datasets }, radarOptions: options };
+  }, [dashboardData, dateRange]);
+
   const totalDays = Math.max(1, dateRange[1].diff(dateRange[0], "day") + 1);
   const avgDaily = Math.round((stats.totalRevenue || 0) / totalDays) || 0;
 
-  // Line (daily booking count per category) — label X = 1..N
+  // ===== Line: Daily Booking per Category =====
   const lineData = useMemo(() => {
     const daily = dashboardData?.dailyRevenue;
     if (!daily || !daily.datasets) return { labels: [], datasets: [] };
@@ -162,7 +390,7 @@ const WorkingSpace = () => {
     };
   }, [dashboardData]);
 
-  // Doughnut (revenue contribution)
+  // ===== Doughnut: Revenue Contribution =====
   const doughnutData = useMemo(() => {
     const contribution = dashboardData?.categoryContribution || [];
     if (!contribution.length) return { labels: [], datasets: [{ data: [] }] };
@@ -173,13 +401,18 @@ const WorkingSpace = () => {
     }, {});
 
     const totalMeetingRoom =
-      (dataMap["Room Meeting Besar"] || 0) + (dataMap["Room Meeting Kecil"] || 0);
+      (dataMap["Room Meeting Besar"] || 0) +
+      (dataMap["Room Meeting Kecil"] || 0);
 
     return {
       labels: ["Open Space", "Space Monitor", "Meeting Room"],
       datasets: [
         {
-          data: [dataMap["Open Space"] || 0, dataMap["Space Monitor"] || 0, totalMeetingRoom],
+          data: [
+            dataMap["Open Space"] || 0,
+            dataMap["Space Monitor"] || 0,
+            totalMeetingRoom,
+          ],
           backgroundColor: ["#2563eb", "#10B981", "#F59E0B"],
           hoverOffset: 8,
         },
@@ -191,35 +424,72 @@ const WorkingSpace = () => {
   const totalSpaceMonitor = doughnutData.datasets?.[0]?.data?.[1] || 0;
   const totalMeetingRoom = doughnutData.datasets?.[0]?.data?.[2] || 0;
 
-  // Trafik Pengguna (Per Durasi) — hanya paket dari DB
-  const trafficByDurationData = useMemo(() => {
-    const paket = dashboardData?.packageByDuration ?? [];
+  // ===== Clustered Bar: Trafik Booking per Durasi =====
+  const trafficByDurationClusteredData = useMemo(() => {
+    const byCat = dashboardData?.packageByDurationByCategory;
 
-    if (!paket.length) {
-      const fallbackDur = [2, 3, 6, 8];
+    let fallbackByCat = null;
+    if (!byCat && Array.isArray(dashboardData?.packageByDuration)) {
+      const flat = dashboardData.packageByDuration;
+      const grouped = {};
+      flat.forEach((r) => {
+        const cat = normalizeCategory(r?.category || r?.name || "");
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push({
+          durasi_jam: Number(r?.durasi_jam ?? 0),
+          total_booking: Number(r?.total_booking ?? r?.total_user ?? 0),
+        });
+      });
+      const anyKnown = ["Open Space", "Space Monitor", "Meeting Room"].some(
+        (k) => grouped[k]?.length
+      );
+      if (anyKnown) fallbackByCat = grouped;
+    }
+
+    const source = byCat || fallbackByCat;
+    const flat = dashboardData?.packageByDuration ?? [];
+
+    const allDurations = source
+      ? Array.from(
+          new Set(
+            Object.values(source)
+              .flat()
+              .map((r) => Number(r?.durasi_jam ?? 0))
+          )
+        ).sort((a, b) => a - b)
+      : Array.from(new Set(flat.map((r) => Number(r?.durasi_jam ?? 0)))).sort(
+          (a, b) => a - b
+        );
+
+    const labels = allDurations.map((d) => `${d} Jam`);
+    const valFrom = (arr, dur) => {
+      const hit = (arr || []).find((r) => Number(r?.durasi_jam ?? 0) === dur);
+      return Number(hit?.total_booking ?? hit?.total_user ?? 0);
+    };
+
+    if (source) {
+      const cats = ["Open Space", "Space Monitor", "Meeting Room"];
+      const colors = ["#2563eb", "#10B981", "#F59E0B"];
       return {
-        labels: fallbackDur.map((d) => `${d} Jam`),
-        datasets: [
-          {
-            label: "Jumlah Pengguna",
-            data: [0, 0, 0, 0],
-            backgroundColor: "#2563eb",
-            borderWidth: 1,
-          },
-        ],
+        labels,
+        datasets: cats.map((cat, idx) => ({
+          label: cat,
+          data: allDurations.map((d) => valFrom(source[cat], d)),
+          backgroundColor: colors[idx],
+          borderWidth: 1,
+        })),
       };
     }
 
-    const sorted = [...paket].sort(
+    const sorted = [...flat].sort(
       (a, b) => Number(a?.durasi_jam ?? 0) - Number(b?.durasi_jam ?? 0)
     );
-
     return {
-      labels: sorted.map((p) => `${Number(p?.durasi_jam ?? 0)} Jam`),
+      labels,
       datasets: [
         {
-          label: "Jumlah Pengguna",
-          data: sorted.map((p) => parseInt(p?.total_user ?? p?.total_booking ?? 0, 10)),
+          label: "Semua Kategori",
+          data: allDurations.map((d) => valFrom(sorted, d)),
           backgroundColor: "#2563eb",
           borderWidth: 1,
         },
@@ -227,32 +497,53 @@ const WorkingSpace = () => {
     };
   }, [dashboardData]);
 
-  // Peak Durations – Top 3 jumlah booking
-  const peakBarData = useMemo(() => {
-    const rows = dashboardData?.packageByDuration || [];
-    if (!rows.length) return { labels: [], datasets: [] };
-
-    const labelsAll = rows.map((r) =>
-      r?.durasi_jam != null ? `${r.durasi_jam} Jam` : "Paket"
-    );
-    const bookingsAll = rows.map((r) => Number(r?.total_booking || 0));
-
-    const idxTop3 = getTopNIndices(bookingsAll, 3);
-    const maskedBookings = maskExceptIndices(bookingsAll, idxTop3);
-
-    return {
-      labels: labelsAll,
-      datasets: [
-        {
-          label: "Jumlah Booking per Durasi (Top 3)",
-          data: maskedBookings,
-          backgroundColor: "#EF4444",
-        },
-      ],
-    };
+  // ===== Peak Hours =====
+  const breakdownMap = useMemo(() => {
+    return dashboardData?.hourlyBookingsByCategory || {};
   }, [dashboardData]);
 
-  // Chart Options
+  const rawHourlyMap = dashboardData?.hourlyBookings || {};
+  const hourlyPairs = useMemo(() => {
+    return Object.entries(rawHourlyMap)
+      .map(([h, v]) => [Number(h), Number(v) || 0])
+      .filter(([h, v]) => h >= 8 && h <= 22 && v > 0)
+      .sort((a, b) => a[0] - b[0]);
+  }, [rawHourlyMap]);
+
+  const hourLabels = useMemo(
+    () => hourlyPairs.map(([h]) => dayjs().hour(h).minute(0).format("HH:mm")),
+    [hourlyPairs]
+  );
+
+  const hourlyInRange = useMemo(
+    () => hourlyPairs.map(([, v]) => v),
+    [hourlyPairs]
+  );
+
+  const topHourIdx = useMemo(
+    () => getTopNIndices(hourlyInRange, 3),
+    [hourlyInRange]
+  );
+  const hourBg = useMemo(() => {
+    const keep = new Set(topHourIdx);
+    return hourlyInRange.map((_, i) => (keep.has(i) ? "#EF4444" : "#93C5FD"));
+  }, [hourlyInRange, topHourIdx]);
+
+  const peakHoursData = useMemo(
+    () => ({
+      labels: hourLabels,
+      datasets: [
+        {
+          label: "Booking Mulai per Jam (08:00–22:00)",
+          data: hourlyInRange,
+          backgroundColor: hourBg,
+        },
+      ],
+    }),
+    [hourLabels, hourlyInRange, hourBg]
+  );
+
+  // ===== Chart Options =====
   const nonDoughnutOptions = useMemo(
     () => ({
       responsive: true,
@@ -264,23 +555,34 @@ const WorkingSpace = () => {
           callbacks: {
             title: (items) => {
               const idx = items?.[0]?.dataIndex ?? 0;
-              const pretty =
-                dashboardData?.dailyRevenue?.labelsPretty?.[idx] ||
-                dashboardData?.dailyRevenue?.labels?.[idx];
-              return pretty || String(idx + 1);
+              return items?.[0]?.chart?.data?.labels?.[idx] ?? "";
             },
           },
         },
       },
       scales: {
         x: {
-          ticks: {
-            callback: (val, idx, ticks) => ticks?.[idx]?.label ?? val,
-          },
+          type: "category",
+          offset: false,
           title: { display: true, text: "Tanggal" },
+          ticks: {
+            autoSkip: false,
+            maxRotation: 0,
+            minRotation: 0,
+            callback: function (value, index) {
+              const label = this.getLabelForValue
+                ? this.getLabelForValue(value)
+                : this.chart?.data?.labels?.[index];
+              return label ?? "";
+            },
+          },
         },
         y: {
-          ticks: { callback: (v) => `${Math.trunc(v)}` },
+          ticks: {
+            callback: (v) => formatRupiah(v),
+            precision: 0,
+            autoSkip: true,
+          },
         },
       },
     }),
@@ -303,8 +605,13 @@ const WorkingSpace = () => {
       },
       datalabels: {
         formatter: (value, ctx) => {
-          const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-          return total === 0 ? "0.0%" : ((value / total) * 100).toFixed(1) + "%";
+          const total = ctx.chart.data.datasets[0].data.reduce(
+            (a, b) => a + b,
+            0
+          );
+          return total === 0
+            ? "0.0%"
+            : ((value / total) * 100).toFixed(1) + "%";
         },
         color: "#fff",
         font: { weight: "bold", size: 16 },
@@ -312,28 +619,43 @@ const WorkingSpace = () => {
     },
   };
 
-  const trafficBarOptions = {
+  const trafficClusterOptions = {
     maintainAspectRatio: false,
-    plugins: { legend: { display: false }, datalabels: { display: false } },
+    plugins: { legend: { display: true }, datalabels: { display: false } },
     scales: {
       y: {
         beginAtZero: true,
-        title: { display: true, text: "Jumlah Pengguna" },
-        ticks: { callback: (v) => `${Math.trunc(v)}` },
+        title: { display: true, text: "Jumlah Booking" },
+        ticks: {
+          callback: (v) => `${Math.trunc(v)}`,
+          precision: 0,
+          autoSkip: true,
+        },
       },
-      x: { title: { display: true, text: "Durasi (Jam)" } },
+      x: { title: { display: true, text: "Paket Durasi" }, stacked: false },
     },
   };
 
-  const peakBarOptions = {
+  const peakHoursOptions = {
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       datalabels: { display: false },
       tooltip: {
-        filter: (ctx) => ctx.raw != null, // hanya bar yang tidak null
+        displayColors: false,
         callbacks: {
+          title: (items) => items?.[0]?.label ?? "",
           label: (ctx) => `Booking: ${Math.trunc(Number(ctx.parsed?.y ?? 0))}`,
+          afterBody: (items) => {
+            const hh = Number((items?.[0]?.label || "00:00").split(":")[0]);
+            const b = breakdownMap?.[String(hh)];
+            if (!b) return [];
+            const order = ["Open Space", "Space Monitor", "Meeting Room"];
+            const lines = order
+              .filter((k) => Number(b[k]) > 0)
+              .map((k) => `${k}: ${b[k]}`);
+            return lines.length ? ["", ...lines] : [];
+          },
         },
       },
     },
@@ -343,276 +665,479 @@ const WorkingSpace = () => {
         title: { display: true, text: "Jumlah Booking" },
         ticks: { callback: (v) => `${Math.trunc(v)}` },
       },
-      x: { title: { display: true, text: "Durasi Paket" } },
+      x: { title: { display: true, text: "Jam Operasional" } },
     },
   };
 
-  const topColumns = [
-    { title: "Nama Space", dataIndex: "item", key: "item" },
-    {
-      title: "Kategori",
-      dataIndex: "category",
-      key: "category",
-      width: 150,
-      render: (text) => (
-        <Tag
-          color={
-            text.includes("Open Space")
-              ? "blue"
-              : text.includes("Space Monitor")
-              ? "green"
-              : text.includes("Meeting Room")
-              ? "gold"
-              : "orange"
-          }
-        >
-          {text}
-        </Tag>
-      ),
-    },
-    {
-      title: "Qty Booking",
-      dataIndex: "qty",
-      key: "qty",
-      align: "center",
-      width: 120,
-    },
-    {
-      title: "Total(Rp)",
-      dataIndex: "total",
-      key: "total",
-      align: "right",
-      width: 180,
-      render: (t) => <b>Rp {formatRupiah(t)}</b>,
-    },
-  ];
+  // ===== Capture to Image =====
+  const handleCaptureImage = async () => {
+    try {
+      const node = reportRef.current;
+      if (!node) {
+        message.error("Area laporan tidak ditemukan.");
+        return;
+      }
+      await new Promise((r) => requestAnimationFrame(r));
 
+      const clone = node.cloneNode(true);
+      const w = Math.max(node.scrollWidth, node.clientWidth);
+      const h = Math.max(node.scrollHeight, node.clientHeight);
+
+      Object.assign(clone.style, {
+        position: "absolute",
+        left: "0",
+        top: "-100000px",
+        width: `${w}px`,
+        background: "#ffffff",
+        zIndex: "-1",
+      });
+
+      document.body.appendChild(clone);
+      const canvas = await html2canvas(clone, {
+        scale: Math.max(2, window.devicePixelRatio || 1),
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        width: w,
+        height: h,
+        logging: false,
+      });
+      document.body.removeChild(clone);
+
+      const dataUrl = canvas.toDataURL("image/png");
+      setPreviewSrc(dataUrl);
+      setPreviewOpen(true);
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `laporan-WS-${dateRange[0].format(
+        "YYYYMMDD"
+      )}-${dateRange[1].format("YYYYMMDD")}.png`;
+      link.click();
+    } catch (e) {
+      console.error(e);
+      message.error("Gagal membuat gambar laporan.");
+    }
+  };
+
+  // ===== Export to Excel =====
+  const handleExportExcel = () => {
+    try {
+      const startStr = dateRange[0].format("YYYY-MM-DD");
+      const endStr = dateRange[1].format("YYYY-MM-DD");
+
+      const wsSummary = XLSX.utils.json_to_sheet([
+        {
+          "Total Pendapatan": stats.totalRevenue,
+          "Jumlah Booking": stats.totalBookings,
+          "Total Pengunjung": stats.totalVisitors,
+          "Rata-rata Harian": avgDaily,
+          Periode: `${startStr} s.d. ${endStr}`,
+        },
+      ]);
+
+      const wsTop = XLSX.utils.json_to_sheet(
+        (topWs || []).map((r) => ({
+          "Kategori (Durasi)": r.item,
+          "Jumlah Terjual": r.qty,
+          "Total Penjualan (Rp)": r.total,
+        }))
+      );
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+      XLSX.utils.book_append_sheet(wb, wsTop, "Popular Space");
+      XLSX.writeFile(wb, `WorkingSpace_${startStr}_to_${endStr}.xlsx`);
+      message.success("✅ Laporan berhasil diekspor ke Excel!");
+    } catch (e) {
+      console.error(e);
+      message.error("Gagal mengekspor Excel.");
+    }
+  };
+
+  // ===== RENDER =====
   return (
-    <ConfigProvider locale={locale}>
-      <div style={{ padding: 20 }}>
-        {/* Header */}
-        <Row
-          gutter={[16, 16]}
-          justify="space-between"
-          align="middle"
-          style={{ marginBottom: 14 }}
-        >
-          <Col>
-            <Title level={4} style={{ margin: 0 }}>
-              Working Space Dashboard
-            </Title>
-            <Text type="secondary">Dago Creative Hub & Coffee Lab — Working Space</Text>
-          </Col>
-          <Col>
-            <Space align="center">
-              <Text type="secondary">Rentang:</Text>
-              <RangePicker
-                value={dateRange}
-                onChange={(vals) => {
-                  if (!vals) return;
-                  setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]);
-                }}
-                format="DD-MM-YYYY"
-                disabled={loading}
-              />
-            </Space>
-          </Col>
-        </Row>
+    <>
+      <ConfigProvider locale={locale}>
+        <div style={{ padding: 20 }} ref={reportRef}>
+          {/* Header */}
+          <Row
+            gutter={[16, 16]}
+            justify="space-between"
+            align="middle"
+            style={{ marginBottom: 14 }}
+          >
+            <Col>
+              <Title level={4} style={{ margin: 0 }}>
+                Working Space Dashboard
+              </Title>
+              <Text type="secondary">
+                Dago Creative Hub &amp; Coffee Lab — Working Space
+              </Text>
+            </Col>
+            <Col>
+              <Space align="center">
+                <Text type="secondary">Rentang:</Text>
+                <RangePicker
+                  value={dateRange}
+                  onChange={(vals) => {
+                    if (!vals) return;
+                    setDateRange([
+                      vals[0].startOf("day"),
+                      vals[1].endOf("day"),
+                    ]);
+                  }}
+                  format="DD-MM-YYYY"
+                  disabled={loading}
+                />
+              </Space>
+            </Col>
+          </Row>
 
-        {/* Quick Links */}
-        <div className="flex justify-start gap-2 mb-4">
-          <a
-            href="/laporan"
-            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-          >
-            Laporan
-          </a>
-          <a
-            href="/fnbdashboard"
-            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-          >
-            FNB
-          </a>
-          <a
-            href="/workingspace"
-            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100"
-          >
-            Working Space
-          </a>
-          <a
-            href="/laporanpajak"
-            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-          >
-            Laporan Pajak
-          </a>
-        </div>
-
-        {error && (
-          <Alert
-            message="Error"
-            description={error}
-            type="error"
-            showIcon
-            closable
-            style={{ marginBottom: 16 }}
-          />
-        )}
-
-        {/* Statistic Cards */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-              <Card>
-                <Spin spinning={loading}>
-                  <Statistic
-                    title="Total Pendapatan"
-                    value={`Rp ${formatRupiah(stats.totalRevenue)}`}
-                    prefix={<DollarCircleOutlined />}
-                  />
-                </Spin>
-              </Card>
-            </motion.div>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
+          {/* Quick Links */}
+          <div className="flex justify-start gap-2 mb-4">
+            <a
+              href="/laporan"
+              className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
             >
-              <Card>
-                <Spin spinning={loading}>
-                  <Statistic
-                    title="Total Pengunjung"
-                    value={formatRupiah(stats.totalVisitors)}
-                    prefix={<UsergroupAddOutlined />}
-                  />
-                </Spin>
-              </Card>
-            </motion.div>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+              Laporan
+            </a>
+            <a
+              href="/fnbdashboard"
+              className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
             >
-              <Card>
-                <Spin spinning={loading}>
-                  <Statistic
-                    title="Jumlah Booking"
-                    value={stats.totalBookings}
-                    prefix={<FieldTimeOutlined />}
-                  />
-                </Spin>
-              </Card>
-            </motion.div>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
+              FNB
+            </a>
+            <a
+              href="/workingspace"
+              className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100"
             >
-              <Card>
+              Working Space
+            </a>
+            <a
+              href="/laporanpajak"
+              className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+            >
+              Pajak
+            </a>
+          </div>
+
+          {error && (
+            <Alert
+              message="Error"
+              description={error}
+              type="error"
+              showIcon
+              closable
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {/* Statistic Cards */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Card>
+                  <Spin spinning={loading}>
+                    <Statistic
+                      title="Total Pendapatan"
+                      value={`Rp ${formatRupiah(stats.totalRevenue)}`}
+                      prefix={<DollarCircleOutlined />}
+                    />
+                  </Spin>
+                </Card>
+              </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
+                <Card>
+                  <Spin spinning={loading}>
+                    <Statistic
+                      title="Total Pengunjung"
+                      value={formatRupiah(stats.totalVisitors)}
+                      prefix={<UsergroupAddOutlined />}
+                    />
+                  </Spin>
+                </Card>
+              </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <Card>
+                  <Spin spinning={loading}>
+                    <Statistic
+                      title="Jumlah Booking"
+                      value={stats.totalBookings}
+                      prefix={<FieldTimeOutlined />}
+                    />
+                  </Spin>
+                </Card>
+              </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <Card>
+                  <Spin spinning={loading}>
+                    <Statistic
+                      title="Rata-rata Harian"
+                      value={`Rp ${formatRupiah(avgDaily)}`}
+                      prefix={<ArrowUpOutlined />}
+                    />
+                  </Spin>
+                </Card>
+              </motion.div>
+            </Col>
+          </Row>
+
+          {/* Charts */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={16}>
+              <Card style={{ marginBottom: 16 }}>
                 <Spin spinning={loading}>
-                  <Statistic
-                    title="Rata-rata Harian"
-                    value={`Rp ${formatRupiah(avgDaily)}`}
-                    prefix={<ArrowUpOutlined />}
-                  />
+                  <Title level={5}>Daily Booking (per Space Category)</Title>
+                  <div style={{ height: 300 }}>
+                    <Line data={lineData} options={nonDoughnutOptions} />
+                  </div>
                 </Spin>
               </Card>
-            </motion.div>
-          </Col>
-        </Row>
 
-        {/* Charts */}
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={16}>
-            <Card style={{ marginBottom: 16 }}>
-              <Spin spinning={loading}>
-                <Title level={5}>Daily Booking (per Space Category)</Title>
-                <div style={{ height: 300 }}>
-                  <Line data={lineData} options={nonDoughnutOptions} />
-                </div>
-              </Spin>
-            </Card>
-
-            <Card style={{ marginBottom: 16 }}>
-              <Spin spinning={loading}>
-                <Title level={5}>Trafik Pengguna (Per Durasi)</Title>
-                <div style={{ height: 300, marginTop: 10 }}>
-                  <Bar data={trafficByDurationData} options={trafficBarOptions} />
-                </div>
-              </Spin>
-            </Card>
-
-            <Card>
-              <Spin spinning={loading}>
-                <Title level={5}>Peak Durasi (Top 3 Booking)</Title>
-                <Text type="secondary">
-                  Menampilkan 3 paket durasi dengan jumlah booking/sewa terbanyak pada
-                  periode {totalDays} hari.
-                </Text>
-                <div style={{ height: 220, marginTop: 10 }}>
-                  <Bar data={peakBarData} options={peakBarOptions} />
-                </div>
-              </Spin>
-            </Card>
-          </Col>
-
-          <Col xs={24} lg={8}>
-            <Card>
-              <Spin spinning={loading}>
-                <Title level={5}>Kontribusi Space</Title>
-                <div style={{ height: 220 }}>
-                  <Doughnut data={doughnutData} options={doughnutOptions} />
-                </div>
-                <Divider />
-                <Space direction="vertical" size="small" style={{ width: "100%" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <Text>
-                      <Tag color="#2563eb" /> Open Space
-                    </Text>
-                    <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
+              <Card style={{ marginBottom: 16 }}>
+                <Spin spinning={loading}>
+                  <Title level={5}>Trafik Booking per Durasi</Title>
+                  <Text type="secondary">
+                    Menampilkan jumlah booking per paket durasi dan kategori
+                    space pada periode {totalDays} hari.
+                  </Text>
+                  <div style={{ height: 300, marginTop: 10 }}>
+                    <Bar
+                      data={trafficByDurationClusteredData}
+                      options={trafficClusterOptions}
+                    />
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <Text>
-                      <Tag color="#10B981" /> Space Monitor
-                    </Text>
-                    <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
+                </Spin>
+              </Card>
+            </Col>
+
+            <Col xs={24} lg={8}>
+              <Card>
+                <Spin spinning={loading}>
+                  <Title level={5}>Kontribusi Space</Title>
+                  <div style={{ height: 220 }}>
+                    <Doughnut data={doughnutData} options={doughnutOptions} />
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <Text>
-                      <Tag color="#F59E0B" /> Meeting Room
-                    </Text>
-                    <Text strong>Rp {formatRupiah(totalMeetingRoom)}</Text>
-                  </div>
+                  <Divider />
+                  <Space
+                    direction="vertical"
+                    size="small"
+                    style={{ width: "100%" }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text>
+                        <Tag color="#2563eb" /> Open Space
+                      </Text>
+                      <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text>
+                        <Tag color="#10B981" /> Space Monitor
+                      </Text>
+                      <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text>
+                        <Tag color="#F59E0B" /> Meeting Room
+                      </Text>
+                      <Text strong>Rp {formatRupiah(totalMeetingRoom)}</Text>
+                    </div>
+                  </Space>
+                </Spin>
+              </Card>
+
+              <Card>
+                <Title level={5}>Quick Actions</Title>
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Tooltip title="Mencetak tampilan dashboard saat ini ke gambar PNG">
+                    <button
+                      onClick={handleCaptureImage}
+                      style={{
+                        width: "100%",
+                        padding: 10,
+                        borderRadius: 8,
+                        border: "1px solid #e6e6e6",
+                        cursor: "pointer",
+                      }}
+                    >
+                      📄 Cetak Laporan (Gambar)
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="Unduh seluruh data yang tampil ke Excel (multi-sheet)">
+                    <button
+                      onClick={handleExportExcel}
+                      style={{
+                        width: "100%",
+                        padding: 10,
+                        borderRadius: 8,
+                        border: "1px solid #e6e6e6",
+                        cursor: "pointer",
+                      }}
+                    >
+                      ⬇ Export Data (Excel)
+                    </button>
+                  </Tooltip>
                 </Space>
-              </Spin>
-            </Card>
-          </Col>
-        </Row>
+              </Card>
+            </Col>
+          </Row>
 
-        {/* Top 10 Working Spaces */}
-        <Card style={{ marginTop: 16 }}>
-          <Spin spinning={loading}>
-            <Title level={5}>Top 10 Working Spaces</Title>
-            {(dashboardData?.topSpaces || []).length > 0 ? (
-              <Table
-                dataSource={dashboardData.topSpaces}
-                columns={topColumns}
-                pagination={false}
-                rowKey={(r) => `${r.item}-${r.category}`}
-                scroll={{ x: "max-content" }}
-              />
-            ) : (
-              !loading && <Empty description="Tidak ada data" />
-            )}
-          </Spin>
-        </Card>
-      </div>
-    </ConfigProvider>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={16}>
+              <Card>
+                <Spin spinning={loading}>
+                  <Title level={5}>Peak Hours</Title>
+                  <Text type="secondary">
+                    Menampilkan jam berdasarkan mulai booking. Bar merah
+                    merupakan top 3 jumlah booking tertinggi.
+                  </Text>
+                  <div style={{ height: 300, marginTop: 10 }}>
+                    <Bar data={peakHoursData} options={peakHoursOptions} />
+                  </div>
+                </Spin>
+              </Card>
+            </Col>
+
+            <Col xs={24} lg={8}>
+              <Card title="Popular Space" loading={loading}>
+                <Table
+                  tableLayout="fixed"
+                  columns={[
+                    {
+                      title: "Kategori (Durasi)",
+                      dataIndex: "item",
+                      key: "item",
+                      width: 170,
+                    },
+                    {
+                      title: "Jumlah Terjual",
+                      dataIndex: "qty",
+                      key: "qty",
+                      align: "right",
+                      width: 70,
+                    },
+                    {
+                      title: "Total Penjualan (Rp)",
+                      dataIndex: "total",
+                      key: "total",
+                      align: "right",
+                      width: 140,
+                      render: (t) => `Rp ${formatRupiah(t)}`,
+                    },
+                  ]}
+                  dataSource={topWs}
+                  rowKey={(r) =>
+                    `${r.item}-${String(r.qty)}-${String(r.total)}`
+                  }
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+            <Col xs={24} lg={16}>
+              <Card>
+                <Title level={5} style={{ marginBottom: 8 }}>
+                  Booking Pattern by Day
+                </Title>
+                <Text type="secondary">
+                  Distribusi booking per hari (Senin - Minggu)
+                </Text>
+                <div style={{ height: 2 }}>
+                  <Radar data={radarData} options={radarOptions} />
+                </div>
+              </Card>
+            </Col>
+
+            <Col xs={24} lg={8}>
+              <Card title="Performance Overview per Category">
+                <Table
+                  size="small"
+                  pagination={false}
+                  dataSource={categoryPerf}
+                  rowKey={(r) => r.category}
+                  columns={[
+                    {
+                      title: "Kategori",
+                      dataIndex: "category",
+                      key: "category",
+                    },
+                    {
+                      title: "Booking",
+                      dataIndex: "bookings",
+                      key: "bookings",
+                      align: "right",
+                    },
+                    {
+                      title: "Pendapatan",
+                      dataIndex: "revenue",
+                      key: "revenue",
+                      align: "right",
+                      render: (v) => `Rp ${formatRupiah(v)}`,
+                    },
+                    {
+                      title: "Rata-rata Durasi (Jam)",
+                      dataIndex: "avgDuration",
+                      key: "avgDuration",
+                      align: "right",
+                      render: (v) => Number(v).toFixed(1),
+                    },
+                  ]}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      </ConfigProvider>
+
+      <Modal
+        open={previewOpen}
+        onCancel={() => setPreviewOpen(false)}
+        footer={null}
+        width={900}
+      >
+        <Image src={previewSrc} alt="Preview" style={{ width: "100%" }} />
+      </Modal>
+    </>
   );
 };
 

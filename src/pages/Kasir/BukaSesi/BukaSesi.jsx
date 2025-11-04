@@ -2,111 +2,104 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../../providers/AuthProvider';
 import { useNavigate } from 'react-router-dom';
-// Impor service baru
 import {
     apiGetAllOpenSessions,
     apiGetRecentClosedSessions,
     apiTakeoverSession
-} from '../../../services/service'; // (Sesuaikan path ke file service Anda)
-import { formatRupiah } from '../../../utils/formatRupiah'; // Asumsi Anda punya ini
-
-// Komponen kecil untuk menampilkan item sesi
-const SessionItem = ({ session, onAction, actionText, isTakeover }) => {
-    const startTime = new Date(session.waktu_mulai).toLocaleString('id-ID', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-
-    return (
-        <div className={`p-4 border rounded-lg flex justify-between items-center ${isTakeover ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50'}`}>
-            <div>
-                <p className="font-semibold">{session.nama_sesi || 'Sesi Tanpa Nama'}</p>
-                <p className="text-sm text-gray-600">
-                    Kasir: <span className="font-medium">{session.nama_kasir || 'N/A'}</span>
-                </p>
-                <p className="text-sm text-gray-600">
-                    Mulai: {startTime}
-                </p>
-                <p className="text-sm text-gray-600">
-                    Saldo Awal: {formatRupiah(session.saldo_awal)}
-                </p>
-            </div>
-            {onAction && (
-                <button
-                    onClick={onAction}
-                    className={`px-4 py-2 text-white rounded-md ${isTakeover ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'}`}
-                >
-                    {actionText}
-                </button>
-            )}
-        </div>
-    );
-};
+} from '../../../services/service';
+import { formatRupiah } from '../../../utils/formatRupiah';
+import logoImage from '../../../assets/images/logo.png';
+import { Modal, message } from 'antd';
 
 const BukaSesi = () => {
+
+
     const {
         openSession,
         getLastSaldo,
-        activeSession,      // Sesi milik user ini
-        isSessionLoading,   // Loading dari AuthProvider
-        checkActiveSession  // Fungsi untuk refresh sesi (setelah takeover)
+        activeSession,
+        isSessionLoading,
+        checkActiveSession
     } = useAuth();
 
     const [namaSesi, setNamaSesi] = useState('');
-    const [saldoAwal, setSaldoAwal] = useState(''); // State ini tetap string
+    const [saldoAwal, setSaldoAwal] = useState('');
     const [isPageLoading, setIsPageLoading] = useState(true);
     const [error, setError] = useState('');
+    const [showModal, setShowModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const navigate = useNavigate();
 
-    // State untuk daftar sesi
     const [openSessions, setOpenSessions] = useState([]);
     const [closedSessions, setClosedSessions] = useState([]);
 
-    // 1. Set nama sesi default (hanya sekali)
+    const months = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+
+    // Set nama sesi default
     useEffect(() => {
-        const tgl = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
-        setNamaSesi(`Kasir ${tgl}`);
+        const tgl = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        setNamaSesi(`Cashier ${tgl}`);
     }, []);
 
-    // 2. Fetch semua data sesi saat halaman dimuat
-    useEffect(() => {
-        // Jangan fetch apapun jika loading sesi dari AuthProvider belum selesai
-        if (isSessionLoading) {
-            return;
-        }
+    // Fetch data sesi
+    const fetchAllSessions = async () => {
+        try {
+            const [saldoData, openSessionsData, closedSessionsData] = await Promise.all([
+                getLastSaldo(),
+                apiGetAllOpenSessions(),
+                apiGetRecentClosedSessions()
+            ]);
 
-        setIsPageLoading(true);
-
-        // Kita jalankan semua API call secara bersamaan
-        Promise.all([
-            getLastSaldo(),
-            apiGetAllOpenSessions(),
-            apiGetRecentClosedSessions()
-        ])
-        .then(([saldoData, openSessionsData, closedSessionsData]) => {
-            // Simpan saldo awal sebagai string
             setSaldoAwal(saldoData != null ? saldoData.toString() : '0');
             setOpenSessions(openSessionsData.sessions || []);
             setClosedSessions(closedSessionsData.sessions || []);
-        })
-        .catch((err) => {
+        } catch (err) {
             setError(err.message || 'Gagal memuat data sesi');
-            setSaldoAwal('0'); // Set default jika gagal
-        })
-        .finally(() => {
+            setSaldoAwal('0');
+        } finally {
             setIsPageLoading(false);
-        });
+        }
+    };
 
-    }, [isSessionLoading, getLastSaldo]); // Jalankan ulang jika status loading sesi berubah
+    useEffect(() => {
+        if (isSessionLoading) return;
+        setIsPageLoading(true);
+        fetchAllSessions();
+    }, [isSessionLoading]);
 
-    // 3. Logika untuk memfilter sesi
+    // Filter sesi
     const { myActiveSession, otherOpenSessions } = useMemo(() => {
         const mySession = activeSession;
         const others = openSessions.filter(s => s.id_sesi !== mySession?.id_sesi);
         return { myActiveSession: mySession, otherOpenSessions: others };
     }, [activeSession, openSessions]);
 
+    // Gabungkan open sessions dan closed sessions untuk ditampilkan
+    const allSessionsForDisplay = useMemo(() => {
+        // Tambahkan status ke setiap sesi
+        const openWithStatus = openSessions.map(s => ({ ...s, status: 'open' }));
+        const closedWithStatus = closedSessions.map(s => ({ ...s, status: 'closed' }));
 
-    // 4. Handler untuk Buka Sesi Baru (Submit Form)
+        // Gabungkan dan filter berdasarkan search dan bulan/tahun
+        const combined = [...openWithStatus, ...closedWithStatus];
+
+        return combined.filter(session => {
+            const sessionDate = new Date(session.waktu_mulai);
+            const matchSearch = session.nama_sesi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                session.nama_kasir?.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchMonth = sessionDate.getMonth() === selectedMonth;
+            const matchYear = sessionDate.getFullYear() === selectedYear;
+
+            return matchSearch && matchMonth && matchYear;
+        }).sort((a, b) => new Date(b.waktu_mulai) - new Date(a.waktu_mulai)); // Sort by newest first
+    }, [openSessions, closedSessions, searchQuery, selectedMonth, selectedYear]);
+
+    // Handler untuk submit sesi baru
     const handleSubmitNewSession = async (e) => {
         e.preventDefault();
         setError('');
@@ -116,18 +109,28 @@ const BukaSesi = () => {
         }
         try {
             await openSession(namaSesi, parseFloat(saldoAwal));
-            navigate('/transaksikasir', { replace: true });
+            setShowModal(false);
+            // Refresh data sesi setelah membuat sesi baru
+            await checkActiveSession();
+            await fetchAllSessions();
+            // TIDAK navigate ke kasir, biarkan user klik tombol OPEN dulu
         } catch (err) {
             setError(err.message || 'Gagal membuka sesi');
         }
     };
 
-    // 5. Handler untuk "Lanjutkan Sesi"
+    // Handler untuk klik tombol OPEN pada sesi yang baru dibuat
+    const handleOpenSession = (session) => {
+        // Jika ini adalah sesi milik user sendiri, bisa langsung masuk
+        if (session.id_sesi === activeSession?.id_sesi) {
+            navigate('/transaksikasir', { replace: true });
+        }
+    };
+
     const handleContinueSession = () => {
         navigate('/transaksikasir', { replace: true });
     };
 
-    // 6. Handler untuk "Ambil Alih Sesi"
     const handleTakeoverSession = async (id_sesi) => {
         setError('');
         if (!window.confirm("Apakah Anda yakin ingin mengambil alih sesi ini? Kasir sebelumnya akan kehilangan akses.")) {
@@ -135,6 +138,7 @@ const BukaSesi = () => {
         }
         try {
             await apiTakeoverSession(id_sesi);
+            window.location.reload();
             await checkActiveSession();
             navigate('/transaksikasir', { replace: true });
         } catch (err) {
@@ -142,123 +146,269 @@ const BukaSesi = () => {
         }
     };
 
-    // Tampilkan loading utama
+    // Clock component
+    const [currentTime, setCurrentTime] = useState(new Date());
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
     if (isPageLoading || isSessionLoading) {
-        return <div className="p-8">Memuat data sesi...</div>;
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Memuat data sesi...</p>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8">
-            <h1 className="text-3xl font-bold text-gray-800">Manajemen Sesi Kasir</h1>
-
-            {error && <p className="p-4 bg-red-100 text-red-700 rounded-lg">{error}</p>}
-
-            {/* 1. Sesi Aktif Milik Sendiri */}
-            {myActiveSession && (
-                <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-green-700">Sesi Aktif Anda</h2>
-                    <SessionItem
-                        session={myActiveSession}
-                        onAction={handleContinueSession}
-                        actionText="Lanjutkan Sesi"
-                        isTakeover={false}
-                    />
+        <div className="min-h-screen bg-gray-50">
+            {/* Header */}
+            <div className="bg-white border-b sticky top-0 z-10">
+                <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                    <h1 className="text-xl font-semibold text-gray-800">Cashier Session</h1>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="flex items-center gap-2 text-green-600 font-medium hover:text-green-700 transition-colors"
+                    >
+                        <span className="text-2xl leading-none">+</span>
+                        <span>Add</span>
+                    </button>
                 </div>
-            )}
+            </div>
 
-            {/* 2. Sesi Terbuka Lainnya (Ambil Alih) */}
-            {!myActiveSession && otherOpenSessions.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-yellow-700">Sesi Terbuka (Ambil Alih)</h2>
-                    <p className="text-sm text-gray-600">
-                        Sesi ini masih berjalan, ditinggalkan oleh kasir lain. Anda bisa mengambil alih untuk melanjutkan.
-                    </p>
-                    {otherOpenSessions.map(session => (
-                        <SessionItem
-                            key={session.id_sesi}
-                            session={session}
-                            onAction={() => handleTakeoverSession(session.id_sesi)}
-                            actionText="Ambil Alih"
-                            isTakeover={true}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* 3. Form Buka Sesi Baru */}
-            {!myActiveSession && (
-                <div className="space-y-4 p-6 bg-white rounded-lg shadow-md border">
-                    <h2 className="text-xl font-semibold text-gray-800">Buka Sesi Kasir Baru</h2>
-                    <form onSubmit={handleSubmitNewSession} className="space-y-4">
-                        <div>
-                            <label htmlFor="namaSesi" className="block text-sm font-medium text-gray-700">Nama Sesi</label>
-                            <input
-                                id="namaSesi"
-                                type="text"
-                                value={namaSesi}
-                                onChange={(e) => setNamaSesi(e.target.value)}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                            />
+            <div className="max-w-7xl mx-auto px-4 py-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Column - Sessions List */}
+                    <div className="lg:col-span-2 space-y-4">
+                        {/* Search Bar */}
+                        <div className="bg-white rounded-lg p-3 shadow-sm">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                                <svg className="absolute left-3 top-3 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                            </div>
                         </div>
-                        <div>
-                            <label htmlFor="saldoAwal" className="block text-sm font-medium text-gray-700">Saldo Awal (Tunai)</label>
-                            <input
-                                id="saldoAwal"
-                                type="number"
-                                value={saldoAwal}
-                                onChange={(e) => setSaldoAwal(e.target.value)}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                required
-                            />
-                            {/* --- PERBAIKAN DI SINI --- */}
-                            <small className="text-gray-500">Saldo awal diambil dari uang tunai di laci (rekomendasi: {formatRupiah(parseFloat(saldoAwal) || 0)}).</small>
-                            {/* --- AKHIR PERBAIKAN --- */}
+
+                        {/* Month/Year Filter */}
+                        <div className="flex justify-center gap-4 bg-white rounded-lg p-3 shadow-sm">
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                            >
+                                {[2023, 2024, 2025, 2026].map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+                            >
+                                {months.map((month, idx) => (
+                                    <option key={idx} value={idx}>{month}</option>
+                                ))}
+                            </select>
                         </div>
-                        <button
-                            type="submit"
-                            className="w-full px-4 py-2 text-white font-semibold bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        >
-                            Buka Sesi Baru
-                        </button>
-                    </form>
-                </div>
-            )}
 
-            {/* 4. Riwayat Sesi Ditutup */}
-            {closedSessions.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-gray-800">Riwayat Sesi Terakhir (Ditutup)</h2>
-                    <div className="space-y-3">
-                        {closedSessions.map(session => {
-                            // Konversi aman ke angka dengan fallback 0
-                            const saldoAwalNum = parseFloat(session.saldo_awal);
-                            const saldoTercatatNum = parseFloat(session.saldo_akhir_tercatat);
-                            const saldoAktualNum = parseFloat(session.saldo_akhir_aktual);
-
-                            const saldoAwalFormatted = formatRupiah(isNaN(saldoAwalNum) ? 0 : saldoAwalNum);
-                            const saldoTercatatFormatted = formatRupiah(isNaN(saldoTercatatNum) ? 0 : saldoTercatatNum);
-                            const saldoAktualFormatted = formatRupiah(isNaN(saldoAktualNum) ? 0 : saldoAktualNum);
-
-                            return (
-                                <div key={session.id_sesi} className="p-4 border rounded-lg bg-gray-50">
-                                    <div className="flex justify-between items-center">
-                                        <p className="font-semibold">{session.nama_sesi || 'Sesi Tanpa Nama'}</p>
-                                        <span className="text-sm font-medium text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Ditutup</span>
-                                    </div>
-                                    <p className="text-sm text-gray-600">Kasir: <span className="font-medium">{session.nama_kasir || 'N/A'}</span></p>
-                                    <p className="text-sm text-gray-600">
-                                        Mulai: {new Date(session.waktu_mulai).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                                        {session.waktu_selesai ? ` | Selesai: ${new Date(session.waktu_selesai).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ''}
-                                    </p>
-                                    <div className="text-sm grid grid-cols-2 gap-x-4 mt-1">
-                                        <p>Saldo Awal: {saldoAwalFormatted}</p>
-                                        <p>Saldo Tercatat: {saldoTercatatFormatted}</p>
-                                        <p>Saldo Aktual: {saldoAktualFormatted}</p>
-                                    </div>
+                        {/* Sessions List - Combined Open and Closed */}
+                        <div className="space-y-2">
+                            {allSessionsForDisplay.length === 0 ? (
+                                <div className="bg-white rounded-lg p-8 text-center shadow-sm">
+                                    <p className="text-gray-500">Tidak ada sesi ditemukan</p>
                                 </div>
-                            );
-                        })}
+                            ) : (
+                                allSessionsForDisplay.map(session => {
+                                    const sessionDate = new Date(session.waktu_mulai);
+                                    const formattedDate = sessionDate.toLocaleDateString('id-ID', {
+                                        day: 'numeric',
+                                        month: 'long',
+                                        year: 'numeric'
+                                    });
+
+                                    const isMySession = session.id_sesi === activeSession?.id_sesi;
+                                    const isOpen = session.status === 'open';
+
+                                    return (
+                                        <div key={session.id_sesi} className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                                            <div className="flex items-center gap-4 p-4">
+                                                {/* Status Badge */}
+                                                <div className={`flex-shrink-0 rounded-lg px-4 py-2 ${isOpen ? 'bg-blue-100' : 'bg-green-100'}`}>
+                                                    <div className="flex items-center gap-2">
+                                                        {isOpen ? (
+                                                            <>
+                                                                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                                                                </svg>
+                                                                <span className="text-sm font-medium text-blue-700">OPEN</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                                <span className="text-sm font-medium text-green-700">CLOSE</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Session Info */}
+                                                <div className="flex-grow">
+                                                    <p className="font-semibold text-gray-800">{session.nama_sesi || formattedDate}</p>
+                                                    <p className="text-sm text-gray-500">Kasir: {session.nama_kasir}</p>
+                                                </div>
+
+                                                {/* Action Button */}
+                                                {isOpen && isMySession ? (
+                                                    <button
+                                                        onClick={() => handleOpenSession(session)}
+                                                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                                                    >
+                                                        Open
+                                                    </button>
+                                                ) : isOpen && !isMySession ? (
+                                                    <button
+                                                        onClick={() => handleTakeoverSession(session.id_sesi)}
+                                                        className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors font-medium"
+                                                    >
+                                                        Takeover
+                                                    </button>
+                                                ) : (
+                                                    <button className="text-blue-500 hover:text-blue-700 transition-colors">
+                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Right Column - Clock and Logo */}
+                    {/* Right Column - Clock and Logo (centered) */}
+                    <div className="hidden lg:flex flex-col items-center justify-center h-screen">
+                        {/* Logo */}
+                        <div className="w-36 h-36 mb-6 flex items-center justify-center">
+                            <img
+                                src={logoImage}
+                                alt="Logo"
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+
+                        {/* Clock */}
+                        <div className="text-center">
+                            <div className="text-5xl font-mono font-bold text-gray-800 tracking-wider">
+                                {currentTime.toLocaleTimeString('id-ID', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                    hour12: false
+                                }).replace(/:/g, ' : ')}
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1 font-medium">Asia/Makassar</p>
+                            <p className="text-xs text-gray-400">Wita server</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            {/* Modal Add New Session with Backdrop Blur */}
+            {showModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)'
+                    }}
+                    onClick={() => setShowModal(false)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Close Button */}
+                        <button
+                            onClick={() => setShowModal(false)}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+
+                        {/* Modal Header */}
+                        <div className="mb-6">
+                            <h2 className="text-xl font-semibold text-gray-800">Add New Cashier Session</h2>
+                        </div>
+
+                        {/* Error Message */}
+                        {error && (
+                            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                                {error}
+                            </div>
+                        )}
+
+                        {/* Form */}
+                        <form onSubmit={handleSubmitNewSession} className="space-y-5">
+                            {/* Nama Field */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Nama</label>
+                                <input
+                                    type="text"
+                                    value={namaSesi}
+                                    onChange={(e) => setNamaSesi(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Cashier 29 Oktober 2025"
+                                    required
+                                />
+                            </div>
+
+                            {/* Saldo Awal Field */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Saldo Awal</label>
+                                <input
+                                    type="text"
+                                    value={saldoAwal === '0' ? 'Rp. 0' : `Rp. ${parseInt(saldoAwal).toLocaleString('id-ID')}`}
+                                    onChange={(e) => {
+                                        const value = e.target.value.replace(/[^\d]/g, '');
+                                        setSaldoAwal(value || '0');
+                                    }}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Rp. 0"
+                                    required
+                                />
+                            </div>
+
+                            {/* Confirm Button */}
+                            <button
+                                type="submit"
+                                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Confirm
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}

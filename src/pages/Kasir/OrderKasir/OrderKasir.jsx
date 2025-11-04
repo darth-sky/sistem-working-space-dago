@@ -27,7 +27,8 @@ import {
     QrcodeOutlined,
     CheckCircleOutlined,
     PercentageOutlined,
-    SaveOutlined // <-- Import SaveOutlined
+    SaveOutlined, // <-- Import SaveOutlined
+
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useLocation, useNavigate } from "react-router-dom"; // <-- Import useNavigate
@@ -109,7 +110,6 @@ const OrderKasir = () => {
 
     // --- New State ---
     const [editingOrderId, setEditingOrderId] = useState(null); // Track ID of the saved order being edited
-
 
     const resetOrderState = () => {
         setSelectedItems([]);
@@ -303,7 +303,7 @@ const OrderKasir = () => {
     }, [posMode]);
 
     // useMemo and other useEffects for filtering remain the same...
-    // Filter kategori produk berdasarkan merchant yang dipilih
+    // Filter kategori produk berdasarkan merchant that is selected
     const availableProductTypes = useMemo(() => {
         if (selectedMerchant === "all_merchants") {
             return productTypeCategories;
@@ -358,13 +358,7 @@ const OrderKasir = () => {
         parseFloat(cashInput) > totalAmount ? parseFloat(cashInput) - totalAmount : 0,
         [cashInput, totalAmount]);
 
-
-
-
-
     // --- Event Handlers ---
-
-    // Handlers for adding/updating/removing items (handleAddProductToCart, handleUpdateItemQty, handleRemoveItemFromCart) remain the same
     const handleAddProductToCart = (product) => {
         setItemToAddNote({ ...product, qty: 1, note: "" });
         setIsAddNoteModalVisible(true);
@@ -385,10 +379,7 @@ const OrderKasir = () => {
         setSelectedItems(selectedItems.filter((item) => !(item.id === productId && item.note === itemNote)));
     };
 
-
-
-
-    // Handlers for discount modal (showDiscountModal, handleDiscountSubmit) remain the same
+    // Discount handlers
     const showDiscountModal = () => {
         discountForm.setFieldsValue({ discount: discountPercentage });
         setIsDiscountModalVisible(true);
@@ -410,8 +401,7 @@ const OrderKasir = () => {
         }
     };
 
-
-    // Handlers for New Order Modal (showNewOrderModal, handleNewOrderOk, handleNewOrderCancel) remain the same, but handleNewOrderOk should also call resetOrderState()
+    // New Order Modal handlers
     const showNewOrderModal = () => {
         setIsNewOrderModalVisible(true);
     };
@@ -447,9 +437,7 @@ const OrderKasir = () => {
         newOrderForm.resetFields();
     };
 
-
-    // Handlers for Add Note Modal (handleAddNoteOk, handleAddNoteCancel) remain the same
-
+    // Add Note handlers
     const handleAddNoteOk = async () => {
         try {
             const values = await addNoteForm.validateFields();
@@ -485,8 +473,7 @@ const OrderKasir = () => {
         addNoteForm.resetFields();
     };
 
-
-    // Handlers for Payment Modals (handleProcessPayment, handleCashPaymentSubmit, handleStrukCancel) remain mostly the same
+    // Payment handlers
     const handleProcessPayment = () => {
         if (selectedItems.length === 0) {
             message.warning("Keranjang masih kosong.");
@@ -502,6 +489,11 @@ const OrderKasir = () => {
             setIsCashPaymentModalVisible(true);
         } else if (selectedPaymentMethod === 'qris') {
             message.info("Simulasi Pembayaran QRIS berhasil! (Dalam pengembangan)");
+            setPaymentSuccess(true);
+            setIsStrukModalVisible(true);
+        } else if (selectedPaymentMethod === 'debit') {
+            // For debit, we simulate similar to QRIS for now
+            message.info("Simulasi Pembayaran Debit berhasil! (Dalam pengembangan)");
             setPaymentSuccess(true);
             setIsStrukModalVisible(true);
         }
@@ -523,9 +515,6 @@ const OrderKasir = () => {
         setPaymentSuccess(false);
         message.info("Pembayaran dibatalkan.");
     };
-
-
-
 
     // --- NEW: Handler for Save Order Button ---
     const handleSaveOrder = async () => {
@@ -573,7 +562,6 @@ const OrderKasir = () => {
         }
     };
 
-
     // --- MODIFIED: Handler for Confirming Payment (in Struk Modal) ---
     const handleStrukConfirmPayment = async () => {
         setIsProcessing(true); // Show loading
@@ -583,7 +571,7 @@ const OrderKasir = () => {
             customerName: customerName,
             orderType: currentOrderType,
             room: currentOrderType === 'dinein' ? room : null,
-            paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : 'QRIS',
+            paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : selectedPaymentMethod === 'qris' ? 'QRIS' : 'DEBIT',
             items: selectedItems.map(item => ({
                 id: item.id,
                 qty: parseInt(item.qty) || 0,
@@ -633,7 +621,6 @@ const OrderKasir = () => {
             // setPaymentSuccess(false);
         }
     };
-
 
     // orderDropdownMenu and paymentQuickAmounts remain the same
     const orderDropdownMenu = (
@@ -702,24 +689,15 @@ const OrderKasir = () => {
         const matchesSearch = product.name
             .toLowerCase()
             .includes(searchProductQuery.toLowerCase());
-
-        // --- TAMBAHKAN BARIS INI ---
-        // (Asumsi nama propertinya 'status_visibilitas' dan nilainya 'non aktif'
-        // Jika nama properti/nilai beda, sesuaikan di sini)
-        const matchesVisibility = product.status_visibilitas !== 'Nonaktif';
-        // --- SELESAI TAMBAHAN ---
-
-        return matchesMerchant && matchesProductType && matchesSearch && matchesVisibility; // <-- TAMBAHKAN matchesVisibility DI SINI
+        return matchesMerchant && matchesProductType && matchesSearch;
     });
 
-
-    // --- JSX Structure ---
     return (
         // Wrap with Spin if isLoading or isProcessing
         <Spin spinning={isLoading || isProcessing} tip={isProcessing ? "Menyimpan..." : "Memuat..."} size="large">
-            <div className="flex bg-gray-50 text-gray-800 font-sans">
+            <div className="flex flex-col lg:flex-row bg-gray-50 text-gray-800 font-sans h-screen">
                 {/* Product Selection Column */}
-                <div className="lg:col-span-2 h-screen overflow-y-scroll p-6 bg-white border-r border-gray-100">
+                <div className="flex-1 h-screen overflow-y-scroll p-6 bg-white border-r border-gray-100">
                     {/* Header: Mode Toggle, Logo, Cashier */}
                     <div className="flex justify-between items-center mb-6">
                         {/* ... (Mode toggle, logo, cashier name) ... */}
@@ -816,7 +794,7 @@ const OrderKasir = () => {
 
                 {/* Order Summary/Cart Column */}
                 {/* Apply disabled effect if in 'ruangan' mode */}
-                <div className={`bg-gray-50 flex flex-col p-6 transition-opacity duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none select-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
+                <div className={`lg:w-2/5 bg-gray-50 flex flex-col p-6 transition-opacity duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none select-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
                     {/* Header: Title and Order Options Dropdown */}
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800">
@@ -842,13 +820,11 @@ const OrderKasir = () => {
                         ))}
                     </div>
 
-
                     {/* Customer Info */}
                     <div className="flex flex-col mb-6">
                         <span className="text-gray-500 text-sm">Order ({currentOrderNumber})</span>
-                        <span className="text-lg font-bold">Order {customerName} {room && `(Meja: ${room})`}</span>
+                        <span className="text-lg font-bold">Order {customerName} {room && `(${room})`}</span>
                     </div>
-
 
                     {/* Selected Items List */}
                     <div className="flex-1 space-y-3 mb-6 overflow-y-auto custom-scrollbar pr-1"> {/* Added flex-1 and overflow */}
@@ -871,7 +847,6 @@ const OrderKasir = () => {
                             ))
                         )}
                     </div>
-
 
                     {/* Price Summary */}
                     <div className="bg-white rounded-xl shadow-md p-4 mb-6 border">
@@ -909,63 +884,92 @@ const OrderKasir = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="space-y-3 mt-auto"> {/* Added mt-auto to push to bottom */}
-                        {/* Row 1: Discount & Save/Cancel */}
-                        <div className="grid grid-cols-3 gap-3"> {/* Use grid-cols-3 */}
-                            {/* Discount Button */}
-                            <div className="flex items-center gap-1 col-span-1"> {/* Takes 1 column */}
-                                <Button size="large" icon={<PercentageOutlined />} onClick={showDiscountModal} className="flex-1">
-                                    {discountPercentage > 0 ? `Edit Diskon (${discountPercentage}%)` : 'Tambah Diskon'}
-                                </Button>
-                                {discountPercentage > 0 && (
-                                    <Button danger type="primary" size="large" icon={<CloseOutlined />} onClick={() => { setDiscountPercentage(0); message.info("Diskon berhasil dihapus."); }} />
-                                )}
-                            </div>
+                    <div className="space-y-3 mt-auto">
 
-                            {/* Save Order Button (NEW) */}
+                        {/* Row 1: Discount & Cancel */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <Button
+                                size="large"
+                                type="primary"
+                                className="bg-blue-500 hover:bg-blue-600 border-none text-white"
+                                icon={<PercentageOutlined />}
+                                onClick={showDiscountModal}
+                            >
+                                Discount
+                            </Button>
+
+                            <Button
+                                danger
+                                size="large"
+                                className="text-white border-none bg-red-500 hover:bg-red-600"
+                                onClick={() => {
+                                    resetOrderState();
+                                    message.warning(
+                                        `Order ${editingOrderId ? `#${editingOrderId}` : "saat ini"
+                                        } dibatalkan.`
+                                    );
+                                }}
+                            >
+                                Cancel Order
+                            </Button>
+                        </div>
+
+                        {/* Row 2: Payment Methods */}
+                        <div className="grid grid-cols-2 gap-3 text-sm font-medium">
+                            <Button
+                                type={selectedPaymentMethod === "cash" ? "primary" : "default"}
+                                className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "cash"
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-700"
+                                    }`}
+                                icon={<DollarOutlined />}
+                                onClick={() => setSelectedPaymentMethod("cash")}
+                            >
+                                Cash
+                            </Button>
+
+                            <Button
+                                type={selectedPaymentMethod === "qris" ? "primary" : "default"}
+                                className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "qris"
+                                    ? "bg-blue-600 text-white"
+                                    : "text-gray-700"
+                                    }`}
+                                icon={<QrcodeOutlined />}
+                                onClick={() => setSelectedPaymentMethod("qris")}
+                            >
+                                QRIS
+                            </Button>
+                        </div>
+
+                        {/* Row 3: Save & Payment */}
+                        <div className="grid grid-cols-2 gap-3">
                             <Button
                                 size="large"
                                 icon={<SaveOutlined />}
                                 onClick={handleSaveOrder}
-                                disabled={selectedItems.length === 0 || isProcessing} // Disable if no items or processing
-                                className="col-span-1" // Takes 1 column
+                                disabled={selectedItems.length === 0 || isProcessing}
+                                className="bg-green-600 hover:bg-green-700 border-none text-white"
                             >
-                                Simpan Order
+                                Save
                             </Button>
 
-                            {/* Cancel Button */}
                             <Button
-                                danger
+                                type="primary"
                                 size="large"
-                                onClick={() => {
-                                    resetOrderState(); // Use reset function
-                                    message.warning(`Order ${editingOrderId ? `#${editingOrderId}` : 'saat ini'} dibatalkan.`);
-                                }}
-                                className="col-span-1" // Takes 1 column
+                                className="bg-blue-600 hover:bg-blue-700 border-none text-white"
+                                block
+                                onClick={handleProcessPayment}
+                                disabled={
+                                    selectedItems.length === 0 || !selectedPaymentMethod || isProcessing
+                                }
+                                loading={isProcessing && selectedPaymentMethod !== null}
                             >
-                                {editingOrderId ? 'Batal Edit' : 'Cancel Order'}
+                                Payment & Print
                             </Button>
                         </div>
 
-                        {/* Row 2: Payment Method */}
-                        <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium">
-                            <Button type={selectedPaymentMethod === "cash" ? "primary" : "text"} className={`flex-1 rounded-md py-2 px-4 transition-all duration-200 ${selectedPaymentMethod === "cash" ? "bg-blue-600 text-white shadow-md" : "text-gray-600 hover:bg-gray-200"}`} icon={<DollarOutlined />} onClick={() => setSelectedPaymentMethod("cash")}>Cash</Button>
-                            <Button type={selectedPaymentMethod === "qris" ? "primary" : "text"} className={`flex-1 rounded-md py-2 px-4 transition-all duration-200 ${selectedPaymentMethod === "qris" ? "bg-blue-600 text-white shadow-md" : "text-gray-600 hover:bg-gray-200"}`} icon={<QrcodeOutlined />} onClick={() => setSelectedPaymentMethod("qris")}>QRIS</Button>
-                        </div>
-
-                        {/* Row 3: Payment Button */}
-                        <Button
-                            type="primary"
-                            size="large"
-                            block
-                            onClick={handleProcessPayment}
-                            disabled={selectedItems.length === 0 || !selectedPaymentMethod || isProcessing} // Disable if no items, no payment method, or processing
-                            loading={isProcessing && selectedPaymentMethod !== null} // Show loading only when trying to pay
-                        >
-                            {/* Change text based on context */}
-                            {editingOrderId ? 'Bayar & Selesaikan Order' : 'Payment & Print'}
-                        </Button>
                     </div>
+
 
                 </div>
             </div>
@@ -1066,22 +1070,90 @@ const OrderKasir = () => {
             </Modal>
 
             {/* Add Note Modal */}
-            <Modal title={<div className="text-xl font-bold text-gray-800">Tambahkan Catatan untuk <span className="font-normal">{itemToAddNote?.name}</span></div>} open={isAddNoteModalVisible} onOk={handleAddNoteOk} onCancel={handleAddNoteCancel} okText="Konfirmasi" cancelText="Batal" width={400} centered>
-                {/* ... (Form content remains the same) ... */}
-                <Form form={addNoteForm} layout="vertical" className="mt-4" initialValues={{ note: itemToAddNote?.note || "" }}>
-                    {/* Display category if available in itemToAddNote */}
+            <Modal
+                title={
+                    <div className="flex flex-col items-start">
+                        <div className="text-lg font-semibold text-gray-800">
+                            Tambahkan Catatan untuk
+                        </div>
+                        <div className="text-xl font-bold text-blue-600 mt-1">
+                            {itemToAddNote?.name}
+                        </div>
+                    </div>
+                }
+                open={isAddNoteModalVisible}
+                onOk={handleAddNoteOk}
+                onCancel={handleAddNoteCancel}
+                okText="Konfirmasi"
+                cancelText="Batal"
+                width={420}
+                centered
+                className="rounded-xl"
+            >
+                <Form
+                    form={addNoteForm}
+                    layout="vertical"
+                    className="mt-2 space-y-4"
+                    initialValues={{ note: itemToAddNote?.note || "" }}
+                >
+                    {/* Kategori */}
                     {itemToAddNote?.category && (
-                        <p className="text-sm text-gray-500 mb-2">
-                            Kategori: {productTypeCategories.find(cat => cat.id === itemToAddNote.category)?.name || itemToAddNote.category}
+                        <p className="text-sm text-gray-500 mb-1">
+                            Kategori:{" "}
+                            <span className="font-medium text-gray-700">
+                                {productTypeCategories.find(
+                                    (cat) => cat.id === itemToAddNote.category
+                                )?.name || itemToAddNote.category}
+                            </span>
                         </p>
                     )}
-                    <Form.Item label="Catatan" name="note"><Input.TextArea placeholder="nasi setengah, tidak pedas, dll." rows={2} /></Form.Item>
-                    <div className="flex items-center justify-between text-lg font-bold text-blue-600">
-                        <span>{formatRupiah(itemToAddNote?.price || 0)}</span>
-                        <div className="flex items-center space-x-2">
-                            <Button icon={<MinusOutlined />} size="small" onClick={() => setItemToAddNote(prev => ({ ...prev, qty: Math.max(1, (prev?.qty || 1) - 1) }))} disabled={itemToAddNote?.qty <= 1} />
-                            <span className="font-medium w-6 text-center">{itemToAddNote?.qty || 1}</span>
-                            <Button icon={<PlusOutlined />} size="small" onClick={() => setItemToAddNote(prev => ({ ...prev, qty: (prev?.qty || 0) + 1 }))} />
+
+                    {/* Catatan */}
+                    <Form.Item
+                        label={<span className="font-medium text-gray-700">Catatan</span>}
+                        name="note"
+                    >
+                        <Input.TextArea
+                            placeholder="Contoh: nasi setengah, tidak pedas, tanpa sambal, dll."
+                            rows={3}
+                            maxLength={150}
+                            showCount
+                        />
+                    </Form.Item>
+
+                    {/* Harga dan jumlah */}
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                        <span className="text-lg font-bold text-blue-600">
+                            {formatRupiah(itemToAddNote?.price || 0)}
+                        </span>
+
+                        <div className="flex items-center space-x-3">
+                            <Button
+                                icon={<MinusOutlined />}
+                                size="small"
+                                shape="circle"
+                                onClick={() =>
+                                    setItemToAddNote((prev) => ({
+                                        ...prev,
+                                        qty: Math.max(1, (prev?.qty || 1) - 1),
+                                    }))
+                                }
+                                disabled={itemToAddNote?.qty <= 1}
+                            />
+                            <span className="font-semibold text-gray-800 w-6 text-center">
+                                {itemToAddNote?.qty || 1}
+                            </span>
+                            <Button
+                                icon={<PlusOutlined />}
+                                size="small"
+                                shape="circle"
+                                onClick={() =>
+                                    setItemToAddNote((prev) => ({
+                                        ...prev,
+                                        qty: (prev?.qty || 0) + 1,
+                                    }))
+                                }
+                            />
                         </div>
                     </div>
                 </Form>
@@ -1089,26 +1161,73 @@ const OrderKasir = () => {
 
 
             {/* Cash Payment Modal */}
-            <Modal title={<div className="text-xl font-bold text-gray-800 flex items-center justify-between">Pembayaran Tunai <span className="text-blue-600">{formatRupiah(totalAmount)}</span></div>} open={isCashPaymentModalVisible} onCancel={() => setIsCashPaymentModalVisible(false)} footer={null} width={400} centered>
-                {/* ... (Form content remains the same) ... */}
-                <Form layout="vertical" className="mt-4">
+            <Modal
+                title={<div className="text-xl font-bold text-gray-800">Pembayaran Tunai</div>}
+                open={isCashPaymentModalVisible}
+                onCancel={() => setIsCashPaymentModalVisible(false)}
+                footer={null}
+                width={400}
+                centered
+            >
+                <div className="text-lg font-semibold text-blue-600 mb-2 text-right">
+                    Total: {formatRupiah(totalAmount)}
+                </div>
+
+                <Form layout="vertical" className="mt-2">
                     <Form.Item label="Uang Tunai" className="mb-4">
-                        <Input prefix="Rp" value={cashInput > 0 ? cashInput.toLocaleString('id-ID') : ''} onChange={(e) => { const value = e.target.value.replace(/[^0-9]/g, ''); setCashInput(Number(value) || 0); }} /* Ensure Number or 0 */ suffix={cashInput > 0 && (<CloseOutlined className="cursor-pointer text-gray-400" onClick={() => setCashInput(0)} />)} className="text-right text-lg font-medium" size="large" autoFocus />
+                        <Input
+                            prefix="Rp"
+                            value={cashInput > 0 ? cashInput.toLocaleString('id-ID') : ''}
+                            onChange={(e) => {
+                                const value = e.target.value.replace(/[^0-9]/g, '');
+                                setCashInput(Number(value) || 0);
+                            }}
+                            allowClear={false}
+                            className="text-right text-lg font-medium"
+                            size="large"
+                            autoFocus
+                        />
                     </Form.Item>
+
                     <div className="grid grid-cols-3 gap-3 mb-6">
-                        {paymentQuickAmounts.map((amount) => (<Button key={amount} size="large" className="h-12" onClick={() => setCashInput(amount)}>{formatRupiah(amount)}</Button>))}
-                        {/* Ensure totalAmount is a valid number before formatting */}
+                        {paymentQuickAmounts.map((amount) => (
+                            <Button
+                                key={amount}
+                                size="large"
+                                className="h-12"
+                                onClick={() => setCashInput(amount)}
+                            >
+                                {formatRupiah(amount)}
+                            </Button>
+                        ))}
                         {totalAmount > 0 && !paymentQuickAmounts.includes(totalAmount) && (
-                            <Button size="large" className="h-12" onClick={() => setCashInput(totalAmount)}>{formatRupiah(totalAmount)}</Button>
+                            <Button
+                                size="large"
+                                className="h-12"
+                                onClick={() => setCashInput(totalAmount)}
+                            >
+                                {formatRupiah(totalAmount)}
+                            </Button>
                         )}
                     </div>
+
                     <div className="flex justify-between items-center mb-4 text-base">
                         <span>Kembalian:</span>
                         <span className="font-bold text-green-600">{formatRupiah(changeAmount)}</span>
                     </div>
+
                     <div className="grid grid-cols-2 gap-3">
-                        <Button size="large" onClick={() => setIsCashPaymentModalVisible(false)}>Batal</Button>
-                        <Button type="primary" size="large" onClick={handleCashPaymentSubmit} disabled={cashInput < totalAmount}>Submit</Button>
+                        <Button size="large" onClick={() => setIsCashPaymentModalVisible(false)}>
+                            Batal
+                        </Button>
+                        <Button
+                            type="primary"
+                            size="large"
+                            onClick={handleCashPaymentSubmit}
+                            disabled={cashInput < totalAmount}
+                        >
+                            Submit
+                        </Button>
                     </div>
                 </Form>
             </Modal>
@@ -1158,7 +1277,7 @@ const OrderKasir = () => {
                         <p><strong>Order #:</strong> {currentOrderNumber}</p>
                         <p><strong>Kasir:</strong> {cashierName}</p>
                         <p><strong>Tanggal:</strong> {currentDate.format("DD/MM/YY HH:mm")}</p>
-                        <p><strong>Bayar:</strong> {selectedPaymentMethod === 'cash' ? 'Tunai' : selectedPaymentMethod === 'qris' ? 'QRIS' : '-'}</p>
+                        <p><strong>Bayar:</strong> {selectedPaymentMethod === 'cash' ? 'Tunai' : selectedPaymentMethod === 'qris' ? 'QRIS' : selectedPaymentMethod === 'debit' ? 'DEBIT' : '-'}</p>
                     </div>
                     {/* Item Details (Scrollable) */}
                     <div className="border-t border-b border-gray-200 py-2 my-2 max-h-40 overflow-y-auto custom-scrollbar">
@@ -1214,7 +1333,6 @@ const OrderKasir = () => {
                     </div>
                 </div>
             </Modal>
-
 
         </Spin> // Close Spin wrapper
     );
