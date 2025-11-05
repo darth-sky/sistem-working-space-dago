@@ -5,21 +5,60 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
+export const changePassword = async (old_password, new_password) => {
+  try {
+    const formData = new FormData();
+    formData.append('old_password', old_password);
+    formData.append('new_password', new_password);
+
+    // Ambil token secara manual
+    const token = await jwtStorage.retrieveToken();
+
+    const response = await fetch(`${baseUrl}/api/v1/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        // Tambahkan token otorisasi secara manual
+        'Authorization': `Bearer ${token}`,
+        // JANGAN set 'Content-Type' saat menggunakan FormData dengan fetch,
+        // browser akan mengaturnya secara otomatis dengan boundary yang benar.
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // Jika server mengembalikan error (cth: 401, 500)
+      // 'data' akan berisi { "msg": "Invalid old password" }
+      throw data;
+    }
+
+    // Jika sukses, 'data' akan berisi { "msg": "Password updated successfully" }
+    return data;
+
+  } catch (error) {
+    console.error("Error changing password:", error);
+    // Lempar error (baik dari 'throw data' atau network error)
+    // agar komponen GantiPasswordKasir bisa menangkapnya
+    throw error;
+  }
+};
+
 
 export const apiGetSessionHistory = async () => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/history`, {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error getting session history:", error);
-        throw error;
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/history`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error getting session history:", error);
+    throw error;
+  }
 };
 
 export const getRekapLive = async (startDate, endDate) => {
@@ -43,7 +82,7 @@ export const addUtangTenant = async (id_tenant, jumlah, deskripsi, tanggal_utang
   try {
     const token = await jwtStorage.retrieveToken();
     // Pastikan 'tanggal_utang' dikirim
-    const body = { id_tenant, jumlah, deskripsi, tanggal_utang }; 
+    const body = { id_tenant, jumlah, deskripsi, tanggal_utang };
     const response = await fetch(`${baseUrl}/api/v1/admin/utang-tenant`, {
       method: 'POST',
       headers: {
@@ -87,7 +126,7 @@ export const getUtangLog = async (tenantId, startDate, endDate) => {
     if (startDate && endDate) {
       url += `&start_date=${startDate}&end_date=${endDate}`;
     }
-    
+
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
@@ -170,51 +209,51 @@ export const deleteUtangLog = async (id_utang) => {
 
 
 export const apiGetLaporanPajakData = async (startDate, endDate) => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        // Bangun URL dengan query parameters
-        const url = new URL(`${baseUrl}/api/v1/owner/laporan-pajak-data`);
-        url.searchParams.append('start_date', startDate);
-        url.searchParams.append('end_date', endDate);
+    // Bangun URL dengan query parameters
+    const url = new URL(`${baseUrl}/api/v1/owner/laporan-pajak-data`);
+    url.searchParams.append('start_date', startDate);
+    url.searchParams.append('end_date', endDate);
 
-        const response = await fetch(url.toString(), {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        return handleResponse(response); // handleResponse harus bisa melempar error
-    } catch (error) {
-        console.error("Error getting Laporan Pajak data:", error);
-        throw error; // Lemparkan error ke komponen
-    }
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return handleResponse(response); // handleResponse harus bisa melempar error
+  } catch (error) {
+    console.error("Error getting Laporan Pajak data:", error);
+    throw error; // Lemparkan error ke komponen
+  }
 };
 
 export const apiSaveTaxPayment = async (paymentData) => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const payload = {
-            start_date: paymentData.startDate, // YYYY-MM-DD
-            end_date: paymentData.endDate,     // YYYY-MM-DD
-            paidAmount: paymentData.paidAmount,
-            paymentDate: paymentData.paymentDate.toISOString(), // Kirim sebagai ISO string
-        };
+    const payload = {
+      start_date: paymentData.startDate, // YYYY-MM-DD
+      end_date: paymentData.endDate,     // YYYY-MM-DD
+      paidAmount: paymentData.paidAmount,
+      paymentDate: paymentData.paymentDate.toISOString(), // Kirim sebagai ISO string
+    };
 
-        const response = await fetch(`${baseUrl}/api/v1/owner/catat-pajak`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error saving tax payment:", error);
-        throw error;
-    }
+    const response = await fetch(`${baseUrl}/api/v1/owner/catat-pajak`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error saving tax payment:", error);
+    throw error;
+  }
 };
 
 
@@ -237,8 +276,8 @@ export const checkBulkAvailability = async (payload) => {
     const responseData = await response.json();
 
     if (!response.ok) {
-       // Lempar error dengan pesan dari backend jika ada
-       throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
+      // Lempar error dengan pesan dari backend jika ada
+      throw new Error(responseData.error || `HTTP error! status: ${response.status}`);
     }
 
     // Kembalikan data dari backend { message: "OK", available: bool, unavailable_slots: [...] }
@@ -254,57 +293,57 @@ export const checkBulkAvailability = async (payload) => {
 
 
 export const apiGetAllOpenSessions = async () => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/all-open`, {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error getting all open sessions:", error);
-        throw error;
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/all-open`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error getting all open sessions:", error);
+    throw error;
+  }
 };
 
 
 export const apiGetRecentClosedSessions = async () => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/recent-closed`, {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error getting recent closed sessions:", error);
-        throw error;
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/recent-closed`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error getting recent closed sessions:", error);
+    throw error;
+  }
 };
 
 
 export const apiTakeoverSession = async (id_sesi) => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/takeover`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ id_sesi }),
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error taking over session:", error);
-        throw error;
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/takeover`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id_sesi }),
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error taking over session:", error);
+    throw error;
+  }
 };
 
 
@@ -312,92 +351,92 @@ export const apiTakeoverSession = async (id_sesi) => {
 
 
 const handleResponses = async (response) => {
-    if (!response.ok) {
-        const errorData = await response.json();
-        // Lemparkan error agar bisa ditangkap oleh .catch() di AuthProvider
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-    }
-    // Jika ok, kembalikan data JSON
-    return response.json();
+  if (!response.ok) {
+    const errorData = await response.json();
+    // Lemparkan error agar bisa ditangkap oleh .catch() di AuthProvider
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+  }
+  // Jika ok, kembalikan data JSON
+  return response.json();
 };
 
 
 export const apiCheckActiveSession = async () => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/aktif`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error checking active session:", error);
-        throw error; // Lemparkan error ke AuthProvider
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/aktif`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error checking active session:", error);
+    throw error; // Lemparkan error ke AuthProvider
+  }
 };
 
 
 export const apiOpenSession = async (sessionData) => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/buka`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(sessionData), // Kirim data sebagai JSON
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error opening session:", error);
-        throw error; // Lemparkan error ke AuthProvider
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/buka`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(sessionData), // Kirim data sebagai JSON
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error opening session:", error);
+    throw error; // Lemparkan error ke AuthProvider
+  }
 };
 
 
 export const apiCloseSession = async (sessionData) => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/tutup`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(sessionData), // Kirim data sebagai JSON
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error closing session:", error);
-        throw error; // Lemparkan error ke AuthProvider
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/tutup`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(sessionData), // Kirim data sebagai JSON
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error closing session:", error);
+    throw error; // Lemparkan error ke AuthProvider
+  }
 };
 
 export const apiGetLastSaldo = async () => {
-    try {
-        const token = await jwtStorage.retrieveToken();
-        if (!token) throw new Error("Token tidak ditemukan");
+  try {
+    const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
 
-        const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/saldo-terakhir`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-        });
-        return handleResponse(response);
-    } catch (error) {
-        console.error("Error getting last saldo:", error);
-        throw error; // Lemparkan error ke AuthProvider
-    }
+    const response = await fetch(`${baseUrl}/api/v1/kasir/sesi/saldo-terakhir`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return handleResponse(response);
+  } catch (error) {
+    console.error("Error getting last saldo:", error);
+    throw error; // Lemparkan error ke AuthProvider
+  }
 };
 
 
@@ -2663,9 +2702,9 @@ export const getDataPrivate = async () => {
     });
 
     if (!response.ok) {
-       // Ini akan melempar error ke 'catch' jika status 422
-       const errorData = await response.json();
-       throw new Error(errorData.error || "failed to get data private");
+      // Ini akan melempar error ke 'catch' jika status 422
+      const errorData = await response.json();
+      throw new Error(errorData.error || "failed to get data private");
     }
 
     const result = await response.json();

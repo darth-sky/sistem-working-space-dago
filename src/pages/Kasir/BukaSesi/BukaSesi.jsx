@@ -301,12 +301,12 @@ const BukaSesi = () => {
                     </div>
 
                     {/* Right Column - Clock and Logo */}
-                    {/* Right Column - Clock and Logo (centered) */}
-                    <div className="hidden lg:flex flex-col items-center justify-center h-screen">
+                    {/* Right Column - Clock and Logo (angkat sedikit ke atas) */}
+                    <div className="hidden lg:flex flex-col items-center justify-start h-screen pt-20"> {/* pt-20 agar naik */}
                         {/* Logo */}
                         <div className="w-36 h-36 mb-6 flex items-center justify-center">
                             <img
-                                src={logoImage}
+                                src={logoImage} // Ganti dengan logo Dago jika ingin
                                 alt="Logo"
                                 className="w-full h-full object-contain"
                             />
@@ -326,6 +326,7 @@ const BukaSesi = () => {
                             <p className="text-xs text-gray-400">Wita server</p>
                         </div>
                     </div>
+
 
                 </div>
             </div>

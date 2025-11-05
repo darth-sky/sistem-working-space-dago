@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Form, Input, Button, Card, Typography, message, Modal } from 'antd';
 import { LockOutlined, KeyOutlined } from '@ant-design/icons';
 import { useAuth } from '../../../providers/AuthProvider'; // Import useAuth
-import { apiChangePassword } from '../../../services/service'; // Import service baru
+import { changePassword } from '../../../services/service'; // Import service baru
 import logo from '../../../assets/images/logo.png'; // Sesuaikan path ke logo Anda
 
 const { Title, Text } = Typography;
@@ -15,24 +15,44 @@ const GantiPasswordKasir = () => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      await apiChangePassword(values.old_password, values.new_password);
+      await changePassword(values.old_password, values.new_password);
       form.resetFields();
       setLoading(false);
-      Modal.success({
-        title: 'Password Berhasil Diubah',
-        content: 'Anda akan dialihkan ke halaman Login untuk masuk kembali dengan password baru Anda.',
-        onOk: () => logout(),
-      });
+
+      // --- PERBAIKAN: Gunakan 'message' untuk redirect otomatis ---
+      
+      // 1. Tampilkan pesan sukses singkat (durasi 2 detik)
+      message.success('Password Berhasil Diubah!', 2);
+
+      // 2. Tunggu 2.5 detik (agar user sempat baca pesan) lalu panggil logout.
+      //    Fungsi logout() dari AuthProvider akan otomatis redirect ke /login.
+      setTimeout(() => {
+        logout();
+      }, 2500); // 2.5 detik
+
+      // HAPUS KODE LAMA INI:
+      // Modal.success({
+      //   title: 'Password Berhasil Diubah',
+      //   content: 'Anda akan dialihkan ke halaman Login untuk masuk kembali dengan password baru Anda.',
+      //   onOk: () => logout(),
+      // });
+      // --- AKHIR PERBAIKAN ---
 
 
     } catch (error) {
       console.error("Error ganti password:", error);
-      message.error(error.message || "Gagal mengubah password. Pastikan password lama Anda benar.");
+      
+      // --- PERBAIKAN KEDUA: Gunakan 'error.msg' ---
+      // Backend Flask Anda mengirim error sebagai 'msg', bukan 'message'
+      message.error(error.msg || "Gagal mengubah password. Pastikan password lama Anda benar.");
+      // --- AKHIR PERBAIKAN ---
+
       setLoading(false);
     }
   };
 
   return (
+    // ... Sisa JSX Anda sudah benar ...
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
       <Card className="w-full max-w-md shadow-lg">
         <div className="flex flex-col items-center mb-4">

@@ -86,7 +86,7 @@ const CekKreditMembership = () => {
         <Title level={4}>Anda Belum Memiliki Membership Aktif</Title>
         <Text type="secondary">Daftar membership sekarang untuk menikmati berbagai benefit eksklusif!</Text>
         <br />
-        <Button type="primary" size="large" onClick={() => navigate('/daftar-member')} style={{ marginTop: 24 }}>
+        <Button type="primary" size="large" onClick={() => navigate('/membership')} style={{ marginTop: 24 }}>
           Lihat Paket Membership
         </Button>
       </Card>

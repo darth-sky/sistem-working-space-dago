@@ -43,19 +43,19 @@ const { Search, TextArea } = Input;
 const getImageUrl = (filename) => {
   if (!filename) return "/static/kopi.jpg"; // Fallback default jika filename null/undefined
   const baseUrlWithoutApi = import.meta.env.VITE_BASE_URL?.replace('/api/v1', '') || '';
-   return `${baseUrlWithoutApi}/static/${filename}`; // Gunakan '/static/' sesuai backend
+  return `${baseUrlWithoutApi}/static/${filename}`; // Gunakan '/static/' sesuai backend
 };
 
 
 // Helper function di luar komponen agar tidak dibuat ulang
 const uniqueValues = (arr, key) => {
-   if (!arr) return [];
-   const values = arr.map((item) => item?.[key]).filter(Boolean);
-   return [...new Set(values)].sort().map((val) => ({
-     text: val,
-     value: val,
-   }));
- };
+  if (!arr) return [];
+  const values = arr.map((item) => item?.[key]).filter(Boolean);
+  return [...new Set(values)].sort().map((val) => ({
+    text: val,
+    value: val,
+  }));
+};
 
 
 const ProductTab = () => {
@@ -95,7 +95,7 @@ const ProductTab = () => {
         }));
         setData(produk);
       } else {
-         message.error(resProduk.data?.error || "Gagal mengambil data produk");
+        message.error(resProduk.data?.error || "Gagal mengambil data produk");
       }
 
       if (resKategori.status === 200 && resKategori.data.message === "OK") {
@@ -115,7 +115,7 @@ const ProductTab = () => {
         }, []);
         setTenantList(uniqueTenants);
       } else {
-           message.error(resKategori.data?.error || "Gagal mengambil data kategori");
+        message.error(resKategori.data?.error || "Gagal mengambil data kategori");
       }
     } catch (err) {
       console.error("Gagal fetch data:", err);
@@ -133,27 +133,27 @@ const ProductTab = () => {
 
   // 🔎 Memoize Filter pencarian global
   const filteredData = useMemo(() => {
-     if (!searchText) return data; // Jika tidak ada search text, kembalikan data asli
-     const lowerSearchText = searchText.toLowerCase();
-     return data.filter(
-       (item) =>
-         item.nama_produk?.toLowerCase().includes(lowerSearchText) ||
-         item.nama_kategori?.toLowerCase().includes(lowerSearchText) ||
-         item.nama_tenant?.toLowerCase().includes(lowerSearchText)
-     );
-   }, [data, searchText]); // Hitung ulang hanya jika data atau searchText berubah
+    if (!searchText) return data; // Jika tidak ada search text, kembalikan data asli
+    const lowerSearchText = searchText.toLowerCase();
+    return data.filter(
+      (item) =>
+        item.nama_produk?.toLowerCase().includes(lowerSearchText) ||
+        item.nama_kategori?.toLowerCase().includes(lowerSearchText) ||
+        item.nama_tenant?.toLowerCase().includes(lowerSearchText)
+    );
+  }, [data, searchText]); // Hitung ulang hanya jika data atau searchText berubah
 
-   // --- 🔽 Memoize FILTER OPTIONS untuk Kolom Table ---
-   const uniqueNamaProdukFilters = useMemo(() => uniqueValues(data, "nama_produk"), [data]);
-   const uniqueTenantFilters = useMemo(() => uniqueValues(data, "nama_tenant"), [data]);
-   const statusKetersediaanFilters = useMemo(() => [
-        { text: "Tersedia", value: "Active" },
-        { text: "Habis", value: "Inactive" },
-      ], []);
-   const statusVisibilitasFilters = useMemo(() => [
-       { text: "Ditampilkan", value: "Aktif" },
-       { text: "Disembunyikan", value: "Nonaktif" },
-     ], []);
+  // --- 🔽 Memoize FILTER OPTIONS untuk Kolom Table ---
+  const uniqueNamaProdukFilters = useMemo(() => uniqueValues(data, "nama_produk"), [data]);
+  const uniqueTenantFilters = useMemo(() => uniqueValues(data, "nama_tenant"), [data]);
+  const statusKetersediaanFilters = useMemo(() => [
+    { text: "Tersedia", value: "Active" },
+    { text: "Habis", value: "Inactive" },
+  ], []);
+  const statusVisibilitasFilters = useMemo(() => [
+    { text: "Ditampilkan", value: "Aktif" },
+    { text: "Disembunyikan", value: "Nonaktif" },
+  ], []);
 
 
   // --- Memoize Definisi Kolom Tabel ---
@@ -164,20 +164,20 @@ const ProductTab = () => {
       key: "nama_produk",
       sorter: (a, b) => a.nama_produk.localeCompare(b.nama_produk),
       filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-          <div style={{ padding: 8 }}>
-            <Input
-              placeholder={`Cari Nama Produk`}
-              value={selectedKeys[0]}
-              onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-              onPressEnter={() => confirm()}
-              style={{ marginBottom: 8, display: 'block' }}
-            />
-            <Space>
-              <Button type="primary" onClick={() => confirm()} icon={<SearchOutlined />} size="small">Search</Button>
-              <Button onClick={() => { clearFilters(); setSelectedKeys([]); confirm(); }} size="small">Reset</Button>
-            </Space>
-          </div>
-        ),
+        <div style={{ padding: 8 }}>
+          <Input
+            placeholder={`Cari Nama Produk`}
+            value={selectedKeys[0]}
+            onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+            onPressEnter={() => confirm()}
+            style={{ marginBottom: 8, display: 'block' }}
+          />
+          <Space>
+            <Button type="primary" onClick={() => confirm()} icon={<SearchOutlined />} size="small">Search</Button>
+            <Button onClick={() => { clearFilters(); setSelectedKeys([]); confirm(); }} size="small">Reset</Button>
+          </Space>
+        </div>
+      ),
       filterIcon: filtered => <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
       onFilter: (value, record) => record.nama_produk?.toLowerCase().includes(value.toLowerCase()),
       render: (text) => (
@@ -255,7 +255,7 @@ const ProductTab = () => {
             src={getImageUrl(url)}
             alt="produk"
             style={{ width: 50, height: 50, borderRadius: 8, objectFit: 'cover' }}
-            onError={(e) => { e.target.onerror = null; e.target.src="/static/kopi.jpg" }}
+            onError={(e) => { e.target.onerror = null; e.target.src = "/static/kopi.jpg" }}
           />
         ) : (
           <FileImageOutlined style={{ fontSize: '24px', color: '#ccc' }} />
@@ -287,7 +287,7 @@ const ProductTab = () => {
               cancelText="Tidak"
               okButtonProps={{ danger: true, loading: loading }} // Tambah loading di tombol OK popconfirm
             >
-              <Button type="text" danger icon={<DeleteOutlined />} disabled={loading}/>
+              <Button type="text" danger icon={<DeleteOutlined />} disabled={loading} />
             </Popconfirm>
           </Tooltip>
         </Space>
@@ -299,17 +299,17 @@ const ProductTab = () => {
   // --- Memoize Form Handler ---
   const handleChange = useCallback((field, value) => {
     setFormData(prevFormData => {
-        const newFormData = { ...prevFormData, [field]: value };
-        // Jika ganti tenant, reset kategori
-        if (field === "id_tenant") {
-            console.log("Tenant changed in form handler, resetting category");
-            delete newFormData.id_kategori; // Reset kategori field
-            // Filter list tidak perlu dihandle di sini karena sudah dihandle useMemo filteredKategoriList
-        }
-        console.log("Setting FormData:", newFormData);
-        return newFormData;
+      const newFormData = { ...prevFormData, [field]: value };
+      // Jika ganti tenant, reset kategori
+      if (field === "id_tenant") {
+        console.log("Tenant changed in form handler, resetting category");
+        delete newFormData.id_kategori; // Reset kategori field
+        // Filter list tidak perlu dihandle di sini karena sudah dihandle useMemo filteredKategoriList
+      }
+      console.log("Setting FormData:", newFormData);
+      return newFormData;
     });
-   // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kategoriList]); // kategoriList mungkin diperlukan jika ada logic yg bergantung padanya
 
   // --- Memoize Submit Handler (Create/Update) ---
@@ -324,15 +324,15 @@ const ProductTab = () => {
       const formPayload = new FormData();
       // Append semua data dari formData
       for (const key in formData) {
-           if (formData[key] !== null && formData[key] !== undefined) { // Hindari append null/undefined
-               formPayload.append(key, formData[key] || ''); // Kirim string kosong jika null/undefined (kecuali harga)
-           }
+        if (formData[key] !== null && formData[key] !== undefined) { // Hindari append null/undefined
+          formPayload.append(key, formData[key] || ''); // Kirim string kosong jika null/undefined (kecuali harga)
+        }
       }
-       // Pastikan harga dikirim
-        formPayload.set("harga", formData.harga);
-        // Pastikan status default dikirim jika tidak ada di formData
-        formPayload.set("status_ketersediaan", formData.status_ketersediaan || "Active");
-        formPayload.set("status_visibilitas", formData.status_visibilitas || "Aktif");
+      // Pastikan harga dikirim
+      formPayload.set("harga", formData.harga);
+      // Pastikan status default dikirim jika tidak ada di formData
+      formPayload.set("status_ketersediaan", formData.status_ketersediaan || "Active");
+      formPayload.set("status_visibilitas", formData.status_visibilitas || "Aktif");
 
 
       if (fileFoto) {
@@ -348,19 +348,19 @@ const ProductTab = () => {
         console.log("Updating product ID:", editingProduct.id_produk);
         res = await updateProduk(editingProduct.id_produk, formPayload);
         if (res.status === 200) {
-            message.success("Produk berhasil diperbarui!");
+          message.success("Produk berhasil diperbarui!");
         } else {
-             const errorMsg = res.data?.error || res.data?.message || "Gagal memperbarui produk";
-            throw new Error(errorMsg);
+          const errorMsg = res.data?.error || res.data?.message || "Gagal memperbarui produk";
+          throw new Error(errorMsg);
         }
       } else {
         console.log("Creating new product");
         res = await createProduk(formPayload);
         if (res.status === 201) {
-            message.success("Produk baru berhasil ditambahkan!");
+          message.success("Produk baru berhasil ditambahkan!");
         } else {
-            const errorMsg = res.data?.error || res.data?.message || "Gagal menambahkan produk baru";
-            throw new Error(errorMsg);
+          const errorMsg = res.data?.error || res.data?.message || "Gagal menambahkan produk baru";
+          throw new Error(errorMsg);
         }
       }
 
@@ -387,8 +387,8 @@ const ProductTab = () => {
         setData(prevData => prevData.filter(item => item.id_produk !== id_produk));
         // await fetchData(); // Alternatif: fetch ulang jika perlu data konsisten dari server
       } else {
-         const errorMsg = res.data?.error || res.data?.message || "Gagal menghapus produk";
-         throw new Error(errorMsg);
+        const errorMsg = res.data?.error || res.data?.message || "Gagal menghapus produk";
+        throw new Error(errorMsg);
       }
     } catch (err) {
       console.error("Error delete produk:", err);
@@ -398,7 +398,7 @@ const ProductTab = () => {
     }
   }, [/* fetchData */]); // Hapus fetchData jika pakai optimasi hapus dari state
 
-const handleEdit = useCallback((product) => {
+  const handleEdit = useCallback((product) => {
     console.log("Editing product data:", product);
     const kategoriProduk = kategoriList.find((k) => k.id === product.id_kategori);
     const tenantId = kategoriProduk ? kategoriProduk.id_tenant : null;
@@ -412,11 +412,11 @@ const handleEdit = useCallback((product) => {
       deskripsi_produk: product.deskripsi_produk,
       harga: product.harga,
       status_ketersediaan: product.status_ketersediaan,
-      
+
       // ===== INI ADALAH PERBAIKANNYA =====
       // Kode ini membaca status_visibilitas dari produk yang diedit,
       // bukan lagi menggunakan nilai default "Aktif".
-      status_visibilitas: product.status_visibilitas, 
+      status_visibilitas: product.status_visibilitas,
       // ===================================
 
     });
@@ -425,7 +425,7 @@ const handleEdit = useCallback((product) => {
     setOpen(true);
   }, [kategoriList]); // Tambah kategoriList sebagai dependency
 
-  
+
   // --- Memoize Cancel Handler ---
   const handleCancel = useCallback(() => {
     setOpen(false);
@@ -436,279 +436,290 @@ const handleEdit = useCallback((product) => {
     // setFilteredKategoriList tidak perlu direset manual karena tergantung formData.id_tenant
   }, []);
 
-   // --- Memoize File Change Handler ---
-   const handleFileChange = useCallback((info) => {
-       if (info.fileList.length > 0) {
-           const file = info.fileList[0].originFileObj;
-           if (file) {
-               const isJpgOrPng = file.type === 'image/jpeg' || file.type === 'image/png';
-               if (!isJpgOrPng) {
-                   message.error('Hanya bisa upload file JPG/PNG!');
-                   setFileFoto(null);
-                   setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
-                   return;
-               }
-               const isLt2M = file.size / 1024 / 1024 < 2;
-               if (!isLt2M) {
-                   message.error('Gambar harus lebih kecil dari 2MB!');
-                    setFileFoto(null);
-                   setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
-                   return;
-               }
-               setFileFoto(file);
-               const reader = new FileReader();
-               reader.onload = (e) => setPreviewImage(e.target.result);
-               reader.readAsDataURL(file);
-           }
-       } else {
-           setFileFoto(null);
-           setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
-       }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [editingProduct]); // Tambah editingProduct dependency
+  // --- Memoize File Change Handler ---
+  const handleFileChange = useCallback((info) => {
+    if (info.fileList.length > 0) {
+      const file = info.fileList[0].originFileObj;
+      if (file) {
+        const isJpgOrPng = file.type === 'image/jpeg' || file.type === 'image/png';
+        if (!isJpgOrPng) {
+          message.error('Hanya bisa upload file JPG/PNG!');
+          setFileFoto(null);
+          setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
+          return;
+        }
+        const isLt2M = file.size / 1024 / 1024 < 2;
+        if (!isLt2M) {
+          message.error('Gambar harus lebih kecil dari 2MB!');
+          setFileFoto(null);
+          setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
+          return;
+        }
+        setFileFoto(file);
+        const reader = new FileReader();
+        reader.onload = (e) => setPreviewImage(e.target.result);
+        reader.readAsDataURL(file);
+      }
+    } else {
+      setFileFoto(null);
+      setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingProduct]); // Tambah editingProduct dependency
 
 
   // --- Render ---
   return (
     <Spin spinning={loading} tip="Memuat data produk..."> {/* Tambah Spin indicator */}
-        <div style={{ padding: "24px" }}>
-          <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
-            <Col xs={24} sm={12} md={10} lg={8}>
-              <Search
-                placeholder="Cari produk, kategori, tenant..."
-                allowClear
-                enterButton={<SearchOutlined />}
-                size="large"
-                value={searchText}
-                onSearch={value => setSearchText(value)}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
+      <div style={{ padding: "24px" }}>
+        <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
+          <Col xs={24} sm={12} md={10} lg={8}>
+            <Search
+              placeholder="Cari produk, kategori, tenant..."
+              allowClear
+              enterButton={<SearchOutlined />}
+              size="large"
+              value={searchText}
+              onSearch={value => setSearchText(value)}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+          </Col>
+          <Col>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                handleCancel(); // Reset form dulu
+                setOpen(true); // Baru buka modal
+              }}
+              size="large"
+              style={{
+                background: "#667eea",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "600",
+              }}
+            >
+              Tambah Produk Baru
+            </Button>
+          </Col>
+        </Row>
+
+        <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
+          <Table
+            columns={columns} // Gunakan columns yg sudah dimemoize
+            dataSource={filteredData} // Gunakan data yg sudah dimemoize
+            pagination={{
+              current: Math.floor(data.findIndex(item => item.key === filteredData[0]?.key) / pageSize) + 1 || 1, // Kalkulasi halaman saat ini
+              pageSize,
+              showSizeChanger: true,
+              pageSizeOptions: ['10', '20', '50', '100'], // Opsi page size
+              showQuickJumper: true,
+              total: filteredData.length,
+              showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} produk`,
+              onChange: (page, newSize) => {
+                // Hanya update pageSize jika benar-benar berubah
+                if (newSize !== pageSize) {
+                  setPageSize(newSize);
+                }
+                // Antd akan handle perubahan halaman (page)
+              },
+              position: ["bottomRight"],
+            }}
+            loading={loading} // Gunakan state loading utama
+            scroll={{ x: 1300 }}
+            rowKey="id_produk" // Pastikan rowKey benar
+          />
+        </Card>
+
+        {/* Modal Form Produk */}
+        <Modal
+          title={
+            <Space>
+              {editingProduct ? <EditOutlined /> : <PlusOutlined />}
+              {editingProduct ? "Edit Produk" : "Tambah Produk Baru"}
+            </Space>
+          }
+          open={open}
+          onCancel={handleCancel} // Gunakan handler yg dimemoize
+          onOk={handleAddProduct} // Gunakan handler yg dimemoize
+          confirmLoading={submitLoading} // Gunakan loading form
+          okText={editingProduct ? "Update" : "Simpan"}
+          cancelText="Batal"
+          width={800}
+          destroyOnClose // Tetap gunakan ini untuk reset
+          maskClosable={false}
+        >
+          {/* Display loading indicator inside modal if needed */}
+          {/* <Spin spinning={submitLoading}> */}
+          <Row gutter={[20, 20]} style={{ marginTop: 20 }}>
+            <Col xs={24} md={12}>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong>Tenant *</Text>
+                <Select
+                  placeholder="Pilih tenant"
+                  value={formData.id_tenant}
+                  onChange={(val) => handleChange("id_tenant", val)} // Gunakan handler yg dimemoize
+                  style={{ width: "100%" }}
+                  showSearch
+                  optionFilterProp="children"
+                  filterOption={(input, option) =>
+                    (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
+                  }
+                  status={!formData.id_tenant && open && !editingProduct ? 'error' : ''}
+                >
+                  {tenantList.map((t) => (
+                    <Option key={t.id_tenant} value={t.id_tenant}>
+                      {t.nama_tenant}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <Text strong>Kategori *</Text>
+                <Select
+                  placeholder="Pilih kategori (setelah pilih tenant)"
+                  value={formData.id_kategori}
+                  onChange={(val) => handleChange("id_kategori", val)} // Gunakan handler yg dimemoize
+                  style={{ width: "100%" }}
+                  disabled={!formData.id_tenant || filteredKategoriList.length === 0}
+                  showSearch
+                  optionFilterProp="children"
+                  filterOption={(input, option) =>
+                    (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
+                  }
+                  notFoundContent={!formData.id_tenant ? "Pilih tenant dulu" : "Tidak ada kategori untuk tenant ini"}
+                  status={!formData.id_kategori && formData.id_tenant && open && !editingProduct ? 'error' : ''}
+                >
+                  {filteredKategoriList.map((k) => (
+                    <Option key={k.id} value={k.id}>
+                      {k.nama}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <Text strong>Nama Produk *</Text>
+                <Input
+                  placeholder="Masukkan nama produk"
+                  value={formData.nama_produk || ""}
+                  onChange={(e) => handleChange("nama_produk", e.target.value)} // Gunakan handler yg dimemoize
+                  status={!formData.nama_produk && open && !editingProduct ? 'error' : ''}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <Text strong>Harga *</Text>
+                <InputNumber
+                  controls={false}
+                  placeholder="Masukkan harga (angka saja)"
+                  value={formData.harga === null || formData.harga === undefined ? null : formData.harga}
+                  onChange={(val) => handleChange("harga", val)} // Gunakan handler yg dimemoize
+                  style={{ width: "100%" }}
+                  formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+                  min={0}
+                  status={(formData.harga === null || formData.harga === undefined || formData.harga < 0) && open && !editingProduct ? 'error' : ''}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <Text strong>Status Ketersediaan (Tenant)</Text>
+                <Switch
+                  checked={formData.status_ketersediaan === "Active"}
+                  onChange={(checked) =>
+                    handleChange("status_ketersediaan", checked ? "Active" : "Inactive") // Gunakan handler yg dimemoize
+                  }
+                  checkedChildren="Tersedia"
+                  unCheckedChildren="Habis"
+                  style={{ display: "block", marginTop: 8 }}
+                />
+              </div>
+
+              <div>
+                <Text strong>Visibilitas Produk (Admin)</Text>
+                <Switch
+                  checked={formData.status_visibilitas === "Aktif"}
+                  onChange={(checked) =>
+                    handleChange("status_visibilitas", checked ? "Aktif" : "Nonaktif") // Gunakan handler yg dimemoize
+                  }
+                  checkedChildren="Ditampilkan"
+                  unCheckedChildren="Disembunyikan"
+                  style={{ display: "block", marginTop: 8 }}
+                />
+              </div>
             </Col>
-            <Col>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                    handleCancel(); // Reset form dulu
-                    setOpen(true); // Baru buka modal
-                }}
-                size="large"
-                 style={{
-                    background: "#667eea",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontWeight: "600",
-                 }}
-              >
-                Tambah Produk Baru
-              </Button>
+
+            <Col xs={24} md={12}>
+              <div style={{ marginBottom: 16 }}>
+                <Text strong>Deskripsi</Text>
+                <TextArea
+                  rows={6}
+                  placeholder="Masukkan deskripsi produk (opsional)"
+                  value={formData.deskripsi_produk || ""}
+                  onChange={(e) => handleChange("deskripsi_produk", e.target.value)} // Gunakan handler yg dimemoize
+                />
+              </div>
+
+              <div>
+                <Text strong>Foto Produk</Text>
+                <Upload
+                  listType="picture-card"
+                  className="product-uploader"
+                  showUploadList={false}
+                  // beforeUpload di-handle oleh onChange
+                  onChange={handleFileChange} // Gunakan handler yg dimemoize
+                  maxCount={1}
+                  accept="image/png, image/jpeg"
+                >
+                  {previewImage ? (
+                    <img
+                      src={previewImage}
+                      alt="Preview"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: '8px',
+                        display: 'block',
+                      }}
+                    />
+
+                  ) : (
+                    <div>
+                      <PlusOutlined />
+                      <div style={{ marginTop: 8 }}>Upload Foto</div>
+                    </div>
+                  )}
+                </Upload>
+                {previewImage && (
+                  <Button
+                    size="small"
+                    danger
+                    onClick={() => { // Logic hapus preview
+                      setFileFoto(null);
+                      setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
+                    }}
+                    style={{ marginTop: 8 }}
+                  >
+                    Hapus Foto
+                  </Button>
+                )}
+                <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: 4 }}>
+                  Klik area di atas untuk upload (JPG/PNG, Max 2MB).
+                  {editingProduct && ' Kosongkan jika tidak ingin mengubah foto.'}
+                </Text>
+              </div>
             </Col>
           </Row>
+          {/* </Spin> */}
+        </Modal>
 
-          <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
-            <Table
-              columns={columns} // Gunakan columns yg sudah dimemoize
-              dataSource={filteredData} // Gunakan data yg sudah dimemoize
-              pagination={{
-                current: Math.floor(data.findIndex(item => item.key === filteredData[0]?.key) / pageSize) + 1 || 1, // Kalkulasi halaman saat ini
-                pageSize,
-                showSizeChanger: true,
-                pageSizeOptions: ['10', '20', '50', '100'], // Opsi page size
-                showQuickJumper: true,
-                total: filteredData.length,
-                showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} produk`,
-                 onChange: (page, newSize) => {
-                     // Hanya update pageSize jika benar-benar berubah
-                     if (newSize !== pageSize) {
-                         setPageSize(newSize);
-                     }
-                     // Antd akan handle perubahan halaman (page)
-                 },
-                position: ["bottomRight"],
-              }}
-              loading={loading} // Gunakan state loading utama
-              scroll={{ x: 1300 }}
-              rowKey="id_produk" // Pastikan rowKey benar
-            />
-          </Card>
-
-          {/* Modal Form Produk */}
-          <Modal
-             title={
-               <Space>
-                 {editingProduct ? <EditOutlined /> : <PlusOutlined />}
-                 {editingProduct ? "Edit Produk" : "Tambah Produk Baru"}
-               </Space>
-             }
-             open={open}
-             onCancel={handleCancel} // Gunakan handler yg dimemoize
-             onOk={handleAddProduct} // Gunakan handler yg dimemoize
-             confirmLoading={submitLoading} // Gunakan loading form
-             okText={editingProduct ? "Update" : "Simpan"}
-             cancelText="Batal"
-             width={800}
-             destroyOnClose // Tetap gunakan ini untuk reset
-             maskClosable={false}
-          >
-            {/* Display loading indicator inside modal if needed */}
-            {/* <Spin spinning={submitLoading}> */}
-                <Row gutter={[20, 20]} style={{ marginTop: 20}}>
-                  <Col xs={24} md={12}>
-                    <div style={{ marginBottom: 16 }}>
-                      <Text strong>Tenant *</Text>
-                      <Select
-                        placeholder="Pilih tenant"
-                        value={formData.id_tenant}
-                        onChange={(val) => handleChange("id_tenant", val)} // Gunakan handler yg dimemoize
-                        style={{ width: "100%"}}
-                        showSearch
-                        optionFilterProp="children"
-                        filterOption={(input, option) =>
-                          (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
-                        }
-                        status={!formData.id_tenant && open && !editingProduct ? 'error' : ''}
-                      >
-                        {tenantList.map((t) => (
-                          <Option key={t.id_tenant} value={t.id_tenant}>
-                            {t.nama_tenant}
-                          </Option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <Text strong>Kategori *</Text>
-                      <Select
-                        placeholder="Pilih kategori (setelah pilih tenant)"
-                        value={formData.id_kategori}
-                        onChange={(val) => handleChange("id_kategori", val)} // Gunakan handler yg dimemoize
-                        style={{ width: "100%"}}
-                        disabled={!formData.id_tenant || filteredKategoriList.length === 0}
-                        showSearch
-                        optionFilterProp="children"
-                        filterOption={(input, option) =>
-                          (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
-                        }
-                        notFoundContent={!formData.id_tenant ? "Pilih tenant dulu" : "Tidak ada kategori untuk tenant ini"}
-                        status={!formData.id_kategori && formData.id_tenant && open && !editingProduct ? 'error' : ''}
-                      >
-                        {filteredKategoriList.map((k) => (
-                          <Option key={k.id} value={k.id}>
-                            {k.nama}
-                          </Option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <Text strong>Nama Produk *</Text>
-                      <Input
-                        placeholder="Masukkan nama produk"
-                        value={formData.nama_produk || ""}
-                        onChange={(e) => handleChange("nama_produk", e.target.value)} // Gunakan handler yg dimemoize
-                        status={!formData.nama_produk && open && !editingProduct ? 'error' : ''}
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <Text strong>Harga *</Text>
-                      <InputNumber
-                        controls={false}
-                        placeholder="Masukkan harga (angka saja)"
-                        value={formData.harga === null || formData.harga === undefined ? null : formData.harga}
-                        onChange={(val) => handleChange("harga", val)} // Gunakan handler yg dimemoize
-                        style={{ width: "100%"}}
-                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                        parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
-                        min={0}
-                        status={(formData.harga === null || formData.harga === undefined || formData.harga < 0) && open && !editingProduct ? 'error' : ''}
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 16 }}>
-                      <Text strong>Status Ketersediaan (Tenant)</Text>
-                      <Switch
-                        checked={formData.status_ketersediaan === "Active"}
-                        onChange={(checked) =>
-                          handleChange("status_ketersediaan", checked ? "Active" : "Inactive") // Gunakan handler yg dimemoize
-                        }
-                        checkedChildren="Tersedia"
-                        unCheckedChildren="Habis"
-                        style={{ display: "block", marginTop: 8 }}
-                      />
-                    </div>
-
-                    <div>
-                      <Text strong>Visibilitas Produk (Admin)</Text>
-                      <Switch
-                        checked={formData.status_visibilitas === "Aktif"}
-                        onChange={(checked) =>
-                          handleChange("status_visibilitas", checked ? "Aktif" : "Nonaktif") // Gunakan handler yg dimemoize
-                        }
-                        checkedChildren="Ditampilkan"
-                        unCheckedChildren="Disembunyikan"
-                        style={{ display: "block", marginTop: 8 }}
-                      />
-                    </div>
-                  </Col>
-
-                  <Col xs={24} md={12}>
-                    <div style={{ marginBottom: 16 }}>
-                      <Text strong>Deskripsi</Text>
-                      <TextArea
-                        rows={6}
-                        placeholder="Masukkan deskripsi produk (opsional)"
-                        value={formData.deskripsi_produk || ""}
-                        onChange={(e) => handleChange("deskripsi_produk", e.target.value)} // Gunakan handler yg dimemoize
-                      />
-                    </div>
-
-                    <div>
-                      <Text strong>Foto Produk</Text>
-                      <Upload
-                        listType="picture-card"
-                        className="product-uploader"
-                        showUploadList={false}
-                        // beforeUpload di-handle oleh onChange
-                        onChange={handleFileChange} // Gunakan handler yg dimemoize
-                        maxCount={1}
-                        accept="image/png, image/jpeg"
-                      >
-                        {previewImage ? (
-                          <img src={previewImage} alt="Preview" style={{ width: '100%', borderRadius: '8px' }} />
-                        ) : (
-                          <div>
-                            <PlusOutlined />
-                            <div style={{ marginTop: 8 }}>Upload Foto</div>
-                          </div>
-                        )}
-                      </Upload>
-                      {previewImage && (
-                        <Button
-                          size="small"
-                          danger
-                          onClick={() => { // Logic hapus preview
-                            setFileFoto(null);
-                            setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
-                          }}
-                          style={{ marginTop: 8 }}
-                        >
-                          Hapus Foto
-                        </Button>
-                      )}
-                      <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: 4 }}>
-                        Klik area di atas untuk upload (JPG/PNG, Max 2MB).
-                        {editingProduct && ' Kosongkan jika tidak ingin mengubah foto.'}
-                      </Text>
-                    </div>
-                  </Col>
-                </Row>
-            {/* </Spin> */}
-          </Modal>
-
-          {/* CSS untuk preview upload picture-card */}
-          <style jsx global>{`
+        {/* CSS untuk preview upload picture-card */}
+        <style jsx global>{`
               .product-uploader .ant-upload.ant-upload-select-picture-card {
                 width: 150px;
                 height: 150px;
@@ -720,7 +731,7 @@ const handleEdit = useCallback((product) => {
                  object-fit: cover; /* Pastikan gambar ter-cover */
               }
             `}</style>
-        </div>
+      </div>
     </Spin> // Tutup Spin indicator
   );
 };

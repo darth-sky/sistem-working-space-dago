@@ -68,6 +68,7 @@ import BukaSesi from "./pages/Kasir/BukaSesi/BukaSesi";
 import SesiKasirGuard from "./components/SesiKasirGuard";
 import LaporanPajak from "./pages/Owner/LaporanPajak/LaporanPajak";
 import InformasiAcaraLogin from "./pages/Pelanggan/InformasiAcaraLogin/InformasiAcaraLogin";
+import GantiPasswordKasir from "./pages/Kasir/GantiPasswordKasir/GantiPasswordKasir";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -254,16 +255,31 @@ const App = () => {
             - TIDAK DIBUNGKUS SidebarKasir
         */}
         <Route element={<PrivateRoute allowedRoles={['kasir']} />}>
+
+          {/* HALAMAN BUKA SESI */}
           <Route path="/kasir/buka-sesi" element={<BukaSesi />} />
+
+          {/* --- PERUBAHAN YANG DITAMBAHKAN ---
+    HALAMAN GANTI PASSWORD (UNTUK LOGIN PERTAMA KALI)
+  */}
+          <Route
+            path="/kasir/ganti-password"
+            element={<GantiPasswordKasir />}
+          />
+          {/* --- AKHIR PERUBAHAN --- */}
+
         </Route>
 
 
         {/* RUTE 2: SEMUA HALAMAN KASIR LAINNYA
-            Ini adalah struktur "nested" (bersarang) yang benar.
-        */}
-        <Route element={<PrivateRoute allowedRoles={['kasir']} />}>  {/* 1. Cek Login & Role */}
+    Rute-rute ini memerlukan:
+    1. Login & Role yang benar (PrivateRoute)
+    2. Sesi kasir yang aktif (SesiKasirGuard)
+    3. Tampilan Sidebar (SidebarKasir)
+*/}
+        <Route element={<PrivateRoute allowedRoles={['kasir']} />}>  {/* 1. Cek Login, Role, & FirstLogin */}
           <Route element={<SesiKasirGuard />}> {/* 2. Cek Sesi Aktif */}
-            <Route element={<SidebarKasir />}> {/* 3. Tampilkan Layout Sidebar (yang punya <Outlet/>) */}
+            <Route element={<SidebarKasir />}> {/* 3. Tampilkan Layout Sidebar */}
 
               {/* 4. Halaman-halaman ini akan dirender di dalam <Outlet /> milik SidebarKasir */}
               <Route path="/transaksikasir" element={<TransaksiKasir />} />

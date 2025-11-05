@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Card, Typography, Form, Input, Button, Spin, Alert, Space, Tag,
-  Divider, Row, Col, notification, Image, Checkbox
+  Card, Typography, Form, Input, Button, Spin, Space, Tag,
+  Divider, Row, Col, notification, Checkbox
 } from "antd";
 import {
-  UserOutlined, MailOutlined, PhoneOutlined, ArrowLeftOutlined, StarOutlined,
-  ClockCircleOutlined, DollarOutlined, GiftOutlined
+  PhoneOutlined, ClockCircleOutlined, DollarOutlined, StarOutlined
 } from "@ant-design/icons";
 import { getMembershipPackageDetail, registerMembership } from "../../../services/service";
 import { AuthContext } from "../../../providers/AuthProvider";
 import { ArrowLeft } from "lucide-react";
-// BARU: Import komponen modal
 import PaymentConfirmationModal from "../../../components/PaymentConfirmationModal";
 
 const { Title, Text } = Typography;
@@ -26,9 +24,10 @@ const DaftarMember = () => {
   const [form] = Form.useForm();
   const { userProfile } = useContext(AuthContext);
 
-  // BARU: State untuk modal pembayaran
+  // 🆕 State untuk modal & checkbox
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [transactionDetails, setTransactionDetails] = useState(null);
+  const [isAgreed, setIsAgreed] = useState(false); // <--- Tambahan
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -49,13 +48,13 @@ const DaftarMember = () => {
     fetchDetail();
   }, [id]);
 
-  // PERUBAHAN: handleSubmit sekarang menampilkan modal
+  // Submit handler
   const handleSubmit = async (values) => {
     setSubmitting(true);
     try {
       const payload = {
         id_user: userProfile?.id_user,
-        nama_guest: userProfile?.nama, // Menggunakan nama dari user profile
+        nama_guest: userProfile?.nama,
         no_hp: values.phone,
         id_paket_membership: membership.id_paket_membership
       };
@@ -63,13 +62,11 @@ const DaftarMember = () => {
       const result = await registerMembership(payload);
 
       if (result.message === "OK") {
-        // Siapkan data untuk modal
         setTransactionDetails({
           id_transaksi: result.id_transaksi,
           nama_paket: membership.nama_paket,
           harga: membership.harga,
         });
-        // Tampilkan modal
         setPaymentModalVisible(true);
       } else {
         throw new Error(result.error || "Pendaftaran gagal");
@@ -85,7 +82,6 @@ const DaftarMember = () => {
     }
   };
 
-  // BARU: Handler untuk tombol konfirmasi di modal
   const handlePaymentConfirm = () => {
     setPaymentModalVisible(false);
     notification.success({
@@ -102,17 +98,18 @@ const DaftarMember = () => {
     </div>
   );
 
-  // Bagian JSX (Form, Card, dll.) tetap sama, hanya menambahkan render Modal
   return (
     <div style={{ padding: "24px", maxWidth: "1000px", margin: "0 auto" }}>
-      {/* ... (Semua JSX Anda dari Card, Form, dll. tetap di sini) ... */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-gray-200 transition-colors" aria-label="Kembali">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+          aria-label="Kembali"
+        >
           <ArrowLeft size={20} className="text-gray-700" />
         </button>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Kembali</h1>
       </div>
-
 
       <Row gutter={[24, 24]}>
         <Col xs={24} lg={10}>
@@ -174,7 +171,6 @@ const DaftarMember = () => {
                     </div>
                   </div>
                 )}
-
               </Space>
             </Card>
           )}
@@ -193,13 +189,7 @@ const DaftarMember = () => {
               Data Diri Member
             </Title>
 
-            <Form
-              form={form}
-              layout="vertical"
-              onFinish={handleSubmit}
-              size="large"
-            >
-
+            <Form form={form} layout="vertical" onFinish={handleSubmit} size="large">
               <Form.Item
                 label="Nomor HP"
                 name="phone"
@@ -214,9 +204,14 @@ const DaftarMember = () => {
                 />
               </Form.Item>
 
-              <Checkbox>
-                Dengan mengklik "Daftar Sekarang", Anda menyetujui <a href="#">Syarat & Ketentuan</a> yang berlaku.
-              </Checkbox>
+              {/* 🆕 Checkbox persetujuan */}
+              <Form.Item>
+                <Checkbox checked={isAgreed} onChange={(e) => setIsAgreed(e.target.checked)}>
+                  Dengan mengklik "Daftar Sekarang", Anda menyetujui{" "}
+                  <a href="#">Syarat & Ketentuan</a> yang berlaku.
+                </Checkbox>
+              </Form.Item>
+
               <Divider style={{ margin: "20px 0" }} />
 
               <Form.Item style={{ marginBottom: 0 }}>
@@ -225,13 +220,17 @@ const DaftarMember = () => {
                   htmlType="submit"
                   block
                   size="large"
+                  disabled={!isAgreed} // 🔒 Tidak bisa klik sebelum setuju
                   style={{
                     borderRadius: "8px",
                     height: "48px",
-                    background: "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)",
+                    background: isAgreed
+                      ? "linear-gradient(135deg, #1890ff 0%, #096dd9 100%)"
+                      : "#d9d9d9",
                     border: "none",
                     fontWeight: "bold",
-                    fontSize: "16px"
+                    fontSize: "16px",
+                    cursor: isAgreed ? "pointer" : "not-allowed"
                   }}
                   loading={submitting}
                 >
@@ -243,7 +242,6 @@ const DaftarMember = () => {
         </Col>
       </Row>
 
-      {/* BARU: Render komponen modal di sini */}
       <PaymentConfirmationModal
         open={paymentModalVisible}
         details={transactionDetails}
