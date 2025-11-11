@@ -37,6 +37,10 @@ import "dayjs/locale/id";
 import locale from "antd/locale/id_ID";
 import { getExpenses, createExpense, updateExpense, deleteExpense } from "../../../services/service";
 
+// --- IMPOR BARU UNTUK EXPORT ---
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -65,40 +69,42 @@ const formatRupiah = (amount) =>
 const CostBulanan = () => {
   dayjs.locale("id");
 
-  // <-- MODIFIKASI: State 'expenses' diawali dengan array kosong
   const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true); // <-- BARU: State untuk loading indicator
+  const [loading, setLoading] = useState(true);
   const [filteredExpenses, setFilteredExpenses] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [form] = Form.useForm();
   const [searchText, setSearchText] = useState("");
+  const [exporting, setExporting] = useState(false); // <-- STATE BARU UNTUK LOADING EXPORT
 
   const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1);
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
 
-  // <-- BARU: Fungsi untuk mengambil data dari API, dibungkus dengan useCallback
+  // Fungsi untuk mengambil data (Sudah benar)
   const fetchExpenses = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getExpenses(selectedMonth, selectedYear);
+      const date = dayjs().year(selectedYear).month(selectedMonth - 1);
+      const startDate = date.startOf('month').format('YYYY-MM-DD');
+      const endDate = date.endOf('month').format('YYYY-MM-DD');
+      
+      const data = await getExpenses(startDate, endDate);
       setExpenses(data);
     } catch (error) {
       message.error(error.message || "Gagal memuat data dari server.");
-      setExpenses([]); // Kosongkan data jika terjadi error
+      setExpenses([]);
     } finally {
       setLoading(false);
     }
   }, [selectedMonth, selectedYear]);
 
-  // <-- MODIFIKASI: useEffect ini sekarang memanggil API saat filter berubah
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
 
 
-  // Filter expenses
-  // <-- MODIFIKASI: useEffect ini sekarang hanya untuk filter pencarian teks (client-side)
+  // Filter expenses (client-side)
   useEffect(() => {
     const filtered = expenses.filter((expense) => {
       const matchSearch =
@@ -146,8 +152,8 @@ const CostBulanan = () => {
     };
 
     try {
+      setLoading(true); // Tampilkan loading di tabel
       if (editingExpense) {
-        // Proses UPDATE
         const response = await updateExpense(editingExpense.id, expenseData);
         if (response.status === 200) {
           message.success("Pengeluaran berhasil diperbarui!");
@@ -155,7 +161,6 @@ const CostBulanan = () => {
           throw new Error(response.data.error || "Gagal memperbarui pengeluaran.");
         }
       } else {
-        // Proses CREATE
         const response = await createExpense(expenseData);
         if (response.status === 201) {
           message.success("Pengeluaran berhasil ditambahkan!");
@@ -164,39 +169,122 @@ const CostBulanan = () => {
         }
       }
       handleCancel();
-      fetchExpenses(); // <-- PENTING: Muat ulang data dari server setelah berhasil
+      await fetchExpenses(); // Muat ulang data
     } catch (error) {
       message.error(error.message);
+    } finally {
+      setLoading(false); // Sembunyikan loading
     }
   };
 
   const handleDelete = async (id) => {
     try {
+      setLoading(true); // Tampilkan loading di tabel
       const response = await deleteExpense(id);
       if (response.status === 200) {
         message.success("Pengeluaran berhasil dihapus!");
-        fetchExpenses(); // <-- PENTING: Muat ulang data dari server setelah berhasil
+        await fetchExpenses(); // Muat ulang data
       } else {
         throw new Error(response.data.error || "Gagal menghapus pengeluaran.");
       }
     } catch (error) {
       message.error(error.message);
+    } finally {
+      setLoading(false); // Sembunyikan loading
     }
   };
 
-  const handleExport = () => {
-    const header = "No,Tanggal,Kategori,Deskripsi,Jumlah\n";
-    const csvContent = filteredExpenses.map((exp, idx) => {
-      const category = CATEGORIES.find((c) => c.value === exp.kategori)?.label || exp.kategori;
-      return `${idx + 1},${exp.tanggal},${category},${exp.deskripsi},${exp.jumlah}`;
-    }).join("\n");
+  // --- FUNGSI HANDLE EXPORT BARU MENGGUNAKAN EXCELJS ---
+  const handleExport = async () => {
+    setExporting(true);
 
-    const blob = new Blob([header + csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `pengeluaran_${selectedMonth}_${selectedYear}.csv`;
-    link.click();
-    message.success("Data berhasil diexport!");
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Data Pengeluaran");
+
+      // Definisikan border style
+      const borderStyle = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+
+      // Definisikan header
+      const header = [
+        "No",
+        "Tanggal",
+        "Kategori",
+        "Deskripsi",
+        "Jumlah (Rp)"
+      ];
+
+      const headerRow = ws.addRow(header);
+
+      // Beri style pada header (Bold, Border, Center)
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true };
+        cell.border = borderStyle;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // Tambahkan data
+      filteredExpenses.forEach((exp, idx) => {
+        const categoryInfo = getCategoryInfo(exp.kategori);
+        
+        const rowData = [
+          idx + 1,
+          dayjs(exp.tanggal).toDate(), // Kirim sebagai objek Date
+          categoryInfo.label,
+          exp.deskripsi,
+          exp.jumlah // Kirim sebagai angka
+        ];
+        
+        const row = ws.addRow(rowData);
+
+        // Beri style pada setiap sel data
+        row.eachCell((cell, colNumber) => {
+          cell.border = borderStyle;
+          
+          if (colNumber === 1) { // No
+            cell.alignment = { horizontal: 'center' };
+          }
+          if (colNumber === 2) { // Tanggal
+            cell.numFmt = 'DD/MM/YYYY'; // Format tanggal
+            cell.alignment = { horizontal: 'left' };
+          }
+           if (colNumber === 5) { // Jumlah
+            cell.numFmt = '"Rp"#,##0'; // Format Rupiah
+            cell.alignment = { horizontal: 'right' };
+          }
+        });
+      });
+
+      // Atur lebar kolom
+      ws.columns = [
+        { width: 5 },  // No
+        { width: 15 }, // Tanggal
+        { width: 20 }, // Kategori
+        { width: 40 }, // Deskripsi
+        { width: 20 }  // Jumlah
+      ];
+
+      // Siapkan nama file
+      const filename = `Pengeluaran_${selectedYear}-${String(selectedMonth).padStart(2, '0')}.xlsx`;
+
+      // Tulis ke buffer dan simpan file
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      saveAs(blob, filename);
+
+      message.success("Data berhasil diexport!");
+
+    } catch (err) {
+      console.error("Gagal export Excel:", err);
+      message.error("Gagal mengekspor data.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const getCategoryInfo = (value) => {
@@ -400,6 +488,8 @@ const CostBulanan = () => {
                 icon={<FileExcelOutlined />}
                 onClick={handleExport}
                 className="bg-green-50 border-green-500 text-green-600 hover:bg-green-100"
+                loading={exporting} // <-- TAMBAHKAN LOADING STATE
+                disabled={loading || filteredExpenses.length === 0} // <-- TAMBAHKAN DISABLED
               >
                 Export Excel
               </Button>

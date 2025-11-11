@@ -45,6 +45,9 @@ const PaketMembershipTab = () => {
     const [pageSize, setPageSize] = useState(5);
     const [kategoriRuanganList, setKategoriRuanganList] = useState([]);
 
+    // --- TAMBAHAN: State untuk validasi ---
+    const [validationErrors, setValidationErrors] = useState({});
+
     const getKategoriName = (id) => {
         const kategori = kategoriRuanganList.find(
             (k) => k.id_kategori_ruangan === id
@@ -63,7 +66,8 @@ const PaketMembershipTab = () => {
             const resPaket = await getPaketMembership();
             if (resPaket.status === 200) {
                 const paket = resPaket.data.datas.map((item, index) => ({
-                    key: index + 1,
+                    // --- PERBAIKAN: Gunakan ID asli untuk key ---
+                    key: item.id_paket_membership || index + 1, 
                     id_paket_membership: item.id_paket_membership,
                     id_kategori_ruangan: item.id_kategori_ruangan,
                     nama_paket: item.nama_paket,
@@ -211,20 +215,33 @@ const PaketMembershipTab = () => {
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
+        // --- PERBAIKAN: Hapus error spesifik saat user mulai mengisi ---
+        if (validationErrors[field]) {
+            setValidationErrors(prevErrors => {
+                const newErrors = { ...prevErrors };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
     };
 
     const handleSave = async () => {
-        if (
-            !formData.nama_paket ||
-            !formData.harga ||
-            !formData.kuota ||
-            !formData.id_kategori_ruangan ||
-            !formData.durasi ||
-            !formData.status_paket
-        ) {
-            message.error("Semua field bertanda * dan status wajib diisi!");
+        // --- PERBAIKAN: Validasi Penuh ---
+        const errors = {};
+        if (!formData.nama_paket || formData.nama_paket.trim() === "") errors.nama_paket = true;
+        if (!formData.id_kategori_ruangan) errors.id_kategori_ruangan = true;
+        if (formData.durasi === null || formData.durasi === undefined || formData.durasi <= 0) errors.durasi = true;
+        if (formData.kuota === null || formData.kuota === undefined || formData.kuota < 0) errors.kuota = true;
+        if (formData.harga === null || formData.harga === undefined || formData.harga < 0) errors.harga = true;
+        // status_paket selalu memiliki nilai
+
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
             return;
         }
+        setValidationErrors({}); // Lolos validasi, bersihkan error
+        // --- AKHIR PERBAIKAN VALIDASI ---
 
         setLoading(true);
         try {
@@ -255,11 +272,13 @@ const PaketMembershipTab = () => {
                 await fetchData();
                 handleCancel();
             } else {
-                message.error("Gagal menyimpan paket!");
+                // Tampilkan error dari server jika ada
+                message.error(res.data?.error || "Gagal menyimpan paket!");
             }
         } catch (err) {
             console.error("Error save paket:", err);
-            message.error(`Gagal menyimpan. Error: ${err.message}`);
+            const errorMsg = err.response?.data?.error || `Gagal menyimpan. Error: ${err.message}`;
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -273,11 +292,12 @@ const PaketMembershipTab = () => {
                 message.success("Paket berhasil dihapus permanen!");
                 await fetchData();
             } else {
-                message.error("Gagal menghapus paket");
+                message.error(res.data?.error || "Gagal menghapus paket");
             }
         } catch (err) {
             console.error("Error delete paket:", err);
-            message.error("Gagal menghapus paket.");
+            const errorMsg = err.response?.data?.error || "Gagal menghapus paket.";
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -295,6 +315,7 @@ const PaketMembershipTab = () => {
             fitur_membership: membershipPackage.fitur_membership,
             status_paket: membershipPackage.status_paket,
         });
+        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
         setOpen(true);
     };
 
@@ -302,6 +323,15 @@ const PaketMembershipTab = () => {
         setOpen(false);
         setEditingPackage(null);
         setFormData({ status_paket: "Active" });
+        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+    };
+
+    // --- PERBAIKAN: Pisahkan handler untuk tombol "Tambah Paket Baru" ---
+    const handleAddClick = () => {
+        setEditingPackage(null);
+        setFormData({ status_paket: "Active" });
+        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setOpen(true);
     };
 
     const handleStatusChange = (checked) => {
@@ -323,17 +353,15 @@ const PaketMembershipTab = () => {
                         onSearch={setSearchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         prefix={<SearchOutlined />}
+                        size="large" // <-- PERBAIKAN: Buat search bar lebih besar
                     />
                 </Col>
                 <Col xs={24} md={12} style={{ textAlign: "right" }}>
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
-                        onClick={() => {
-                            setOpen(true);
-                            setEditingPackage(null);
-                            setFormData({ status_paket: "Active" });
-                        }}
+                        onClick={handleAddClick} // <-- PERBAIKAN: Gunakan handler baru
+                        size="large" // <-- PERBAIKAN: Buat tombol lebih besar
                     >
                         Tambah Paket Baru
                     </Button>
@@ -352,6 +380,7 @@ const PaketMembershipTab = () => {
                     }}
                     loading={loading}
                     scroll={{ x: "max-content" }}
+                    rowKey="key" // <-- PERBAIKAN: Gunakan key unik
                 />
             </Card>
 
@@ -365,8 +394,9 @@ const PaketMembershipTab = () => {
                 okText={editingPackage ? "Update" : "Simpan"}
                 cancelText="Batal"
                 bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
+                destroyOnClose // Reset state internal AntD
             >
-                <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+                <Row justify="space-between" align="middle" style={{ margin: "20px 0 16px 0" }}>
                     <Col>
                         <Text strong>Status Paket</Text>
                     </Col>
@@ -380,81 +410,126 @@ const PaketMembershipTab = () => {
                     </Col>
                 </Row>
 
-                <Text strong>Nama Paket <span style={{ color: "red" }}>*</span></Text>
-                <Input
-                    placeholder="Contoh: Basic Open Space"
-                    value={formData.nama_paket || ""}
-                    onChange={(e) => handleChange("nama_paket", e.target.value)}
-                    style={{ marginBottom: 16 }}
-                />
+                <div style={{ marginBottom: 16 }}>
+                    <Text strong>Nama Paket <span style={{ color: "red" }}>*</span></Text>
+                    <Input
+                        placeholder="Contoh: Basic Open Space"
+                        value={formData.nama_paket || ""}
+                        onChange={(e) => handleChange("nama_paket", e.target.value)}
+                        style={{ marginTop: 8 }}
+                        status={validationErrors.nama_paket ? 'error' : ''}
+                    />
+                    {validationErrors.nama_paket && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Nama paket wajib diisi.
+                        </Text>
+                    )}
+                </div>
 
-                <Text strong>Kategori Ruangan <span style={{ color: "red" }}>*</span></Text>
-                <Select
-                    style={{ width: "100%", marginBottom: 16 }}
-                    placeholder="Pilih Kategori Ruangan"
-                    value={formData.id_kategori_ruangan || undefined}
-                    onChange={(value) => handleChange("id_kategori_ruangan", value)}
-                >
-                    {kategoriRuanganList.map((kategori) => (
-                        <Select.Option
-                            key={kategori.id_kategori_ruangan}
-                            value={kategori.id_kategori_ruangan}
-                        >
-                            {kategori.nama_kategori}
-                        </Select.Option>
-                    ))}
-                </Select>
+                <div style={{ marginBottom: 16 }}>
+                    <Text strong>Kategori Ruangan <span style={{ color: "red" }}>*</span></Text>
+                    <Select
+                        style={{ width: "100%", marginTop: 8 }}
+                        placeholder="Pilih Kategori Ruangan"
+                        value={formData.id_kategori_ruangan || undefined}
+                        onChange={(value) => handleChange("id_kategori_ruangan", value)}
+                        status={validationErrors.id_kategori_ruangan ? 'error' : ''}
+                    >
+                        {kategoriRuanganList.map((kategori) => (
+                            <Select.Option
+                                key={kategori.id_kategori_ruangan}
+                                value={kategori.id_kategori_ruangan}
+                            >
+                                {kategori.nama_kategori}
+                            </Select.Option>
+                        ))}
+                    </Select>
+                    {validationErrors.id_kategori_ruangan && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Kategori wajib dipilih.
+                        </Text>
+                    )}
+                </div>
 
                 <Row gutter={16}>
                     <Col xs={24} md={12}>
-                        <Text strong>Durasi (Hari) <span style={{ color: "red" }}>*</span></Text>
-                        <InputNumber
-                            style={{ width: "100%", marginBottom: 16 }}
-                            placeholder="Contoh: 30"
-                            min={1}
-                            value={formData.durasi}
-                            onChange={(v) => handleChange("durasi", v)}
-                        />
+                        <div style={{ marginBottom: 16 }}>
+                            <Text strong>Durasi (Hari) <span style={{ color: "red" }}>*</span></Text>
+                            <InputNumber
+                                style={{ width: "100%", marginTop: 8 }}
+                                placeholder="Contoh: 30"
+                                min={1}
+                                value={formData.durasi}
+                                onChange={(v) => handleChange("durasi", v)}
+                                status={validationErrors.durasi ? 'error' : ''}
+                            />
+                            {validationErrors.durasi && (
+                                <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                                    Durasi wajib diisi (minimal 1 hari).
+                                </Text>
+                            )}
+                        </div>
                     </Col>
                     <Col xs={24} md={12}>
-                        <Text strong>Kuota/Kredit <span style={{ color: "red" }}>*</span></Text>
-                        <InputNumber
-                            style={{ width: "100%", marginBottom: 16 }}
-                            placeholder="Jumlah kredit"
-                            min={0}
-                            value={formData.kuota}
-                            onChange={(v) => handleChange("kuota", v)}
-                        />
+                         <div style={{ marginBottom: 16 }}>
+                            <Text strong>Kuota/Kredit <span style={{ color: "red" }}>*</span></Text>
+                            <InputNumber
+                                style={{ width: "100%", marginTop: 8 }}
+                                placeholder="Jumlah kredit"
+                                min={0}
+                                value={formData.kuota}
+                                onChange={(v) => handleChange("kuota", v)}
+                                status={validationErrors.kuota ? 'error' : ''}
+                            />
+                            {validationErrors.kuota && (
+                                <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                                    Kuota wajib diisi (minimal 0).
+                                </Text>
+                            )}
+                        </div>
                     </Col>
                 </Row>
 
-                <Text strong>Harga (Rp) <span style={{ color: "red" }}>*</span></Text>
-                <InputNumber
-                    style={{ width: "100%", marginBottom: 16 }}
-                    placeholder="Contoh: 500000"
-                    formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                    parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
-                    min={0}
-                    value={formData.harga}
-                    onChange={(v) => handleChange("harga", v)}
-                />
+                <div style={{ marginBottom: 16 }}>
+                    <Text strong>Harga (Rp) <span style={{ color: "red" }}>*</span></Text>
+                    <InputNumber
+                        style={{ width: "100%", marginTop: 8 }}
+                        placeholder="Contoh: 500000"
+                        formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                        parser={(v) => v.replace(/\$\s?|(,*)/g, "")}
+                        min={0}
+                        value={formData.harga}
+                        onChange={(v) => handleChange("harga", v)}
+                        status={validationErrors.harga ? 'error' : ''}
+                    />
+                    {validationErrors.harga && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Harga wajib diisi (minimal 0).
+                        </Text>
+                    )}
+                </div>
 
-                <Text strong>Deskripsi Benefit</Text>
-                <TextArea
-                    rows={3}
-                    placeholder="Penjelasan benefit (opsional)"
-                    value={formData.deskripsi_benefit || ""}
-                    onChange={(e) => handleChange("deskripsi_benefit", e.target.value)}
-                    style={{ marginBottom: 16 }}
-                />
+                <div style={{ marginBottom: 16 }}>
+                    <Text strong>Deskripsi Benefit</Text>
+                    <TextArea
+                        rows={3}
+                        placeholder="Penjelasan benefit (opsional)"
+                        value={formData.deskripsi_benefit || ""}
+                        onChange={(e) => handleChange("deskripsi_benefit", e.target.value)}
+                        style={{ marginTop: 8 }}
+                    />
+                </div>
 
-                <Text strong>Fitur Membership</Text>
-                <TextArea
-                    rows={2}
-                    placeholder="Fitur tambahan (opsional)"
-                    value={formData.fitur_membership || ""}
-                    onChange={(e) => handleChange("fitur_membership", e.target.value)}
-                />
+                <div>
+                    <Text strong>Fitur Membership</Text>
+                    <TextArea
+                        rows={2}
+                        placeholder="Fitur tambahan (opsional)"
+                        value={formData.fitur_membership || ""}
+                        onChange={(e) => handleChange("fitur_membership", e.target.value)}
+                        style={{ marginTop: 8 }}
+                    />
+                </div>
             </Modal>
         </div>
     );

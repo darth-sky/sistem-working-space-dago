@@ -29,7 +29,9 @@ const GlobalRentalMonitor = () => {
     // 'rental' berisi info seperti { client, unit, ... }
     notification.warning({
       message: 'Waktu Sewa Segera Habis',
-      description: `Sewa atas nama "${rental.client}" di unit "${rental.unit.toUpperCase()}" akan berakhir dalam 15 menit.`,
+      // --- UBAH BARIS INI ---
+      description: `Sewa atas nama "${rental.client || 'N/A'}" di unit "${(rental.unit || 'N/A').toUpperCase()}" akan berakhir dalam 15 menit.`,
+      // --- AKHIR PERUBAHAN ---
       placement: 'topRight', // Posisi pop-up
       duration: 10, // Tampilkan selama 10 detik
       icon: <ClockCircleOutlined style={{ color: '#faad14' }} />, // Ikon penanda

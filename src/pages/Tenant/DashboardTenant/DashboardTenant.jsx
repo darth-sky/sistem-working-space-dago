@@ -216,12 +216,6 @@ const DashboardTenant = () => {
                                     >
                                         Terima Order
                                     </Button>
-                                    <Button
-                                        danger
-                                        onClick={() => message.info("Fitur Batalkan Order belum diimplementasikan")}
-                                    >
-                                        Batalkan
-                                    </Button>
                                 </>
                             )}
                             {selectedOrder.status === "Diproses" && (

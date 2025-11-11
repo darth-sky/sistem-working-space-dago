@@ -75,10 +75,7 @@ const maskExceptIndices = (arr, indices) => {
 };
 
 const Laporan = () => {
-  const [dateRange, setDateRange] = useState([
-    dayjs().startOf("month"),
-    dayjs(),
-  ]);
+  const [dateRange, setDateRange] = useState([dayjs().startOf("month"), dayjs()]);
   const [loading, setLoading] = useState(false);
   const reportRef = useRef(null);
 
@@ -88,7 +85,7 @@ const Laporan = () => {
     total_ws: 0,
     total_sales: 0,
     total_transactions: 0,
-    total_visitors: 0, // <-- PERUBAHAN DI SINI (1): Ditambahkan
+    total_visitors: 0,
     avg_daily: 0,
     total_days: 0,
   });
@@ -111,7 +108,7 @@ const Laporan = () => {
           total_ws: Number(d?.totals?.total_ws || 0),
           total_sales: Number(d?.totals?.total_sales || 0),
           total_transactions: Number(d?.totals?.total_transactions || 0),
-          total_visitors: Number(d?.totals?.total_visitors || 0), // <-- PERUBAHAN DI SINI (2): Ditambahkan
+          total_visitors: Number(d?.totals?.total_visitors || 0),
           avg_daily: Number(d?.totals?.avg_daily || 0),
           total_days: Number(d?.totals?.total_days || 0),
         });
@@ -123,8 +120,8 @@ const Laporan = () => {
         setTopWs(
           Array.isArray(d?.top_ws)
             ? [...d.top_ws].sort(
-              (a, b) => Number(b.qty || 0) - Number(a.qty || 0)
-            )
+                (a, b) => Number(b.qty || 0) - Number(a.qty || 0)
+              )
             : []
         );
       } catch (e) {
@@ -195,10 +192,7 @@ const Laporan = () => {
   const visitorsData = hours.map((H) => visitorsMap.get(H) || 0);
 
   // Peak hours visiting (Top 3 dari visitorsData)
-  const topPeakIdx = useMemo(
-    () => getTopNIndices(visitorsData, 3),
-    [visitorsData]
-  );
+  const topPeakIdx = useMemo(() => getTopNIndices(visitorsData, 3), [visitorsData]);
   const peakOnly = useMemo(
     () => maskExceptIndices(visitorsData, topPeakIdx),
     [visitorsData, topPeakIdx]
@@ -215,8 +209,7 @@ const Laporan = () => {
           label: (ctx) => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
-            if (ctx.parsed?.y != null)
-              label += `Rp ${formatRupiah(ctx.parsed.y)}`;
+            if (ctx.parsed?.y != null) label += `Rp ${formatRupiah(ctx.parsed.y)}`;
             return label;
           },
         },
@@ -242,8 +235,7 @@ const Laporan = () => {
           label: (ctx) => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
-            if (ctx.parsed?.y != null)
-              label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
+            if (ctx.parsed?.y != null) label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
             return label;
           },
         },
@@ -270,8 +262,7 @@ const Laporan = () => {
           label: (ctx) => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
-            if (ctx.parsed?.y != null)
-              label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
+            if (ctx.parsed?.y != null) label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
             return label;
           },
         },
@@ -341,7 +332,7 @@ const Laporan = () => {
           img.style.height = orig.style.height || `${orig.height}px`;
           const cloned = clonedCanvases[idx];
           if (cloned?.parentNode) cloned.parentNode.replaceChild(img, cloned);
-        } catch (_) { }
+        } catch (_) {}
       });
 
       document.body.appendChild(clone);
@@ -410,7 +401,7 @@ const Laporan = () => {
             `<img src="${dataUrl}" style="max-width:100%"/>`
           );
         }
-      } catch (_) { }
+      } catch (_) {}
     }
   };
 
@@ -426,7 +417,7 @@ const Laporan = () => {
           "Total WS": totals.total_ws,
           "Total Sales": totals.total_sales,
           "Jumlah Transaksi (FNB + Booking WS)": totals.total_transactions,
-          "Total Pengunjung (FNB + WS)": totals.total_visitors, // <-- Saya tambahkan di Excel juga
+          "Total Pengunjung (FNB + WS)": totals.total_visitors,
           "Rata-rata Harian": totals.avg_daily,
           "Total Hari": totals.total_days,
           Periode: `${startStr} s.d. ${endStr}`,
@@ -518,10 +509,11 @@ const Laporan = () => {
               <Text type="secondary">Rentang:</Text>
               <RangePicker
                 value={dateRange}
-                onChange={(vals) =>
-                  vals &&
-                  setDateRange([vals[0].startOf("day"), vals[1].endOf("day")])
-                }
+                onChange={(vals) => {
+                  if (vals && vals[0] && vals[1]) {
+                    setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]);
+                  }
+                }}
                 format="DD-MM-YYYY"
               />
               <Select
@@ -584,7 +576,7 @@ const Laporan = () => {
             <Card loading={loading}>
               <Statistic
                 title="Total Pengunjung"
-                value={totals.total_visitors} // <-- PERUBAHAN DI SINI (3): Diganti
+                value={totals.total_visitors}
                 prefix={<UsergroupAddOutlined />}
               />
             </Card>
@@ -626,8 +618,7 @@ const Laporan = () => {
                     Daily Selling
                   </Title>
                   <Text type="secondary">
-                    {dateRange[0].format("D MMM")} -{" "}
-                    {dateRange[1].format("D MMM YYYY")}
+                    {dateRange[0].format("D MMM")} - {dateRange[1].format("D MMM YYYY")}
                   </Text>
                 </Col>
                 <Col span={24}>
@@ -641,7 +632,7 @@ const Laporan = () => {
             <Card style={{ marginBottom: 16 }} loading={loading}>
               <Title level={5}>Trafik Pengunjung per Jam</Title>
               <Text type="secondary">
-                Akumulasi kunjungan selama periode {totalDays}{" "} hari.
+                Akumulasi kunjungan selama periode {totalDays} hari.
               </Text>
               <div style={{ height: 300, marginTop: 10 }}>
                 <Bar
@@ -702,7 +693,7 @@ const Laporan = () => {
                               0
                             );
                           return total
-                            ? ((value / total) * 100).toFixed(1) + "%"
+                            ? `${((value / total) * 100).toFixed(1)}%`
                             : "0%";
                         },
                         font: { weight: "bold", size: 14 },
@@ -711,18 +702,10 @@ const Laporan = () => {
                         callbacks: {
                           label: (ctx) => {
                             const value = ctx.parsed || 0;
-                            const total = ctx.dataset.data.reduce(
-                              (s, v) => s + v,
-                              0
-                            );
-                            const pct = total
-                              ? ((value / total) * 100).toFixed(1)
-                              : 0;
-                            return `${ctx.label}: Rp ${formatRupiah(
-                              value
-                            )} (${pct}%)`;
+                            const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
+                            const pct = total ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${ctx.label}: Rp ${formatRupiah(value)} (${pct}%)`;
                           },
-                          
                         },
                       },
                     },
@@ -745,13 +728,13 @@ const Laporan = () => {
                       cursor: "pointer",
                     }}
                   >
-                    📄 Cetak Laporan (Gambar)
+                    📄 Cetak Gambar
                   </button>
                 </Tooltip>
                 <Tooltip title="Unduh seluruh data yang tampil ke Excel (multi-sheet)">
                   <button
                     onClick={handleExportExcel}
-                    s style={{
+                    style={{
                       width: "100%",
                       padding: 10,
                       borderRadius: 8,
@@ -759,10 +742,10 @@ const Laporan = () => {
                       cursor: "pointer",
                     }}
                   >
-                    ⬇ Export Data (Excel)
+                    ⬇ Cetak Laporan (CSV/Excel)
                   </button>
                 </Tooltip>
-                s </Space>
+              </Space>
             </Card>
           </Col>
         </Row>
@@ -885,7 +868,6 @@ const Laporan = () => {
                   border: "1px solid #ddd",
                   borderRadius: 6,
                   cursor: "pointer",
-                  section
                 }}
               >
                 Tutup

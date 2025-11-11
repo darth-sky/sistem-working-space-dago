@@ -9,10 +9,9 @@ import {
   Button,
   Divider,
   message,
-  Modal,
-  Form,
-  InputNumber,
-  Spin, // Import Spin
+  Typography,
+  Space,
+  Select,
 } from "antd";
 import {
   LineChartOutlined,
@@ -24,424 +23,363 @@ import {
   WalletOutlined,
   BankOutlined,
   FileTextOutlined,
-  ScheduleOutlined,
 } from "@ant-design/icons";
 import locale from "antd/locale/id_ID";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
+import { apiGetLaporanPajakData } from "../../../services/service"; // <--- Pastikan path sesuai
 
-// Import service API
-import { apiGetLaporanPajakData, apiSaveTaxPayment } from "../../../services/service"; // Sesuaikan path
+dayjs.locale("id");
 
 const { RangePicker } = DatePicker;
+const { Title, Text } = Typography;
 
-// Fungsi formatRupiah (pastikan ini ada dan benar di utils Anda)
-const formatRupiah = (amount) => {
-    // Tambahkan pengecekan tipe data untuk keamanan tambahan
-    const numberAmount = Number(amount);
-    if (isNaN(numberAmount)) {
-        console.error("formatRupiah received invalid value:", amount);
-        return "Rp 0"; // Fallback value
-    }
-    return new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 0,
-    }).format(numberAmount);
-};
-
+const formatRupiah = (amount) =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount || 0);
 
 const LaporanPajak = () => {
   const [dateRange, setDateRange] = useState([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
   ]);
+  const [loading, setLoading] = useState(false);
 
-  // State untuk data dari API
-  const [pendapatanFnb, setPendapatanFnb] = useState(0); // Pendapatan F&B untuk pajak
-  // const [pendapatanKotorTotal, setPendapatanKotorTotal] = useState(0); // Opsional: jika butuh total semua
+  // === Data dari backend ===
+  const [totalPendapatanFnb, setTotalPendapatanFnb] = useState(0);
   const [expenses, setExpenses] = useState([]);
-  const [taxPayment, setTaxPayment] = useState({ paidAmount: 0, paymentDate: null });
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [paymentDate, setPaymentDate] = useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [form] = Form.useForm();
-
-  // useEffect untuk script XLSX (tetap sama)
-  useEffect(() => {
-    const scriptId = "xlsx-script";
-    if (document.getElementById(scriptId)) return;
-
-    const script = document.createElement("script");
-    script.id = scriptId;
-    script.src =
-      "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-    script.async = true;
-    document.body.appendChild(script);
-
-    return () => {
-      const existingScript = document.getElementById(scriptId);
-      if (existingScript) document.body.removeChild(existingScript);
-    };
-  }, []);
-
-  // Fungsi Pengambilan Data Utama (dari API)
+  // === Fetch data dari backend ===
   const fetchData = useCallback(async () => {
     if (!dateRange || dateRange.length < 2) return;
 
-    setLoading(true);
-    message.loading({ content: 'Memuat data laporan...', key: 'fetchData', duration: 0 }); // duration 0 agar tidak hilang otomatis
-
     try {
+      setLoading(true);
       const startDate = dateRange[0].format("YYYY-MM-DD");
       const endDate = dateRange[1].format("YYYY-MM-DD");
 
       const response = await apiGetLaporanPajakData(startDate, endDate);
 
-      // Update state dengan data dari API
-      setPendapatanFnb(response.total_pendapatan_fnb || 0);
-      // Jika backend mengirim total pendapatan semua:
-      // setPendapatanKotorTotal(response.total_pendapatan_kotor_all || 0);
-      setExpenses(response.pengeluaran_list || []);
-
-      const apiTaxPayment = response.tax_payment_status || {}; // Default object kosong
-      const fetchedPaymentDate = apiTaxPayment.paymentDate ? dayjs(apiTaxPayment.paymentDate) : null;
-      setTaxPayment({
-        paidAmount: apiTaxPayment.paidAmount || 0,
-        paymentDate: fetchedPaymentDate,
-      });
-
-      form.setFieldsValue({
-        paidAmount: apiTaxPayment.paidAmount || 0,
-        paymentDate: fetchedPaymentDate || dayjs(),
-      });
-
-      message.success({ content: 'Data laporan berhasil dimuat!', key: 'fetchData', duration: 2 });
-
-    } catch (error) {
-      console.error("Gagal fetch data laporan:", error);
-      message.error({ content: `Gagal memuat data: ${error.message}`, key: 'fetchData', duration: 4 });
-      setPendapatanFnb(0);
-      // setPendapatanKotorTotal(0);
-      setExpenses([]);
-      setTaxPayment({ paidAmount: 0, paymentDate: null });
-      form.resetFields();
+      if (response.message === "OK") {
+        setTotalPendapatanFnb(response.total_pendapatan_fnb || 0);
+        setExpenses(response.pengeluaran_list || []);
+        setPaidAmount(response.tax_payment_status?.paidAmount || 0);
+        setPaymentDate(
+          response.tax_payment_status?.paymentDate
+            ? dayjs(response.tax_payment_status.paymentDate)
+            : null
+        );
+        message.success("Data laporan pajak berhasil dimuat.");
+      } else {
+        message.error("Gagal memuat data laporan pajak.");
+      }
+    } catch (err) {
+      console.error(err);
+      message.error("Terjadi kesalahan saat memuat data laporan pajak.");
     } finally {
       setLoading(false);
     }
-  }, [dateRange, form]);
+  }, [dateRange]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  // === Perhitungan ===
+  const totalPendapatanKotor = totalPendapatanFnb;
+  const totalPengeluaran = expenses.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+  const persentasePajak = 0.1;
+  const pajakFinal10Persen = totalPendapatanKotor * persentasePajak;
+  const labaBersihAkhir =
+    totalPendapatanKotor - pajakFinal10Persen - totalPengeluaran;
 
-  // Hitungan utama Laba/Rugi & Pajak
-  const totalPengeluaran = expenses.reduce((s, i) => s + (i.jumlah || 0), 0);
-  const revenueUntukPajak = pendapatanFnb; // Gunakan F&B untuk pajak
-  const persentasePajak = 0.10;
-  const pajakFinal10Persen = revenueUntukPajak * persentasePajak;
+  const isTaxPaid = paidAmount >= pajakFinal10Persen && pajakFinal10Persen > 0;
 
-  // Asumsi Laba/Rugi juga dihitung HANYA dari F&B
-  // Jika ingin dari total omzet, ganti revenueUntukPajak dengan pendapatanKotorTotal (jika ada)
-  const labaKotorSetelahPajak = revenueUntukPajak - pajakFinal10Persen;
-  const labaOperasionalBersih = labaKotorSetelahPajak - totalPengeluaran;
-  const labaBersihAkhir = labaOperasionalBersih;
-  const persentaseMarginBersih = revenueUntukPajak === 0 ? 0 : (labaBersihAkhir / revenueUntukPajak) * 100;
-
-  // Status Pembayaran Pajak
-  const isTaxPaid = taxPayment.paidAmount >= pajakFinal10Persen && pajakFinal10Persen > 0;
-  const taxDeficit = Math.max(0, pajakFinal10Persen - taxPayment.paidAmount);
-
-  // Fungsi Export Excel
+  // === Export ke Excel ===
   const exportExcel = () => {
     if (typeof window.XLSX === "undefined") {
-      message.error("Pustaka XLSX belum siap. Tunggu sebentar.");
+      message.error("Pustaka XLSX belum siap. Coba lagi sebentar lagi.");
       return;
     }
 
     const startDate = dateRange[0].format("DD MMM YYYY");
     const endDate = dateRange[1].format("DD MMM YYYY");
 
-    // Sesuaikan judul/label di Excel jika perhitungan hanya F&B
     const wsData = [
-      ["LAPORAN LABA/RUGI (F&B) & PAJAK"],
-      [`Periode: ${startDate} - ${endDate}`],
+      ["LAPORAN LABA/RUGI & PAJAK"],
+      ["Periode", `${startDate} - ${endDate}`],
       [],
       ["METRIK", "JUMLAH"],
-      ["Pendapatan Kotor (F&B)", revenueUntukPajak],
-      ["(-) Pajak Final 10% (Omzet F&B)", pajakFinal10Persen],
-      ["Laba Kotor F&B Setelah Pajak", labaKotorSetelahPajak],
+      ["Pendapatan Kotor", totalPendapatanKotor],
+      ["(-) Pajak Final 10% (Omzet)", pajakFinal10Persen],
       ["(-) Total Pengeluaran Operasional", totalPengeluaran],
-      ["LABA BERSIH AKHIR (F&B vs Ops)", labaBersihAkhir], // Nama bisa disesuaikan
-      ["Margin Laba Bersih (%)", persentaseMarginBersih.toFixed(2)],
+      ["LABA BERSIH AKHIR", labaBersihAkhir],
       [],
-      ["STATUS PAJAK (F&B)"],
-      ["Pajak Yang Harus Dibayar", pajakFinal10Persen],
-      ["Jumlah Sudah Dibayar", taxPayment.paidAmount],
-      ["Tanggal Pembayaran", taxPayment.paymentDate ? taxPayment.paymentDate.format("DD-MM-YYYY") : "Belum Dibayar"],
+      ["STATUS PAJAK"],
+      ["Pajak Wajib Dibayar", pajakFinal10Persen],
+      ["Jumlah Sudah Dibayar", paidAmount],
+      [
+        "Tanggal Pembayaran",
+        paymentDate ? paymentDate.format("DD-MM-YYYY") : "-",
+      ],
       ["Status", isTaxPaid ? "LUNAS" : "BELUM LUNAS"],
     ];
 
     const ws = window.XLSX.utils.aoa_to_sheet(wsData);
     ws["!cols"] = [{ wch: 40 }, { wch: 25 }];
     const wb = window.XLSX.utils.book_new();
-    window.XLSX.utils.book_append_sheet(wb, ws, "Laba_Rugi_Pajak_FnB");
+    window.XLSX.utils.book_append_sheet(wb, ws, "Laba_Rugi_Pajak");
     window.XLSX.writeFile(
       wb,
-      `Laporan Laba Rugi FnB DCH (${startDate} - ${endDate}).xlsx`
+      `Laporan Laba Rugi DCH (${startDate} - ${endDate}).xlsx`
     );
   };
 
-  // Fungsi Submit Form Pembayaran Pajak (panggil API)
-  const handleTaxPaymentSubmit = async (values) => {
-    setLoading(true);
-    message.loading({ content: 'Menyimpan data pembayaran...', key: 'saveTax', duration: 0 });
+  // === Load pustaka XLSX sekali saja ===
+  useEffect(() => {
+    const scriptId = "xlsx-script";
+    if (document.getElementById(scriptId)) return;
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src =
+      "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
 
-    try {
-      const paymentData = {
-        startDate: dateRange[0].format("YYYY-MM-DD"),
-        endDate: dateRange[1].format("YYYY-MM-DD"),
-        paidAmount: values.paidAmount,
-        paymentDate: values.paymentDate, // objek dayjs
-      };
-
-      await apiSaveTaxPayment(paymentData);
-
-      // Update state lokal SETELAH berhasil simpan
-      setTaxPayment({
-        paidAmount: values.paidAmount,
-        paymentDate: values.paymentDate,
-      });
-
-      message.success({ content: 'Pembayaran pajak berhasil dicatat!', key: 'saveTax', duration: 2 });
-      setIsModalOpen(false);
-
-    } catch (error) {
-      console.error("Gagal simpan pembayaran pajak:", error);
-      message.error({ content: `Gagal menyimpan: ${error.message}`, key: 'saveTax', duration: 4 });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-  // Render Komponen
   return (
-    <ConfigProvider locale={locale}>
-      <div className="p-6 bg-gradient-to-br from-gray-50 to-blue-50 min-h-screen">
-        <Card
-          className="shadow-xl rounded-2xl border-t-4 border-blue-600 mb-6"
-          title={
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-              <div>
-                <h2 className="text-3xl font-extrabold text-gray-800">
-                  Laporan Laba/Rugi & Pajak 🧾
-                </h2>
-                <p className="text-gray-500 mt-1">
-                  Dago Creative Hub — Periode:{" "}
-                  {dateRange && dateRange.length === 2 && (
-                    <span className="font-semibold text-blue-600">
-                      {dateRange[0].format("D MMM YYYY")} - {dateRange[1].format("D MMM YYYY")}
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:mt-0">
-                <RangePicker
-                  value={dateRange}
-                  onChange={setDateRange}
-                  format="DD MMM YYYY"
-                  allowClear={false}
-                  size="large"
-                  disabled={loading}
-                />
-                <Button
-                  type="primary"
-                  icon={<DownloadOutlined />}
-                  onClick={exportExcel}
-                  size="large"
-                  disabled={loading || typeof window.XLSX === "undefined"}
-                >
-                  Export Laba Rugi
-                </Button>
-              </div>
-            </div>
-          }
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: "#0ea5e9",
+          borderRadius: 12,
+          colorTextHeading: "#0f172a",
+        },
+      }}
+      locale={locale}
+    >
+      <div style={{ padding: 20 }}>
+        {/* Header ala dashboard */}
+        <Row
+          gutter={[16, 16]}
+          justify="space-between"
+          align="middle"
+          style={{ marginBottom: 12 }}
         >
-          {/* Spin overlay saat loading */}
-          {loading && (
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.7)', zIndex: 10, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <Spin size="large" />
-            </div>
-          )}
+          <Col>
+            <Title level={4} style={{ margin: 0 }}>
+              Dashboard Laporan Pajak
+            </Title>
+            <Text type="secondary">Dago Creative Hub & Coffee Lab</Text>
+          </Col>
+          <Col>
+            <Space align="center">
+              <Text type="secondary">Rentang:</Text>
+              <RangePicker
+                value={dateRange}
+                onChange={(vals) => {
+                  if (vals && vals[0] && vals[1]) {
+                    setDateRange([
+                      vals[0].startOf("day"),
+                      vals[1].endOf("day"),
+                    ]);
+                  }
+                }}
+                format="DD-MM-YYYY"
+                allowClear={false}
+                disabled={loading}
+              />
+              <Select
+                defaultValue="mtm"
+                style={{ width: 140 }}
+                onChange={(val) =>
+                  val === "lw"
+                    ? setDateRange([dayjs().subtract(7, "day"), dayjs()])
+                    : setDateRange([dayjs().startOf("month"), dayjs()])
+                }
+                options={[
+                  { value: "mtm", label: "Month to date" },
+                  { value: "lw", label: "Last 7d" },
+                ]}
+              />
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                onClick={exportExcel}
+                size="middle"
+                disabled={loading || typeof window.XLSX === "undefined"}
+              >
+                Export
+              </Button>
+            </Space>
+          </Col>
+        </Row>
 
-          {/* Pastikan properti 'loading' pada <Statistic> diteruskan */}
-          <Divider orientation="left" className="!mt-0"> Perhitungan Laba Rugi (F&B)</Divider>
-          <Row gutter={[16, 16]}>
+        {/* Quick links */}
+        <div className="flex justify-start gap-2 mb-4">
+          <a
+            href="/laporan"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+          >
+            Laporan
+          </a>
+          <a
+            href="/fnbdashboard"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+          >
+            FNB
+          </a>
+          <a
+            href="/workingspace"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+          >
+            Working Space
+          </a>
+          <a
+            href="/laporanpajak"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-gray-100"
+          >
+            Pajak
+          </a>
+        </div>
+
+        {/* Kartu Laporan Pajak */}
+        <Card
+          className="shadow-sm rounded-2xl border border-gray-100 mb-6"
+          title="Laporan Laba/Rugi & Pajak"
+        >
+          <Divider orientation="left" className="!mt-0">
+            Perhitungan Laba Rugi
+          </Divider>
+
+          <Row gutter={[12, 12]}>
             <Col xs={24} md={12} lg={6}>
-              <Card className="shadow-md border-l-4 border-blue-500 rounded-xl">
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition">
                 <Statistic
-                  title="1. Pendapatan Kotor (F&B)"
+                  title="Pendapatan Kotor (F&B)"
                   prefix={<LineChartOutlined />}
-                  value={pendapatanFnb} // <-- Gunakan pendapatan F&B
+                  value={totalPendapatanKotor}
                   formatter={(val) => formatRupiah(val)}
-                  valueStyle={{ color: "#1677ff", fontWeight: "bold" }}
+                  valueStyle={{ color: "#0ea5e9", fontWeight: 700 }}
                   loading={loading}
                 />
               </Card>
             </Col>
+
             <Col xs={24} md={12} lg={6}>
-              <Card className="shadow-md border-l-4 border-orange-500 rounded-xl">
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition">
                 <Statistic
-                  title="2. (-) Pajak Final (10% Omzet F&B)" // <-- Sesuaikan judul
+                  title="(-) Pajak Final 10%"
                   prefix={<PercentageOutlined />}
-                  value={pajakFinal10Persen} // <-- Pajak dari F&B
+                  value={pajakFinal10Persen}
                   formatter={(val) => formatRupiah(val)}
-                  valueStyle={{ color: "#fa8c16", fontWeight: "bold" }}
+                  valueStyle={{ color: "#fb923c", fontWeight: 700 }}
                   loading={loading}
                 />
               </Card>
             </Col>
+
             <Col xs={24} md={12} lg={6}>
-              <Card className="shadow-md border-l-4 border-red-500 rounded-xl">
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition">
                 <Statistic
-                  title="3. (-) Total Pengeluaran Operasional"
+                  title="(-) Pengeluaran Operasional"
                   prefix={<WalletOutlined />}
                   value={totalPengeluaran}
                   formatter={(val) => formatRupiah(val)}
-                  valueStyle={{ color: "#ff4d4f", fontWeight: "bold" }}
+                  valueStyle={{ color: "#ef4444", fontWeight: 700 }}
                   loading={loading}
                 />
               </Card>
             </Col>
+
             <Col xs={24} md={12} lg={6}>
-              <Card className="shadow-2xl border-l-4 border-purple-600 rounded-xl bg-purple-50">
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition bg-gray-50">
                 <Statistic
-                  title="4. LABA BERSIH AKHIR (F&B vs Ops)" // <-- Sesuaikan judul
+                  title="LABA BERSIH AKHIR"
                   prefix={<BankOutlined />}
-                  value={labaBersihAkhir} // <-- Laba dari F&B - Ops
+                  value={labaBersihAkhir}
                   formatter={(val) => formatRupiah(val)}
-                  valueStyle={{ color: labaBersihAkhir >= 0 ? "#3f8600" : "#cf1322", fontWeight: "bolder", fontSize: "28px" }}
-                  loading={loading}
-                />
-              </Card>
-            </Col>
-          </Row>
-
-          <Divider orientation="left">Status Pembayaran Pajak (F&B)</Divider>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={12} lg={8}>
-              <Card className={`shadow-md rounded-xl ${isTaxPaid ? 'border-l-4 border-green-600' : 'border-l-4 border-red-600'}`}>
-                <Statistic
-                  title="Status PPh Final 10% (Telah Dibayar)"
-                  prefix={isTaxPaid ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-                  value={isTaxPaid ? "LUNAS" : "BELUM LUNAS"}
-                  valueStyle={{ color: isTaxPaid ? "#3f8600" : "#cf1322", fontWeight: "bold" }}
-                  suffix={taxPayment.paymentDate ? ` (${taxPayment.paymentDate.format("DD MMM YYYY")})` : ''}
-                  loading={loading}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} md={12} lg={8}>
-              <Card className="shadow-md border-l-4 border-blue-400 rounded-xl">
-                <Statistic
-                  title="Pajak F&B yang Wajib Dibayarkan" // <-- Sesuaikan judul
-                  prefix={<PercentageOutlined />}
-                  value={pajakFinal10Persen} // <-- Pajak dari F&B
-                  formatter={(val) => formatRupiah(val)}
-                  valueStyle={{ color: "#1890ff", fontWeight: "bold" }}
-                  loading={loading}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} md={12} lg={8}>
-              <Card className="shadow-md border-l-4 border-yellow-500 rounded-xl">
-                <Statistic
-                  title={taxPayment.paidAmount > 0 ? "Jumlah Sudah Dibayar" : "Kekurangan Pembayaran"}
-                  prefix={<CalculatorOutlined />}
-                  value={taxPayment.paidAmount > 0 ? taxPayment.paidAmount : taxDeficit}
-                  formatter={(val) => formatRupiah(val)}
-                  valueStyle={{ color: isTaxPaid ? "#3f8600" : "#ffc069", fontWeight: "bold" }}
-                  loading={loading}
-                />
-                <Button
-                  type="dashed"
-                  icon={<ScheduleOutlined />}
-                  onClick={() => {
-                    form.setFieldsValue({
-                      paidAmount: taxPayment.paidAmount > 0 ? taxPayment.paidAmount : pajakFinal10Persen, // Pre-fill dengan jumlah pajak jika belum bayar
-                      paymentDate: taxPayment.paymentDate || dayjs(),
-                    });
-                    setIsModalOpen(true);
+                  valueStyle={{
+                    color: labaBersihAkhir >= 0 ? "#16a34a" : "#dc2626",
+                    fontWeight: 800,
                   }}
-                  className="mt-3 w-full"
-                  disabled={loading}
-                >
-                  {taxPayment.paidAmount > 0 ? "Edit Catatan Pembayaran" : "Catat Pembayaran Pajak"}
-                </Button>
+                  loading={loading}
+                />
               </Card>
             </Col>
           </Row>
 
-          <Card className="mt-6 border-dashed border-gray-300 bg-gray-50">
+          <Divider orientation="left">Status Pembayaran Pajak</Divider>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={12} lg={8}>
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition">
+                <Statistic
+                  title="Status PPh Final 10%"
+                  prefix={
+                    isTaxPaid ? (
+                      <CheckCircleOutlined />
+                    ) : (
+                      <CloseCircleOutlined />
+                    )
+                  }
+                  value={isTaxPaid ? "LUNAS" : "BELUM LUNAS"}
+                  valueStyle={{
+                    color: isTaxPaid ? "#16a34a" : "#dc2626",
+                    fontWeight: 700,
+                  }}
+                  suffix={
+                    paymentDate ? ` (${paymentDate.format("DD MMM YYYY")})` : ""
+                  }
+                  loading={loading}
+                />
+              </Card>
+            </Col>
+
+            <Col xs={24} md={12} lg={8}>
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition">
+                <Statistic
+                  title="Pajak Wajib Dibayar"
+                  prefix={<PercentageOutlined />}
+                  value={pajakFinal10Persen}
+                  formatter={(val) => formatRupiah(val)}
+                  valueStyle={{ color: "#0ea5e9", fontWeight: 700 }}
+                  loading={loading}
+                />
+              </Card>
+            </Col>
+
+            <Col xs={24} md={12} lg={8}>
+              <Card className="shadow-none border border-gray-100 rounded-xl hover:shadow-md transition">
+                <Statistic
+                  title="Jumlah Sudah Dibayar"
+                  prefix={<CalculatorOutlined />}
+                  value={paidAmount}
+                  formatter={(val) => formatRupiah(val)}
+                  valueStyle={{ color: "#16a34a", fontWeight: 700 }}
+                  loading={loading}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Card className="mt-6 border border-gray-100 bg-gray-50">
             <p className="text-sm text-gray-600">
-              <FileTextOutlined className="mr-2 text-blue-500" />
-              Perhitungan mengasumsikan penggunaan **PPh Final 10%** dari Omzet Bruto **F&B**. Catat pembayaran Anda di kolom di atas untuk melacak status "LUNAS".
+              <FileTextOutlined className="mr-2" />
+              Perhitungan mengasumsikan penggunaan PPh Final 10% dari Omzet
+              Bruto. Data ditarik langsung dari backend (transaksi dan
+              pengeluaran).
             </p>
           </Card>
         </Card>
-
-        {/* Modal Pencatatan Pembayaran Pajak */}
-        <Modal
-          title="Catat Pembayaran PPh Final 10% (F&B)" // <-- Sesuaikan judul
-          open={isModalOpen}
-          onCancel={() => setIsModalOpen(false)}
-          footer={null} // Footer di-handle oleh tombol di dalam Form
-        >
-          <p className="mb-4">
-            Pajak F&B wajib yang perlu dibayarkan untuk periode ini adalah:
-            <span className="font-bold text-blue-600 ml-1">{formatRupiah(pajakFinal10Persen)}</span>.
-          </p>
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={handleTaxPaymentSubmit}
-          >
-            <Form.Item
-              name="paidAmount"
-              label="Jumlah Pajak yang Dibayarkan (IDR)"
-              rules={[{ required: true, message: 'Masukkan jumlah pembayaran' }]}
-            >
-              <InputNumber
-                min={0}
-                style={{ width: '100%' }}
-                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
-                size="large"
-              />
-            </Form.Item>
-            <Form.Item
-              name="paymentDate"
-              label="Tanggal Pembayaran Pajak"
-              rules={[{ required: true, message: 'Pilih tanggal pembayaran' }]}
-            >
-              <DatePicker
-                style={{ width: '100%' }}
-                format="DD MMMM YYYY"
-                size="large"
-              />
-            </Form.Item>
-            <Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading} block size="large">
-                Simpan Catatan Pembayaran
-              </Button>
-            </Form.Item>
-          </Form>
-        </Modal>
       </div>
     </ConfigProvider>
   );
 };
 
-export default LaporanPajak; // Pastikan nama export sesuai nama file/komponen
+export default LaporanPajak;

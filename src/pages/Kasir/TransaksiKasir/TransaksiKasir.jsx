@@ -22,6 +22,7 @@ import {
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { formatRupiah } from "../../../utils/formatRupiah";
+import { useAuth } from "../../../providers/AuthProvider";
 
 
 const { Option } = Select;
@@ -87,7 +88,8 @@ const TransaksiKasir = () => {
 
     const notificationSound = useRef(null);
     const knownTransactionIds = useRef(new Set());
-
+    
+    const { user } = useAuth();
     // Inisialisasi Audio
     useEffect(() => {
         // Gunakan path absolut dari public folder

@@ -73,11 +73,26 @@ const RoomDetail = () => {
     };
 
     const buildDisabledDays = () => {
+        // Mulai dengan aturan dasar (menonaktifkan hari-hari sebelum hari ini)
         const arr = [{ before: today }];
-        if (!includeSunday) arr.push({ dayOfWeek: [0] });
+
+        // Buat array untuk menampung hari-hari yang akan dinonaktifkan
+        const disabledDaysOfWeek = [];
+
+        if (!includeSunday) {
+            disabledDaysOfWeek.push(0); // 0 adalah Minggu
+        }
+        if (!includeSaturday) {
+            disabledDaysOfWeek.push(6); // 6 adalah Sabtu
+        }
+
+        // Jika ada hari yang perlu dinonaktifkan, tambahkan sebagai satu aturan
+        if (disabledDaysOfWeek.length > 0) {
+            arr.push({ dayOfWeek: disabledDaysOfWeek });
+        }
+
         return arr;
     };
-
     // --- STATE TURUNAN (DERIVED STATES) ---
     const countedDays = countIncludedDays(selectedRange?.from, selectedRange?.to, includeSaturday, includeSunday);
     const hasEnoughCredit = userMembership ? userMembership.sisa_credit >= creditCost * (countedDays > 0 ? countedDays : 1) : false;
@@ -460,7 +475,7 @@ const RoomDetail = () => {
                                                     >
                                                         <span className="font-bold text-base">{paket.durasi_jam} Jam</span>
                                                         <span className="text-xs font-semibold opacity-90">{formatRupiah(paket.harga_paket)}</span>
-                                                        
+
                                                     </button>
                                                 )
                                             })}

@@ -37,19 +37,20 @@ const { Option } = Select;
 /**
  * ProductKategoriTab.jsx
  * - Nama Merchant & Nama Kategori filters behave exactly like ProductTab.jsx:
- *   filters from uniqueValues(data, key)
- *   onFilter uses includes(...) case-insensitive
- *   filterSearch enabled on dropdown
+ * filters from uniqueValues(data, key)
+ * onFilter uses includes(...) case-insensitive
+ * filterSearch enabled on dropdown
  */
 
 const ProductKategoriTab = () => {
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-  const [formData, setFormData] = useState({});
+  // const [formData, setFormData] = useState({}); // <--- HAPUS: State form akan dikelola oleh AntD
   const [loading, setLoading] = useState(false);
   const [tenantsForDropdown, setTenantsForDropdown] = useState([]);
   const [data, setData] = useState([]);
   const [pageSize, setPageSize] = useState(5);
+  const [form] = Form.useForm(); // <--- TAMBAH: Buat instance form AntD
 
   // Ambil nilai unik dari data untuk membuat options filter (text/value)
   const uniqueValues = (arr, key) => {
@@ -101,7 +102,7 @@ const ProductKategoriTab = () => {
     fetchTenants();
   }, []);
 
-  // Kolom tabel: merchant & kategori pakai filter sama seperti ProductTab.jsx
+  // Kolom tabel: (Tidak ada perubahan di sini)
   const columns = [
     {
       title: "ID Kategori",
@@ -119,9 +120,8 @@ const ProductKategoriTab = () => {
       title: "Nama Merchant",
       dataIndex: "nama_merchant",
       key: "nama_merchant",
-      // **SAMA DENGAN ProductTab.jsx**: filter dropdown dari uniqueValues(data,'nama_merchant')
       filters: uniqueValues(data, "nama_merchant"),
-      filterSearch: true, // searchable dropdown like typical AntD filter
+      filterSearch: true, 
       onFilter: (value, record) =>
         record.nama_merchant ? record.nama_merchant.toLowerCase().includes(value.toLowerCase()) : false,
       render: (text) => (
@@ -135,7 +135,6 @@ const ProductKategoriTab = () => {
       title: "Nama Kategori",
       dataIndex: "nama_kategori",
       key: "nama_kategori",
-      // **SAMA DENGAN ProductTab.jsx**: filter dropdown dari uniqueValues(data,'nama_kategori')
       filters: uniqueValues(data, "nama_kategori"),
       filterSearch: true,
       onFilter: (value, record) =>
@@ -179,48 +178,49 @@ const ProductKategoriTab = () => {
     },
   ];
 
-  const handleChange = (field, value) => {
-    setFormData({ ...formData, [field]: value });
-  };
+  // <--- HAPUS: Fungsi handleChange tidak diperlukan lagi
+  // const handleChange = (field, value) => {
+  //   setFormData({ ...formData, [field]: value });
+  // };
 
   // Add / Update kategori
   const handleAddCategory = async () => {
-    if (!formData.merchantId || !formData.nama_kategori) {
-      message.error("Mohon lengkapi semua field!");
-      return;
-    }
-
-    setLoading(true);
     try {
+      // <--- UBAH: Gunakan form.validateFields() untuk validasi
+      // Ini akan otomatis menampilkan pesan error di form jika gagal
+      const values = await form.validateFields();
+
+      setLoading(true);
       let res;
       if (editingCategory) {
         res = await updateKategori(editingCategory.id_kategori, {
-          nama_kategori: formData.nama_kategori,
-          id_tenant: formData.merchantId,
+          nama_kategori: values.nama_kategori,
+          id_tenant: values.merchantId, // 'merchantId' dari name Form.Item
         });
       } else {
         res = await createKategori({
-          id_tenant: formData.merchantId,
-          nama_kategori: formData.nama_kategori,
+          id_tenant: values.merchantId,
+          nama_kategori: values.nama_kategori,
         });
       }
 
       if (res.status === 200 || res.status === 201) {
         message.success(res.data?.message || `Kategori berhasil ${editingCategory ? "diperbarui" : "ditambahkan"}!`);
         await fetchData();
-        handleCancel();
+        handleCancel(); // handleCancel akan menutup modal & reset form
       } else {
         message.error(res.data?.error || "Gagal menyimpan kategori.");
       }
-    } catch (err) {
-      console.error("Error save kategori:", err);
-      message.error("Gagal menyimpan kategori: " + (err.message || "Error tidak diketahui"));
+    } catch (validationError) {
+      // <--- TAMBAH: Blok catch ini akan menangani jika validasi gagal
+      console.log("Validation Failed:", validationError);
+      message.warning("Harap isi semua bidang yang wajib diisi.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete kategori
+  // Delete kategori (Tidak ada perubahan di sini)
   const handleDelete = async (id_kategori) => {
     setLoading(true);
     try {
@@ -245,7 +245,8 @@ const ProductKategoriTab = () => {
 
   const handleEdit = (category) => {
     setEditingCategory(category);
-    setFormData({
+    // <--- UBAH: Gunakan form.setFieldsValue untuk mengisi form
+    form.setFieldsValue({
       merchantId: category.merchantId,
       nama_kategori: category.nama_kategori,
     });
@@ -254,8 +255,9 @@ const ProductKategoriTab = () => {
 
   const handleCancel = () => {
     setOpen(false);
-    setFormData({});
+    // setFormData({}); // <--- HAPUS
     setEditingCategory(null);
+    form.resetFields(); // <--- TAMBAH: Reset form & validasinya
   };
 
   return (
@@ -266,7 +268,12 @@ const ProductKategoriTab = () => {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              // <--- UBAH: Pastikan form di-reset saat menambah baru
+              setEditingCategory(null); // Pastikan mode edit mati
+              form.resetFields();      // Reset field
+              setOpen(true);
+            }}
             size="large"
           >
             Tambah Kategori Baru
@@ -301,15 +308,18 @@ const ProductKategoriTab = () => {
         }
         open={open}
         onCancel={handleCancel}
-        onOk={handleAddCategory}
+        onOk={handleAddCategory} // <--- onOk akan menjalankan handleAddCategory yg sdh divalidasi
         confirmLoading={loading}
         okText={editingCategory ? "Update" : "Add"}
         width={600}
+        destroyOnClose // <--- TAMBAH: Pastikan form dihancurkan saat close
       >
         <Form
+          form={form} // <--- TAMBAH: Hubungkan instance form ke komponen Form
           layout="vertical"
-          initialValues={formData}
-          onValuesChange={(changedValues, allValues) => setFormData(allValues)}
+          // <--- HAPUS: Properti di bawah ini tidak diperlukan lagi
+          // initialValues={formData} 
+          // onValuesChange={(changedValues, allValues) => setFormData(allValues)}
         >
           <Form.Item
             label={<Text strong>Merchant <span style={{ color: "red" }}>*</span></Text>}
@@ -322,8 +332,9 @@ const ProductKategoriTab = () => {
               showSearch
               optionFilterProp="children"
               filterOption={(input, option) => (option?.children ?? "").toLowerCase().includes(input.toLowerCase())}
-              onChange={(val) => handleChange("merchantId", val)}
-              value={formData.merchantId}
+              // <--- HAPUS: Properti value & onChange
+              // onChange={(val) => handleChange("merchantId", val)}
+              // value={formData.merchantId}
             >
               {tenantsForDropdown.map((tenant) => (
                 <Option key={tenant.id_tenant} value={tenant.id_tenant}>
@@ -340,8 +351,9 @@ const ProductKategoriTab = () => {
           >
             <Input
               placeholder="Masukkan nama kategori"
-              onChange={(e) => handleChange("nama_kategori", e.target.value)}
-              value={formData.nama_kategori}
+              // <--- HAPUS: Properti value & onChange
+              // onChange={(e) => handleChange("nama_kategori", e.target.value)}
+              // value={formData.nama_kategori}
             />
           </Form.Item>
         </Form>

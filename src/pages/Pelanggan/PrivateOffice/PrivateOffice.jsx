@@ -13,8 +13,8 @@ import {
     Select,
     Tag,
     List,
-    Card, // Ditambahkan karena ada di kode Anda tapi tidak di import
-    Typography, // Ditambahkan karena ada di kode Anda tapi tidak di import
+    Card,
+    Typography,
 } from "antd";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
@@ -51,10 +51,19 @@ const PrivateOffice = () => {
     const [submitLoading, setSubmitLoading] = useState(false);
     const [rooms, setRooms] = useState([]);
     const [selectedDateRange, setSelectedDateRange] = useState(null);
-    const [selectedTimeRange, setSelectedTimeRange] = useState([
-        dayjs().hour(8).minute(0),
-        dayjs().hour(17).minute(0),
-    ]);
+    // ✅ State untuk kontrol buka/tutup kalender
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+    // ✅ Fungsi auto close setelah pilih rentang lengkap
+    const onRangeCalendarChange = (dates) => {
+        setSelectedDateRange(dates);
+        if (dates && dates[0] && dates[1]) {
+            setTimeout(() => setIsCalendarOpen(false), 200);
+        }
+    };
+
+    const [selectedTimeRange, setSelectedTimeRange] = useState(null);
+
     const [quantities, setQuantities] = useState({});
     const [error, setError] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,6 +86,23 @@ const PrivateOffice = () => {
         saturday: false,
         sunday: false,
     });
+
+    // === NEW: isMobile state to avoid ReferenceError and make range pickers responsive ===
+    const [isMobile, setIsMobile] = useState(() => {
+        // initial safe check (works in SSR-ish envs where window may be undefined)
+        try {
+            return window.innerWidth <= 768;
+        } catch (e) {
+            return false;
+        }
+    });
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth <= 768);
+        };
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
 
     // --- FUNCTION TO LOAD INITIAL DATA ---
     useEffect(() => {
@@ -125,33 +151,6 @@ const PrivateOffice = () => {
     };
 
     const groupedRooms = groupByCategory(rooms);
-
-    // --- PERBAIKAN URUTAN KATEGORI ---
-    // Tentukan urutan kategori yang Anda inginkan
-    const categoryOrder = [
-        "Open Space",
-        "Space Monitor",
-        "Ruang Meeting Kecil",
-        "Ruang Meeting Besar"
-    ];
-
-    // Ambil semua keys (kategori) yang ada
-    const allCategoryKeys = Object.keys(groupedRooms);
-
-    // Urutkan keys tersebut berdasarkan 'categoryOrder'
-    const sortedCategoryKeys = allCategoryKeys.sort((a, b) => {
-        const indexA = categoryOrder.indexOf(a);
-        const indexB = categoryOrder.indexOf(b);
-
-        // Jika kategori tidak ada di 'categoryOrder', taruh di akhir
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-
-        // Urutkan berdasarkan indeks di 'categoryOrder'
-        return indexA - indexB;
-    });
-    // --- BATAS AKHIR PERBAIKAN ---
-
 
     const disabledDate = (current) => current && current < dayjs().startOf("day");
 
@@ -207,7 +206,10 @@ const PrivateOffice = () => {
             );
         }
         // Validate time range is within bounds (8 to 22)
-        const startHour = selectedTimeRange[0].hour();
+        const startHour =
+            selectedTimeRange && selectedTimeRange[0]
+                ? selectedTimeRange[0].hour()
+                : undefined;
         const endHour = selectedTimeRange[1].hour();
         if (
             startHour < 8 ||
@@ -423,6 +425,8 @@ const PrivateOffice = () => {
             jam_selesai: endHour,
             metode_pembayaran: "Non-Tunai",
             status_pembayaran: "Lunas",
+            include_saturday: includeWeekends.saturday,
+            include_sunday: includeWeekends.sunday,
         };
 
         console.log("Mengirim Payload Booking:", JSON.stringify(payload, null, 2));
@@ -500,12 +504,6 @@ const PrivateOffice = () => {
 
         const disabledMinutes = (selectedHour) => {
             if (selectedHour !== undefined) {
-                // Hanya izinkan menit ke-0
-                if (selectedHour === 22 && type === 'end') {
-                    // Jika jam 22, hanya izinkan 00
-                    return Array.from({ length: 59 }, (_, i) => i + 1);
-                }
-                // Untuk jam lain, izinkan 00
                 return Array.from({ length: 59 }, (_, i) => i + 1);
             }
             return [];
@@ -594,7 +592,6 @@ const PrivateOffice = () => {
                 const pricePerUnitPerDay = minPackage.harga_paket * packagesPerDay;
                 const totalForCat = pricePerUnitPerDay * qty * totalDays;
                 grandTotal += totalForCat;
-                m
             } else {
                 // fallback to harga_per_jam
                 const pricePerHour = room.harga_per_jam || 0;
@@ -608,6 +605,70 @@ const PrivateOffice = () => {
     };
 
     const { totalDays, totalPrice } = computeEstimatedTotal();
+    // ... state dan useEffect lainnya ...
+
+    // ✅ FUNGSI BARU: Logika untuk menonaktifkan tanggal
+    const dynamicDisabledDate = (current, rangeType = null) => {
+        // 1. Selalu nonaktifkan tanggal lampau
+        if (current && current < dayjs().startOf("day")) {
+            return true;
+        }
+
+        // 2. Logika untuk menonaktifkan Sabtu/Minggu
+        const day = current.day(); // 0 = Minggu, 6 = Sabtu
+        if (day === 6 && !includeWeekends.saturday) {
+            return true;
+        }
+        if (day === 0 && !includeWeekends.sunday) {
+            return true;
+        }
+
+        // 3. Logika tambahan untuk picker individual (mode Mobile)
+        if (rangeType === 'start' && selectedDateRange?.[1]) {
+            // Nonaktifkan jika melebihi tanggal selesai
+            return current > selectedDateRange[1].endOf("day");
+        }
+        if (rangeType === 'end' && selectedDateRange?.[0]) {
+            // Nonaktifkan jika sebelum tanggal mulai
+            return current < selectedDateRange[0].startOf("day");
+        }
+
+        return false;
+    };
+
+    // ✅ FUNGSI BARU: Untuk merender checkbox di dalam kalender
+    const renderCalendarFooter = () => (
+        <div className="flex flex-col sm:flex-row justify-start gap-4 px-4 py-3 border-t border-gray-100">
+            <label className="flex items-center gap-2 text-gray-700 cursor-pointer">
+                <input
+                    type="checkbox"
+                    checked={includeWeekends.saturday}
+                    onChange={(e) =>
+                        setIncludeWeekends((prev) => ({
+                            ...prev,
+                            saturday: e.target.checked,
+                        }))
+                    }
+                    className="form-checkbox"
+                />
+                Sertakan Sabtu
+            </label>
+            <label className="flex items-center gap-2 text-gray-700 cursor-pointer">
+                <input
+                    type="checkbox"
+                    checked={includeWeekends.sunday}
+                    onChange={(e) =>
+                        setIncludeWeekends((prev) => ({
+                            ...prev,
+                            sunday: e.target.checked,
+                        }))
+                    }
+                    className="form-checkbox"
+                />
+                Sertakan Minggu
+            </label>
+        </div>
+    );
 
     return (
         <div className="max-w-6xl mx-auto px-4 py-8">
@@ -617,26 +678,100 @@ const PrivateOffice = () => {
                 waktu (08:00 - 22:00), dan jumlah unit per kategori.
             </p>
 
-            {/* Date and Time Selection Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mb-10">
-                <h2 className="text-2xl font-bold mb-6">Detail Waktu Sewa</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                        <label className="block text-gray-700 mb-2 font-semibold">
-                            <CalendarOutlined className="mr-2" /> Tanggal Sewa{" "}
-                            <span className="text-red-500">*</span>
-                        </label>
-                        <RangePicker
-                            className="w-full"
-                            format="DD MMM YYYY"
-                            onChange={(dates) => setSelectedDateRange(dates)}
-                            disabledDate={disabledDate}
-                            value={selectedDateRange}
-                            dateRender={dateRender} // Menambahkan dateRender di sini
-                        />
+            {/* === RESPONSIVE: Date and Time Section === */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm mb-10">
+                <h2 className="text-xl sm:text-2xl font-bold mb-6">
+                    Detail Waktu Sewa
+                </h2>
 
-                        {/* Checkbox Sabtu/Minggu */}
-                        <div className="mt-3 flex gap-6">
+                <div className="flex flex-col md:flex-row md:items-start gap-6 mb-8">
+                    {/* === Kolom Kalender === */}
+                    <div className="flex-1 w-full">
+                        <label className="text-gray-700 mb-2 font-semibold flex items-center">
+                            <CalendarOutlined className="mr-2" />
+                            <span>
+                                Tanggal Sewa <span className="text-red-500">*</span>
+                            </span>
+                        </label>
+
+                        {/* === Date Picker Responsive === */}
+                        {isMobile ? (
+                            // MOBILE MODE: tampil vertikal (dua DatePicker)
+                            <div className="flex flex-col gap-4">
+                                <div>
+                                    <label className="block text-gray-700 mb-1 font-medium">
+                                        Tanggal Mulai
+                                    </label>
+                                    <DatePicker
+                                        className="w-full"
+                                        format="DD MMM YYYY"
+                                        // disabledDate={(current) => {
+                                        //     // Tidak boleh tanggal lampau
+                                        //     if (current && current < dayjs().startOf("day"))
+                                        //         return true;
+                                        //     // Jika tanggal selesai sudah dipilih, batasi agar tidak melewati tanggal selesai
+                                        //     if (selectedDateRange?.[1]) {
+                                        //         return current > selectedDateRange[1].endOf("day");
+                                        //     }
+                                        //     return false;
+                                        // }}
+                                        renderExtraFooter={renderCalendarFooter}
+                                        disabledDate={(current) => dynamicDisabledDate(current, 'start')}
+                                        value={selectedDateRange?.[0] || null}
+                                        onChange={(date) =>
+                                            setSelectedDateRange([
+                                                date,
+                                                selectedDateRange?.[1] || null,
+                                            ])
+                                        }
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-gray-700 mb-1 font-medium">
+                                        Tanggal Selesai
+                                    </label>
+                                    <DatePicker
+                                        className="w-full"
+                                        format="DD MMM YYYY"
+                                        // disabledDate={(current) => {
+                                        //     if (current && current < dayjs().startOf("day"))
+                                        //         return true;
+                                        //     // Tidak boleh sebelum tanggal mulai
+                                        //     if (selectedDateRange?.[0]) {
+                                        //         return current < selectedDateRange[0].startOf("day");
+                                        //     }
+                                        //     return false;
+                                        // }}
+                                        renderExtraFooter={renderCalendarFooter}
+                                        disabledDate={(current) => dynamicDisabledDate(current, 'end')}
+                                        value={selectedDateRange?.[1] || null}
+                                        onChange={(date) =>
+                                            setSelectedDateRange([
+                                                selectedDateRange?.[0] || null,
+                                                date,
+                                            ])
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            // DESKTOP MODE: tetap pakai RangePicker horizontal
+                            <RangePicker
+                                className="w-full text-sm sm:text-base"
+                                format="DD MMM YYYY"
+                                value={selectedDateRange}
+                                open={isCalendarOpen}
+                                onOpenChange={(open) => setIsCalendarOpen(open)}
+                                onChange={(dates) => { setSelectedDateRange(dates); }}
+                                // disabledDate={(current) =>
+                                //     current && current < dayjs().startOf("day")
+                                // }
+                                renderExtraFooter={renderCalendarFooter}
+                                disabledDate={dynamicDisabledDate}
+                            />
+                        )}
+
+                        {/* <div className="mt-3 flex flex-wrap gap-4">
                             <label className="flex items-center gap-2 text-gray-700">
                                 <input
                                     type="checkbox"
@@ -663,27 +798,75 @@ const PrivateOffice = () => {
                                 />
                                 Sertakan Minggu
                             </label>
-                        </div>
+                        </div> */}
                     </div>
-                    <div>
-                        <label className="block text-gray-700 mb-2 font-semibold">
-                            <ClockCircleOutlined className="mr-2" /> Waktu Sewa (08:00 -
-                            22:00) <span className="text-red-500">*</span>
+
+                    {/* Kolom TimePicker */}
+                    <div className="flex-1 w-full">
+                        <label className="text-gray-700 mb-2 font-semibold flex items-center">
+                            <ClockCircleOutlined className="mr-2" />
+                            Waktu Sewa (08:00 - 22:00) <span className="text-red-500">*</span>
                         </label>
+
                         <TimePicker.RangePicker
                             className="w-full"
                             format="HH:00"
                             minuteStep={60}
                             hourStep={1}
-                            hideDisabledOptions
-                            disabledTime={disabledRangeTime}
-                            onChange={(times) => setSelectedTimeRange(times)}
+                            hideDisabledOptions={false}
+                            showNow={false}
                             value={selectedTimeRange}
-                            order={false}
+                            placeholder={["Pilih Jam Mulai", "Pilih Jam Selesai"]}
+                            disabledTime={(_, type) => {
+                                const hours = Array.from({ length: 24 }, (_, i) => i);
+                                const startHour = selectedTimeRange?.[0]?.hour();
+
+                                if (type === "start") {
+                                    return {
+                                        disabledHours: () => hours.filter((h) => h < 8 || h >= 22),
+                                    };
+                                }
+
+                                if (type === "end") {
+                                    return {
+                                        disabledHours: () => {
+                                            if (startHour === undefined) {
+                                                return hours.filter((h) => h <= 8 || h > 22);
+                                            }
+                                            return hours.filter((h) => h <= startHour || h > 22);
+                                        },
+                                    };
+                                }
+
+                                return {};
+                            }}
+                            onChange={(times) => {
+                                if (!times) {
+                                    setSelectedTimeRange(times);
+                                    return;
+                                }
+
+                                const [start, end] = times;
+
+                                // Kalau jam selesai belum dipilih
+                                if (!start || !end) {
+                                    setSelectedTimeRange(times);
+                                    return;
+                                }
+
+                                // ✅ Benerin otomatis kalau jam selesai <= jam mulai
+                                if (!end.isAfter(start)) {
+                                    const corrected = [start, dayjs(start).add(1, "hour")];
+                                    setSelectedTimeRange(corrected);
+                                    message.warning(
+                                        "Jam selesai minimal 1 jam setelah jam mulai."
+                                    );
+                                    return;
+                                }
+
+                                setSelectedTimeRange(times);
+                            }}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
-                            Pilih jam mulai (mulai 08:00) dan jam selesai (maks 22:00).
-                        </p>
                     </div>
                 </div>
             </div>
@@ -698,9 +881,7 @@ const PrivateOffice = () => {
                         showIcon
                     />
                 )}
-
-                {/* PERBAIKAN: Gunakan sortedCategoryKeys.map di sini */}
-                {sortedCategoryKeys.map((category) => {
+                {Object.keys(groupedRooms).map((category) => {
                     const categoryRooms = groupedRooms[category];
                     if (!categoryRooms || categoryRooms.length === 0) return null;
                     const room = categoryRooms[0];
@@ -911,7 +1092,7 @@ const PrivateOffice = () => {
                                     style={{ width: 160, height: 160, objectFit: "contain" }}
                                     onError={(e) => {
                                         e.target.src =
-                                            "https://placehold.co/160x160/EEE/31343C?text=QR+Error";
+                                            "../../../../public/img/WhatsApp Image 2025-10-08 at 09.02.45.jpeg";
                                     }}
                                 />
                                 <p className="text-xs text-gray-500 mt-2 text-center">
@@ -1077,14 +1258,14 @@ const PrivateOffice = () => {
                                                         <Typography.Text type="secondary">
                                                             <CalendarOutlined
                                                                 style={{ marginRight: "6px" }}
-                                                                S />
+                                                            />
                                                             {dayjs(item.tanggal_mulai).format(
                                                                 "DD MMM YYYY, HH:mm"
                                                             )}{" "}
                                                             - {dayjs(item.tanggal_selesai).format("HH:mm")}
-                                                            S                       </Typography.Text>
+                                                        </Typography.Text>
                                                     </div>
-                                                    _           </List.Item>
+                                                </List.Item>
                                             )}
                                         />
                                     </Card>
@@ -1097,9 +1278,9 @@ const PrivateOffice = () => {
                                             <Typography.Text strong>
                                                 Detail Slot Tidak Tersedia:
                                             </Typography.Text>
-                                            _   <List
+                                            <List
                                                 size="small"
-                                                S bordered
+                                                bordered
                                                 dataSource={availabilityResult.unavailable_slots}
                                                 renderItem={(item) => (
                                                     <List.Item>
@@ -1109,11 +1290,11 @@ const PrivateOffice = () => {
                                                                 "DD MMM YYYY"
                                                             )}, Jam ${item.jam_mulai}:00 - ${item.jam_selesai
                                                                 }:00`}
-                                                            M />
+                                                        />
                                                     </List.Item>
                                                 )}
                                                 style={{ maxHeight: "200px", overflowY: "auto" }}
-                                                Datang />
+                                            />
                                         </div>
                                     )}
                             </>

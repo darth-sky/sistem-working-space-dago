@@ -42,6 +42,9 @@ const VirtualOfficePackageTab = () => {
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
 
+    // --- TAMBAHAN: State untuk validasi ---
+    const [validationErrors, setValidationErrors] = useState({});
+
     // untuk filter
     const [searchText, setSearchText] = useState("");
     const [searchedColumn, setSearchedColumn] = useState("");
@@ -228,13 +231,30 @@ const VirtualOfficePackageTab = () => {
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
+        // --- PERBAIKAN: Hapus error saat user mulai mengisi ---
+        if (validationErrors[field]) {
+            setValidationErrors(prevErrors => {
+                const newErrors = { ...prevErrors };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
     };
 
     const handleSave = async () => {
-        if (!formData.nama_paket || !formData.harga || !formData.durasi) {
-            message.error("Nama Paket, Harga, dan Durasi wajib diisi!");
+        // --- PERBAIKAN: Validasi Penuh ---
+        const errors = {};
+        if (!formData.nama_paket || formData.nama_paket.trim() === "") errors.nama_paket = true;
+        if (formData.harga === null || formData.harga === undefined || formData.harga < 0) errors.harga = true;
+        if (formData.durasi === null || formData.durasi === undefined || formData.durasi <= 0) errors.durasi = true;
+
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
             return;
         }
+        setValidationErrors({}); // Lolos validasi, bersihkan error
+        // --- AKHIR PERBAIKAN VALIDASI ---
 
         setLoading(true);
         try {
@@ -261,7 +281,8 @@ const VirtualOfficePackageTab = () => {
             handleCancel();
         } catch (err) {
             console.error("Error save paket VO:", err);
-            message.error(err.data?.error || "Gagal menyimpan paket");
+            const errorMsg = err.response?.data?.error || "Gagal menyimpan paket";
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -279,7 +300,8 @@ const VirtualOfficePackageTab = () => {
             }
         } catch (err) {
             console.error("Error delete paket:", err);
-            message.error("Gagal menghapus paket");
+            const errorMsg = err.response?.data?.error || "Gagal menghapus paket";
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -288,12 +310,14 @@ const VirtualOfficePackageTab = () => {
     const handleAdd = () => {
         setEditingPackage(null);
         setFormData({ status: "Active" });
+        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
         setOpen(true);
     };
 
     const handleEdit = (pkg) => {
         setEditingPackage(pkg);
         setFormData({ ...pkg });
+        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
         setOpen(true);
     };
 
@@ -301,6 +325,7 @@ const VirtualOfficePackageTab = () => {
         setOpen(false);
         setFormData({ status: "Active" });
         setEditingPackage(null);
+        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
     };
 
     return (
@@ -312,18 +337,18 @@ const VirtualOfficePackageTab = () => {
                         allowClear
                         enterButton={<SearchOutlined />}
                         size="large"
-                        onSearch={setSearchText}
+                        onSearch={setSearchText} // Gunakan onSearch agar konsisten
                         onChange={(e) => setSearchText(e.target.value)}
                     />
                 </Col>
                 <Col>
                     <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">
-                        Add New Package
+                        Tambah Paket VO Baru
                     </Button>
                 </Col>
             </Row>
 
-            <Card style={{ borderRadius: "12px" }}>
+            <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
                 <Table
                     columns={columns}
                     dataSource={data.filter((item) =>
@@ -337,6 +362,7 @@ const VirtualOfficePackageTab = () => {
                     }}
                     loading={loading}
                     scroll={{ x: 1000 }}
+                    rowKey="key" // <-- PERBAIKAN: Gunakan key unik
                 />
             </Card>
 
@@ -352,6 +378,7 @@ const VirtualOfficePackageTab = () => {
                 onOk={handleSave}
                 confirmLoading={loading}
                 okText={editingPackage ? "Update" : "Add"}
+                destroyOnClose // Reset state internal AntD
             >
                 <div style={{ marginTop: "24px" }}>
                     <Text strong>
@@ -362,7 +389,14 @@ const VirtualOfficePackageTab = () => {
                         value={formData.nama_paket || ""}
                         onChange={(e) => handleChange("nama_paket", e.target.value)}
                         style={{ marginTop: "8px" }}
+                        status={validationErrors.nama_paket ? 'error' : ''} // <-- PERBAIKAN
                     />
+                    {/* --- PESAN ERROR SPESIFIK --- */}
+                    {validationErrors.nama_paket && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Nama paket wajib diisi.
+                        </Text>
+                    )}
                 </div>
                 <div style={{ marginTop: "16px" }}>
                     <Text strong>
@@ -377,7 +411,15 @@ const VirtualOfficePackageTab = () => {
                             `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                         }
                         parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
+                        min={0} // <-- PERBAIKAN: Tambahkan min 0
+                        status={validationErrors.harga ? 'error' : ''} // <-- PERBAIKAN
                     />
+                    {/* --- PESAN ERROR SPESIFIK --- */}
+                    {validationErrors.harga && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Harga wajib diisi (minimal 0).
+                        </Text>
+                    )}
                 </div>
                 <div style={{ marginTop: "16px" }}>
                     <Text strong>
@@ -388,7 +430,15 @@ const VirtualOfficePackageTab = () => {
                         value={formData.durasi}
                         onChange={(value) => handleChange("durasi", value)}
                         style={{ marginTop: "8px", width: "100%" }}
+                        min={1} // <-- PERBAIKAN: Tambahkan min 1
+                        status={validationErrors.durasi ? 'error' : ''} // <-- PERBAIKAN
                     />
+                    {/* --- PESAN ERROR SPESIFIK --- */}
+                    {validationErrors.durasi && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Durasi wajib diisi (minimal 1 hari).
+                        </Text>
+                    )}
                 </div>
                 <div style={{ marginTop: "16px" }}>
                     <Text strong>Benefit Jam Meeting Room per Bulan</Text>
@@ -399,6 +449,7 @@ const VirtualOfficePackageTab = () => {
                             handleChange("benefit_jam_meeting_room_per_bulan", value)
                         }
                         style={{ marginTop: "8px", width: "100%" }}
+                        min={0} // <-- PERBAIKAN: Tambahkan min 0
                     />
                 </div>
                 <div style={{ marginTop: "16px" }}>
@@ -410,6 +461,7 @@ const VirtualOfficePackageTab = () => {
                             handleChange("benefit_jam_working_space_per_bulan", value)
                         }
                         style={{ marginTop: "8px", width: "100%" }}
+                        min={0} // <-- PERBAIKAN: Tambahkan min 0
                     />
                 </div>
                 <div style={{ marginTop: "16px" }}>

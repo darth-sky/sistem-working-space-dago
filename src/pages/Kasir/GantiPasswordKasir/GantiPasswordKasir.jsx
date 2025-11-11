@@ -15,39 +15,41 @@ const GantiPasswordKasir = () => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
+      // 1. Hapus error lama (jika ada) setiap kali submit baru
+      form.setFields([{ name: 'old_password', errors: [] }]);
+
       await changePassword(values.old_password, values.new_password);
       form.resetFields();
       setLoading(false);
 
-      // --- PERBAIKAN: Gunakan 'message' untuk redirect otomatis ---
-      
-      // 1. Tampilkan pesan sukses singkat (durasi 2 detik)
       message.success('Password Berhasil Diubah!', 2);
 
-      // 2. Tunggu 2.5 detik (agar user sempat baca pesan) lalu panggil logout.
-      //    Fungsi logout() dari AuthProvider akan otomatis redirect ke /login.
       setTimeout(() => {
         logout();
-      }, 2500); // 2.5 detik
-
-      // HAPUS KODE LAMA INI:
-      // Modal.success({
-      //   title: 'Password Berhasil Diubah',
-      //   content: 'Anda akan dialihkan ke halaman Login untuk masuk kembali dengan password baru Anda.',
-      //   onOk: () => logout(),
-      // });
-      // --- AKHIR PERBAIKAN ---
-
+      }, 2500); 
 
     } catch (error) {
       console.error("Error ganti password:", error);
-      
-      // --- PERBAIKAN KEDUA: Gunakan 'error.msg' ---
-      // Backend Flask Anda mengirim error sebagai 'msg', bukan 'message'
-      message.error(error.msg || "Gagal mengubah password. Pastikan password lama Anda benar.");
-      // --- AKHIR PERBAIKAN ---
-
       setLoading(false);
+      
+      // --- INI PERUBAHAN UTAMA ---
+      // Cek apakah error spesifik dari backend ttg password lama
+      if (error && error.msg && error.msg.toLowerCase().includes("invalid old password")) {
+        
+        // Tampilkan error di bawah field 'old_password'
+        form.setFields([
+          {
+            name: 'old_password', // Nama field harus sama persis
+            errors: ['Password lama yang Anda masukkan salah!'], // Pesan error
+          },
+        ]);
+        
+      } else {
+        // Untuk error lain (misal server 500, network error),
+        // kita tetap gunakan pop-up global
+        message.error(error.msg || "Gagal mengubah password. Coba lagi nanti.");
+      }
+      // --- AKHIR PERUBAHAN ---
     }
   };
 
@@ -101,13 +103,13 @@ const GantiPasswordKasir = () => {
             dependencies={['new_password']}
             hasFeedback
             rules={[
-              { required: true, message: 'Silakan konfirmasi password baru Anda!' },
+              { required: true, message: 'Silakan isi konfirmasi password baru Anda!' },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('new_password') === value) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('Password baru yang Anda masukkan tidak cocok!'));
+                  return Promise.reject(new Error('Konfirmasi Password yang Anda masukkan tidak cocok!'));
                 },
               }),
             ]}

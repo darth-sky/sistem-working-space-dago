@@ -1,7 +1,13 @@
-import React, { useState } from "react";
+// BARU: Impor useContext
+import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "../../../assets/images/logo.png";
-import { register } from "../../../services/service";
+
+// BARU: Impor loginProses dan AuthContext
+import { register, loginProses } from "../../../services/service";
+// (Asumsi loginProses ada di file service yang sama dengan register)
+import { AuthContext } from "../../../providers/AuthProvider";
+// (Sesuaikan path ini jika perlu)
 
 const DaftarAkun = () => {
   const [name, setName] = useState("");
@@ -10,32 +16,77 @@ const DaftarAkun = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
 
+  // BARU: Dapatkan fungsi 'login' dari AuthContext
+  const { login } = useContext(AuthContext);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const clearError = () => {
+    if (error) setError(null);
+  };
+
+  // MODIFIKASI: Logika handleSubmit diubah total
   const handleSubmit = async (e) => {
-    const formData = new FormData();
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
 
     if (password !== confirmPassword) {
-      alert("Password tidak sama!");
+      setError("Password dan Konfirmasi Password tidak sama!");
       return;
     }
 
-    formData.append("nama", name);
-    formData.append("email", email);
-    formData.append("password", password);
+    setIsLoading(true); // Mulai loading
+
+    const registerFormData = new FormData();
+    registerFormData.append("nama", name);
+    registerFormData.append("email", email);
+    registerFormData.append("password", password);
 
     try {
-      const result = await register(formData);
-      console.log(result.status);
+      // Langkah 1: Lakukan Registrasi
+      const registerResult = await register(registerFormData);
 
-      if (result.status === 201) {
-        alert(`Akun berhasil dibuat untuk ${name}`);
-        navigate("/login");
+      if (registerResult.status === 201) {
+        // Registrasi berhasil, sekarang lakukan auto-login
+        setSuccess(`Akun berhasil dibuat untuk ${name}. Sedang login...`);
+
+        const loginFormData = new FormData();
+
+        // --- PERBAIKAN DI SINI ---
+        // Kirim 'identifier' agar sesuai dengan endpoint /login
+        loginFormData.append("identifier", email);
+        // --- AKHIR PERBAIKAN ---
+
+        loginFormData.append("password", password);
+
+        try {
+          // Langkah 2: Panggil service loginProses
+          const loginResult = await loginProses(loginFormData);
+
+          // Langkah 3: Panggil fungsi 'login' dari AuthContext
+          await login(loginResult);
+
+        } catch (loginError) {
+          console.error("Auto-login failed after registration:", loginError);
+          setError("Akun dibuat, tapi login otomatis gagal. Silakan login manual.");
+          setIsLoading(false);
+          setTimeout(() => {
+            navigate("/login");
+          }, 3000);
+        }
       } else {
-        alert("Gagal mendaftar: " + (result.data?.message || "Unknown error"));
+        // Registrasi gagal (dari backend, cth: email/nama duplikat)
+        setError(registerResult.data?.message || "Gagal mendaftar. Silakan coba lagi.");
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error(error);
-      alert("Terjadi error saat mendaftar");
+    } catch (registerError) {
+      // Registrasi gagal (error jaringan/server)
+      console.error(registerError);
+      setError("Terjadi error saat mendaftar. Periksa koneksi Anda.");
+      setIsLoading(false);
     }
   };
 
@@ -63,15 +114,19 @@ const DaftarAkun = () => {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nama Lengkap
+              Username
             </label>
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                clearError();
+              }}
               className="w-full px-4 py-3 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Nama lengkap"
+              placeholder="Username"
               required
+              disabled={isLoading} // BARU: disable saat loading
             />
           </div>
 
@@ -82,10 +137,14 @@ const DaftarAkun = () => {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                clearError();
+              }}
               className="w-full px-4 py-3 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="you@example.com"
               required
+              disabled={isLoading} // BARU: disable saat loading
             />
           </div>
 
@@ -96,10 +155,14 @@ const DaftarAkun = () => {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                clearError();
+              }}
               className="w-full px-4 py-3 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="********"
               required
+              disabled={isLoading} // BARU: disable saat loading
             />
           </div>
 
@@ -110,18 +173,52 @@ const DaftarAkun = () => {
             <input
               type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                clearError();
+              }}
               className="w-full px-4 py-3 border rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="********"
               required
+              disabled={isLoading} // BARU: disable saat loading
             />
+          </div>
+
+          {/* Area Notifikasi (Error atau Sukses) */}
+          <div className="h-6">
+            {" "}
+            {error && (
+              <div
+                className="w-full bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm text-center"
+                role="alert"
+              >
+                {error}
+              </div>
+            )}
+            {success && (
+              <div
+                className="w-full bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-lg text-sm text-center"
+                role="alert"
+              >
+                {success}
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium shadow-md transition duration-200"
+            disabled={isLoading || success} // Tetap disable saat sukses (karena sedang auto-login)
+            className={`w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium shadow-md transition duration-200 ${isLoading || success
+                ? "opacity-50 cursor-not-allowed"
+                : "hover:bg-green-600"
+              }`}
           >
-            Daftar
+            {/* MODIFIKASI: Teks tombol diubah */}
+            {isLoading
+              ? "Memproses..." // Teks umum untuk register + login
+              : success
+                ? "Berhasil!"
+                : "Daftar"}
           </button>
         </form>
 

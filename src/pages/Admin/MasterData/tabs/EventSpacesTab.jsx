@@ -14,7 +14,8 @@ const { Text } = Typography;
 const { Search } = Input;
 const { TextArea } = Input;
 
-const UPLOAD_URL = `${import.meta.env.VITE_BASE_URL}/static/`;
+// --- PERBAIKAN: Gunakan import.meta.env.VITE_BASE_URL dinamis ---
+const UPLOAD_URL = `${import.meta.env.VITE_BASE_URL.replace('/api/v1', '')}/static/`;
 
 const EventSpacesTab = () => {
     const [open, setOpen] = useState(false);
@@ -25,6 +26,9 @@ const EventSpacesTab = () => {
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
     const [fileList, setFileList] = useState([]);
+
+    // --- TAMBAHAN: State untuk validasi ---
+    const [validationErrors, setValidationErrors] = useState({});
 
     const fetchData = async () => {
         setLoading(true);
@@ -71,7 +75,11 @@ const EventSpacesTab = () => {
             width: 120,
             render: (filename) =>
                 filename ? (
-                    <Image width={80} src={`${UPLOAD_URL}${filename}`} />
+                    <Image 
+                      width={80} 
+                      src={`${UPLOAD_URL}${filename}`} 
+                      onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/80?text=Error" }}
+                    />
                 ) : (
                     <Text type="secondary">No Image</Text>
                 ),
@@ -106,7 +114,7 @@ const EventSpacesTab = () => {
                         >
                             Cari
                         </Button>
-                        <Button onClick={clearFilters} size="small" style={{ width: 90 }}>
+                        <Button onClick={() => clearFilters && clearFilters()} size="small" style={{ width: 90 }}>
                             Reset
                         </Button>
                     </Space>
@@ -155,7 +163,7 @@ const EventSpacesTab = () => {
                         >
                             Filter
                         </Button>
-                        <Button onClick={clearFilters} size="small" style={{ width: 90 }}>
+                        <Button onClick={() => clearFilters && clearFilters()} size="small" style={{ width: 90 }}>
                             Reset
                         </Button>
                     </Space>
@@ -207,7 +215,7 @@ const EventSpacesTab = () => {
                         >
                             Filter
                         </Button>
-                        <Button onClick={clearFilters} size="small" style={{ width: 90 }}>
+                        <Button onClick={() => clearFilters && clearFilters()} size="small" style={{ width: 90 }}>
                             Reset
                         </Button>
                     </Space>
@@ -269,15 +277,35 @@ const EventSpacesTab = () => {
     ];
 
     // === HANDLER ===
-    const handleChange = (field, value) => setFormData({ ...formData, [field]: value });
+    const handleChange = (field, value) => {
+        setFormData({ ...formData, [field]: value });
+        // --- PERBAIKAN: Hapus error saat user mulai mengisi ---
+        if (validationErrors[field]) {
+            setValidationErrors(prev => ({ ...prev, [field]: undefined }));
+        }
+    };
 
     const handleFileChange = ({ fileList: newFileList }) => setFileList(newFileList);
 
     const handleSave = async () => {
-        if (!formData.nama_event_space || !formData.harga_paket || !formData.status_ketersediaan) {
-            message.error("Nama, Harga, dan Status wajib diisi!");
+        // --- PERBAIKAN: Validasi Penuh ---
+        const errors = {};
+        if (!formData.nama_event_space || formData.nama_event_space.trim() === "") {
+            errors.nama_event_space = true;
+        }
+        if (formData.harga_paket === null || formData.harga_paket === undefined || formData.harga_paket <= 0) {
+            errors.harga_paket = true;
+        }
+        // Status ketersediaan adalah Switch, tidak perlu divalidasi (selalu ada nilai)
+
+        if (Object.keys(errors).length > 0) {
+            setValidationErrors(errors);
+            message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
             return;
         }
+        setValidationErrors({}); // Lolos validasi, bersihkan error
+        // --- AKHIR PERBAIKAN VALIDASI ---
+
         setLoading(true);
 
         const formDataToSend = new FormData();
@@ -290,6 +318,8 @@ const EventSpacesTab = () => {
         if (fileList.length > 0 && fileList[0].originFileObj) {
             formDataToSend.append("gambar_ruangan", fileList[0].originFileObj);
         } else if (editingEventSpace && editingEventSpace.gambar_ruangan) {
+            // Jika tidak ada file baru, tapi ada file lama, kirim nama file lama
+            // (Backend Anda harus menangani logika 'gambar_ruangan_existing' ini)
             formDataToSend.append("gambar_ruangan_existing", editingEventSpace.gambar_ruangan);
         }
 
@@ -305,7 +335,8 @@ const EventSpacesTab = () => {
             handleCancel();
         } catch (err) {
             console.error("Error save event space:", err);
-            message.error("Gagal menyimpan data");
+            const errorMsg = err.response?.data?.error || "Gagal menyimpan data";
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -323,7 +354,8 @@ const EventSpacesTab = () => {
             }
         } catch (err) {
             console.error("Error delete event space:", err);
-            message.error("Terjadi kesalahan saat menghapus data");
+            const errorMsg = err.response?.data?.error || "Terjadi kesalahan saat menghapus data";
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -342,6 +374,7 @@ const EventSpacesTab = () => {
                 },
             ]);
         } else setFileList([]);
+        setValidationErrors({}); // <-- PERBAIKAN
         setOpen(true);
     };
 
@@ -349,6 +382,7 @@ const EventSpacesTab = () => {
         setEditingEventSpace(null);
         setFormData({ status_ketersediaan: "Active" });
         setFileList([]);
+        setValidationErrors({}); // <-- PERBAIKAN
         setOpen(true);
     };
 
@@ -357,6 +391,7 @@ const EventSpacesTab = () => {
         setFormData({ status_ketersediaan: "Active" });
         setEditingEventSpace(null);
         setFileList([]);
+        setValidationErrors({}); // <-- PERBAIKAN
     };
 
     return (
@@ -368,7 +403,7 @@ const EventSpacesTab = () => {
                         allowClear
                         enterButton={<SearchOutlined />}
                         size="large"
-                        onSearch={setSearchText}
+                        onSearch={setSearchText} // <-- PERBAIKAN
                         onChange={(e) => setSearchText(e.target.value)}
                     />
                 </Col>
@@ -379,12 +414,12 @@ const EventSpacesTab = () => {
                         onClick={handleAdd}
                         size="large"
                     >
-                        Add New Event Space
+                        Tambahkan Event Space
                     </Button>
                 </Col>
             </Row>
 
-            <Card style={{ borderRadius: "12px" }}>
+            <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
                 <Table
                     columns={columns}
                     dataSource={filteredData}
@@ -395,6 +430,7 @@ const EventSpacesTab = () => {
                         onShowSizeChange: (current, size) => setPageSize(size),
                     }}
                     loading={loading}
+                    scroll={{ x: 1200 }} // <-- PERBAIKAN: Tambahkan scroll
                 />
             </Card>
 
@@ -412,6 +448,7 @@ const EventSpacesTab = () => {
                 confirmLoading={loading}
                 okText={editingEventSpace ? "Update" : "Add"}
                 width={600}
+                destroyOnClose // Reset state internal AntD
             >
                 <div style={{ marginTop: 24 }}>
                     <Text strong>
@@ -422,7 +459,14 @@ const EventSpacesTab = () => {
                         value={formData.nama_event_space || ""}
                         onChange={(e) => handleChange("nama_event_space", e.target.value)}
                         style={{ marginTop: 8 }}
+                        status={validationErrors.nama_event_space ? 'error' : ''} // <-- PERBAIKAN
                     />
+                    {/* --- PESAN ERROR SPESIFIK --- */}
+                    {validationErrors.nama_event_space && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            Nama event space wajib diisi.
+                        </Text>
+                    )}
                 </div>
 
                 <div style={{ marginTop: 16 }}>
@@ -451,7 +495,15 @@ const EventSpacesTab = () => {
                                     `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                                 }
                                 parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
+                                min={1} // <-- PERBAIKAN
+                                status={validationErrors.harga_paket ? 'error' : ''} // <-- PERBAIKAN
                             />
+                            {/* --- PESAN ERROR SPESIFIK --- */}
+                            {validationErrors.harga_paket && (
+                                <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                                    Harga wajib diisi (minimal 1).
+                                </Text>
+                            )}
                         </div>
                     </Col>
                     <Col span={12}>
@@ -461,6 +513,7 @@ const EventSpacesTab = () => {
                                 style={{ width: "100%", marginTop: 8 }}
                                 placeholder="Cth: 50"
                                 value={formData.kapasitas}
+                                min={1} // <-- PERBAIKAN
                                 onChange={(value) => handleChange("kapasitas", value)}
                             />
                         </div>
@@ -476,9 +529,13 @@ const EventSpacesTab = () => {
                         beforeUpload={() => false}
                         maxCount={1}
                         style={{ marginTop: 8 }}
+                        accept="image/png, image/jpeg" // <-- PERBAIKAN
                     >
                         <Button icon={<UploadOutlined />}>Pilih Gambar</Button>
                     </Upload>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                        (JPG/PNG, Max 2MB).
+                    </Text>
                 </div>
 
                 <div

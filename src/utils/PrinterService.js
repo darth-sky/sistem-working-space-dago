@@ -28,7 +28,7 @@ export const connectToPrinter = async () => {
     message.loading({ content: 'Mencari printer Bluetooth...', key: 'printer' });
     
     const device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "EPP" }], // Filter nama EPPOS
+      filters: [{ namePrefix: "RPP" }], // Filter nama EPPOS
       optionalServices: [PRINTER_SERVICE_UUID] // Minta akses ke service UUID
     });
 
@@ -118,3 +118,42 @@ export const printReceipt = async (transaksi) => {
     message.error(`Gagal mencetak: ${error.message}`);
   }
 };
+
+
+// Di dalam file: src/utils/printerService.js
+
+// ... (kode 'textEncoder', 'ESC', 'ALIGN_CENTER', 'printerCharacteristic', dll.)
+
+// ... (setelah fungsi 'printReceipt')
+
+// --- TAMBAHKAN FUNGSI BARU INI ---
+export const printTestReceipt = async () => {
+  if (!printerCharacteristic) {
+    message.error("Printer tidak terhubung.");
+    return;
+  }
+
+  let commands = INIT_PRINTER;
+  commands += ALIGN_CENTER;
+  commands += BOLD_ON + "TES CETAK" + BOLD_OFF + FEED_LINE;
+  commands += "--------------------------------" + FEED_LINE;
+  commands += ALIGN_LEFT;
+  commands += "Printer EPPOS EP5858L" + FEED_LINE;
+  commands += "Koneksi Web Bluetooth Berhasil!" + FEED_LINE;
+  commands += "--------------------------------" + FEED_LINE;
+  commands += FEED_LINE + FEED_LINE;
+  commands += "Terima Kasih!" + FEED_LINE + FEED_LINE + FEED_LINE;
+  commands += FEED_AND_CUT; // Perintah potong kertas
+
+  try {
+    const data = textEncoder.encode(commands);
+    // Mengirim data ke printer
+    await printerCharacteristic.writeValueWithoutResponse(data);
+    message.success("Test print terkirim!");
+  } catch (error) {
+    console.error("Gagal test print:", error);
+    message.error(`Gagal test print: ${error.message}`);
+    throw error; // Lempar error agar bisa ditangkap di komponen
+  }
+};
+// --- AKHIR FUNGSI BARU ---

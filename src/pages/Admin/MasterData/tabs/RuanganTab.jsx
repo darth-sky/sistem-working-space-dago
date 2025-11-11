@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Input, Typography, Row, Col, Card, Space,
   Select, message, Popconfirm, Tooltip, Upload, InputNumber, Switch,
-  Tag, List, Divider, Image
+  Tag, List, Divider, Image, Alert
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, SearchOutlined } from "@ant-design/icons";
 import {
@@ -39,6 +39,9 @@ const RuanganTab = () => {
   const [paketHargaList, setPaketHargaList] = useState([]);
   const [newPaket, setNewPaket] = useState({ durasi_jam: "", harga_paket: "" });
   const [editingPaket, setEditingPaket] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
+
 
   // === Ambil Data dari Backend ===
   const fetchData = async () => {
@@ -94,18 +97,41 @@ const RuanganTab = () => {
     setFileGambar(null);
     setPaketHargaList([]);
     setNewPaket({ durasi_jam: "", harga_paket: "" });
+    if (previewImage) {
+      URL.revokeObjectURL(previewImage); // Bersihkan memori
+    }
+    setPreviewImage(null);
+    setValidationErrors({});
   };
 
   const handleChange = (field, value) => setFormData({ ...formData, [field]: value });
 
   const handleAddOrUpdateRuangan = async () => {
+    // --- VALIDASI BARU DIMULAI ---
+    const errors = {};
+    if (!formData.nama_ruangan || formData.nama_ruangan.trim() === "") errors.nama_ruangan = true;
+    if (!formData.id_kategori_ruangan) errors.id_kategori_ruangan = true;
+    // Pengecekan untuk InputNumber yang bisa jadi null atau undefined
+    if (formData.harga_per_jam === null || formData.harga_per_jam === undefined) errors.harga_per_jam = true;
+    if (!formData.kapasitas) errors.kapasitas = true;
+
+    // Jika ada error (panjang 'errors' > 0)
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      message.warning("Harap isi semua form yang wajib diisi (ditandai *).");
+      return; // Hentikan eksekusi fungsi
+    }
+    // --- VALIDASI BARU SELESAI ---
+
+    setValidationErrors({}); // Bersihkan error jika validasi lolos
+    setLoading(true);
+
     const formPayload = new FormData();
     for (const key in formData) {
       if (formData[key] !== null) formPayload.append(key, formData[key]);
     }
     if (fileGambar) formPayload.append("gambar_ruangan", fileGambar);
 
-    setLoading(true);
     try {
       if (editingRuangan) {
         await updateRuangan(editingRuangan.id_ruangan, formPayload);
@@ -122,6 +148,7 @@ const RuanganTab = () => {
       setLoading(false);
     }
   };
+
 
   const handleDelete = async (id) => {
     try {
@@ -334,12 +361,13 @@ const RuanganTab = () => {
       </Card>
 
       {/* === MODAL TAMBAH/EDIT RUANGAN === */}
+      {/* === MODAL TAMBAH/EDIT RUANGAN === */}
       <Modal
         title={<Title level={4}>{editingRuangan ? "Edit Ruangan" : "Tambah Ruangan Baru"}</Title>}
         open={open}
         onCancel={handleCancel}
-        width={850}
-        destroyOnClose
+        width={850} // Lebar yang cukup untuk 2 kolom
+        destroyOnClose // Hancurkan form saat ditutup untuk mereset state internal
         footer={[
           <Button key="cancel" onClick={handleCancel}>Batal</Button>,
           <Button key="save" type="primary" onClick={handleAddOrUpdateRuangan} loading={loading}>
@@ -347,8 +375,250 @@ const RuanganTab = () => {
           </Button>,
         ]}
       >
-        {/* Isi form seperti sebelumnya */}
-        {/* ... (form yang kamu punya sebelumnya tetap digunakan di sini) ... */}
+        <Row gutter={24}>
+          {/* === KOLOM KIRI === */}
+          <Col span={12}>
+            {/* Nama Ruangan */}
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>Nama Ruangan <span style={{ color: 'red' }}>*</span></Text>
+              <Input
+                value={formData.nama_ruangan}
+                onChange={(e) => handleChange("nama_ruangan", e.target.value)}
+                status={validationErrors.nama_ruangan ? 'error' : ''}
+              />
+              {/* PESAN ERROR SPESIFIK */}
+              {validationErrors.nama_ruangan && (
+                <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                  Nama ruangan wajib diisi.
+                </Text>
+              )}
+            </div>
+
+            {/* Kategori Ruangan */}
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>Kategori <span style={{ color: 'red' }}>*</span></Text>
+              <Select
+                placeholder="Pilih kategori"
+                value={formData.id_kategori_ruangan}
+                onChange={(value) => handleChange("id_kategori_ruangan", value)}
+                style={{ width: "100%" }}
+                status={validationErrors.id_kategori_ruangan ? 'error' : ''}
+              >
+                {kategoriRuanganList.map((kat) => (
+                  <Option key={kat.id_kategori_ruangan} value={kat.id_kategori_ruangan}>
+                    {kat.nama_kategori}
+                  </Option>
+                ))}
+              </Select>
+              {/* PESAN ERROR SPESIFIK */}
+              {validationErrors.id_kategori_ruangan && (
+                <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                  Kategori wajib dipilih.
+                </Text>
+              )}
+            </div>
+
+            <Row gutter={16}>
+              {/* Harga per Jam */}
+              <Col span={12}>
+                <div style={{ marginBottom: 12 }}>
+                  <Text strong>Harga per Jam <span style={{ color: 'red' }}>*</span></Text>
+                  <InputNumber
+                    value={formData.harga_per_jam}
+                    onChange={(value) => handleChange("harga_per_jam", value)}
+                    style={{ width: "100%" }}
+                    min={0}
+                    formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={(value) => value.replace(/Rp\s?|(,*)/g, '')}
+                    status={validationErrors.harga_per_jam ? 'error' : ''}
+                  />
+                  {/* PESAN ERROR SPESIFIK */}
+                  {validationErrors.harga_per_jam && (
+                    <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                      Harga wajib diisi.
+                    </Text>
+                  )}
+                </div>
+              </Col>
+              {/* Kapasitas */}
+              <Col span={12}>
+                <div style={{ marginBottom: 12 }}>
+                  <Text strong>Kapasitas <span style={{ color: 'red' }}>*</span></Text>
+                  <InputNumber
+                    value={formData.kapasitas}
+                    onChange={(value) => handleChange("kapasitas", value)}
+                    style={{ width: "100%" }}
+                    min={1}
+                    addonAfter="Org"
+                    status={validationErrors.kapasitas ? 'error' : ''}
+                  />
+                  {/* PESAN ERROR SPESIFIK */}
+                  {validationErrors.kapasitas && (
+                    <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                      Kapasitas wajib diisi.
+                    </Text>
+                  )}
+                </div>
+              </Col>
+            </Row>
+
+            {/* Status Ketersediaan */}
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>Status Ketersediaan</Text>
+              <br />
+              <Switch
+                checkedChildren="Active"
+                unCheckedChildren="Inactive"
+                checked={formData.status_ketersediaan === "Active"}
+                onChange={(checked) => handleChange("status_ketersediaan", checked ? "Active" : "Inactive")}
+              />
+            </div>
+
+            {/* Upload Gambar */}
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>Gambar Ruangan</Text>
+              <Upload
+                beforeUpload={(file) => {
+                  setFileGambar(file); // Simpan file di state
+                  setPreviewImage(URL.createObjectURL(file)); // Buat preview URL
+                  return false; // Hentikan upload otomatis AntDesign
+                }}
+                onRemove={() => {
+                  setFileGambar(null);
+                  if (previewImage) {
+                    URL.revokeObjectURL(previewImage); // Bersihkan memori
+                  }
+                  setPreviewImage(null); // Hapus preview URL
+                }}
+                fileList={fileGambar ? [fileGambar] : []}
+                maxCount={1}
+                accept="image/*"
+              >
+                <Button icon={<UploadOutlined />}>Pilih Gambar</Button>
+              </Upload>
+              
+              {/* --- LOGIKA PREVIEW GAMBAR --- */}
+              {previewImage ? (
+                // 1. Prioritas: Tampilkan preview gambar BARU
+                <div style={{ marginTop: 12 }}>
+                  <Text type="secondary">Preview gambar baru:</Text><br />
+                  <Image width={100} src={previewImage} />
+                </div>
+              ) : editingRuangan && formData.gambar_ruangan ? (
+                // 2. Fallback: Tampilkan gambar LAMA (saat edit)
+                <div style={{ marginTop: 12 }}>
+                  <Text type="secondary">Gambar saat ini:</Text><br />
+                  <Image
+                    width={100}
+                    src={`${import.meta.env.VITE_BASE_URL}/static/${formData.gambar_ruangan}`}
+                  />
+                </div>
+              ) : null}
+              {/* --- AKHIR LOGIKA PREVIEW --- */}
+            </div>
+          </Col>
+
+          {/* === KOLOM KANAN === */}
+          <Col span={12}>
+            {/* Deskripsi */}
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>Deskripsi Ruangan</Text>
+              <TextArea
+                rows={4}
+                value={formData.deskripsi_ruangan}
+                onChange={(e) => handleChange("deskripsi_ruangan", e.target.value)}
+              />
+            </div>
+
+            {/* Fitur Ruangan */}
+            <div style={{ marginBottom: 12 }}>
+              <Text strong>Fitur Ruangan</Text>
+              <TextArea
+                rows={4}
+                value={formData.fitur_ruangan}
+                onChange={(e) => handleChange("fitur_ruangan", e.target.value)}
+                placeholder="Satu fitur per baris (cth:&#10;Wifi Cepat&#10;AC&#10;Proyektor)"
+              />
+            </div>
+            
+            {/* --- LOGIKA PAKET HARGA (SESUAI PERMINTAAN) --- */}
+            {editingRuangan ? (
+              // TAMPILKAN JIKA SEDANG EDIT
+              <>
+                <Divider>Kelola Paket Harga (Opsional)</Divider>
+                <List
+                  dataSource={paketHargaList}
+                  bordered
+                  size="small"
+                  style={{ marginBottom: 12, maxHeight: 150, overflowY: 'auto' }}
+                  locale={{ emptyText: "Belum ada paket harga" }}
+                  renderItem={(item) => (
+                    <List.Item
+                      actions={[
+                        <Button type="link" size="small" onClick={() => {
+                          setEditingPaket(item);
+                          setNewPaket({ durasi_jam: item.durasi_jam, harga_paket: item.harga_paket });
+                        }}>Edit</Button>,
+                        <Popconfirm title="Yakin hapus paket?" onConfirm={() => handleDeletePaket(item.id_paket)}>
+                          <Button type="link" danger size="small">Hapus</Button>
+                        </Popconfirm>
+                      ]}
+                    >
+                      <Text>{item.durasi_jam} Jam - Rp {item.harga_paket.toLocaleString('id-ID')}</Text>
+                    </List.Item>
+                  )}
+                />
+                
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber
+                    placeholder="Durasi (Jam)"
+                    value={newPaket.durasi_jam}
+                    onChange={(val) => setNewPaket({ ...newPaket, durasi_jam: val })}
+                    min={1}
+                    style={{ width: '35%' }}
+                  />
+                  <InputNumber
+                    placeholder="Harga Paket"
+                    value={newPaket.harga_paket}
+                    onChange={(val) => setNewPaket({ ...newPaket, harga_paket: val })}
+                    min={0}
+                    style={{ width: '45%' }}
+                    formatter={(value) => `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={(value) => value.replace(/Rp\s?|(,*)/g, '')}
+                  />
+                  <Button type="primary" onClick={handleSavePaket}>
+                    {editingPaket ? "Update" : "Add"}
+                  </Button>
+                </Space.Compact>
+                {editingPaket && (
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    onClick={() => {
+                      setEditingPaket(null);
+                      setNewPaket({ durasi_jam: "", harga_paket: "" });
+                    }}
+                    style={{ display: 'block', marginTop: 8 }}
+                  >
+                    Batal Edit
+                  </Button>
+                )}
+              </>
+            ) : (
+              // TAMPILKAN JIKA SEDANG TAMBAH BARU
+              <>
+                <Divider>Kelola Paket Harga</Divider>
+                <Alert
+                  message="Catatan"
+                  description="Anda dapat menambahkan dan mengelola paket harga (misal: 2 jam, 4 jam) setelah ruangan ini berhasil dibuat dan disimpan."
+                  type="info"
+                  showIcon
+                />
+              </>
+            )}
+            {/* --- AKHIR LOGIKA PAKET HARGA --- */}
+          </Col>
+        </Row>
       </Modal>
     </div>
   );

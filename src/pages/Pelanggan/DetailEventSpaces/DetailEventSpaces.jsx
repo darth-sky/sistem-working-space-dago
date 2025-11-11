@@ -94,30 +94,35 @@ const DetailEventSpaces = () => {
     momentObject ? momentObject.format("HH:mm:ss") : null;
 
   const handleSubmit = async (values) => {
-    if (!selectedDate) return message.error("Tanggal booking belum dipilih!");
+    if (!selectedDate) {
+      message.error("Pilih tanggal terlebih dahulu!");
+      return;
+    }
+
     if (!userProfile?.id_user)
       return message.error("Anda harus login untuk mengajukan booking.");
 
-
-    // 1. Dapatkan jam & menit dari TimePicker
     const startHour = values.waktu_mulai.hour();
     const startMinute = values.waktu_mulai.minute();
     const endHour = values.waktu_selesai.hour();
     const endMinute = values.waktu_selesai.minute();
 
-    // 2. Buat objek moment dari tanggal yang dipilih di kalender
     const baseDate = moment(selectedDate);
-
-    // 3. Gabungkan tanggal dari kalender dengan jam/menit dari TimePicker
-    const finalWaktuMulai = baseDate.clone().hour(startHour).minute(startMinute).second(0);
-    const finalWaktuSelesai = baseDate.clone().hour(endHour).minute(endMinute).second(0);
-
+    const finalWaktuMulai = baseDate
+      .clone()
+      .hour(startHour)
+      .minute(startMinute)
+      .second(0);
+    const finalWaktuSelesai = baseDate
+      .clone()
+      .hour(endHour)
+      .minute(endMinute)
+      .second(0);
 
     const finalData = {
       id_user: userProfile.id_user,
       id_event_space: roomData.id_event_space,
       tanggal_event: selectedDate.toISOString().split("T")[0],
-      // 4. Format ke string DATETIME SQL
       waktu_mulai: finalWaktuMulai.format("YYYY-MM-DD HH:mm:ss"),
       waktu_selesai: finalWaktuSelesai.format("YYYY-MM-DD HH:mm:ss"),
       nama_acara: values.nama_acara,
@@ -148,18 +153,15 @@ const DetailEventSpaces = () => {
     }
   };
 
-  // === FUNGSI JAM MULAI & SELESAI ===
   const disabledHoursStart = () => {
     const now = moment();
     const isToday = selectedDate && moment(selectedDate).isSame(now, "day");
     const currentHour = now.hour();
     const disabled = [];
 
-    // Tutup sebelum 08 dan setelah 22
     for (let i = 0; i < OPENING_HOUR; i++) disabled.push(i);
     for (let i = CLOSING_HOUR + 1; i <= 23; i++) disabled.push(i);
 
-    // Jika hari ini, disable jam yang sudah lewat (kurang dari jam sekarang)
     if (isToday) {
       for (let i = OPENING_HOUR; i < currentHour; i++) disabled.push(i);
     }
@@ -281,22 +283,22 @@ const DetailEventSpaces = () => {
                       <Form.Item
                         name="jumlah_peserta"
                         label="Jumlah Peserta"
-                        rules={[ // <-- MODIFICATION START
+                        rules={[
                           {
                             required: true,
-                            message: "Jumlah peserta wajib diisi"
+                            message: "Jumlah peserta wajib diisi",
                           },
                           {
-                            type: 'number', // Ensure it's treated as a number
+                            type: "number",
                             max: roomData.kapasitas,
                             message: `Jumlah peserta tidak boleh melebihi kapasitas (${roomData.kapasitas} orang)`,
                           },
                           {
-                            type: 'number',
+                            type: "number",
                             min: 1,
-                            message: 'Jumlah peserta minimal 1 orang',
-                          }
-                        ]} // <-- MODIFICATION END
+                            message: "Jumlah peserta minimal 1 orang",
+                          },
+                        ]}
                       >
                         <InputNumber
                           min={1}
@@ -324,44 +326,54 @@ const DetailEventSpaces = () => {
                     />
                   </Form.Item>
 
-                  <Text
-                    style={{
-                      fontWeight: 600,
-                      color: "#0056b3",
-                      fontSize: 16,
-                      display: "block",
-                      marginBottom: 10,
-                    }}
-                  >
-                    Pilih Tanggal & Waktu
-                  </Text>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      background: "white",
-                      borderRadius: 12,
-                      padding: 6,
-                      marginBottom: 24,
-                    }}
+                  {/* === VALIDASI TANGGAL === */}
+                  <Form.Item
+                    label="Pilih Tanggal & Waktu"
+                    required
+                    validateStatus={!selectedDate ? "error" : ""}
+                    style={{ marginBottom: 8 }}
                   >
                     <div
                       style={{
-                        width: "100%",
-                        maxWidth: 260,
-                        transform: "scale(0.78)",
-                        transformOrigin: "top center",
+                        display: "flex",
+                        justifyContent: "center",
+                        background: "white",
+                        borderRadius: 12,
+                        padding: 6,
                       }}
                     >
-                      <DayPicker
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={handleDateSelect}
-                        disabled={{ before: new Date() }}
-                      />
+                      <div
+                        style={{
+                          width: "100%",
+                          maxWidth: 260,
+                          transform: "scale(0.78)",
+                          transformOrigin: "top center",
+                        }}
+                      >
+                        <DayPicker
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={handleDateSelect}
+                          disabled={{ before: new Date() }}
+                        />
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Pesan error manual agar muncul tepat di bawah kalender */}
+                    {!selectedDate && (
+                      <div
+                        style={{
+                          color: "#ff4d4f",
+                          fontSize: 13,
+                          marginTop: -50,
+                          textAlign: "center",
+                        }}
+                      >
+                        Pilih tanggal
+                      </div>
+                    )}
+                  </Form.Item>
+
 
                   <Row gutter={16}>
                     <Col xs={24} sm={12}>
@@ -471,7 +483,8 @@ const DetailEventSpaces = () => {
             <br />
             <Text strong>Deskripsi:</Text> {bookingData.deskripsi}
             <br />
-            <Text strong>Kebutuhan Tambahan:</Text> {bookingData.kebutuhan_tambahan}
+            <Text strong>Kebutuhan Tambahan:</Text>{" "}
+            {bookingData.kebutuhan_tambahan}
             <br />
             <Divider />
             <Text type="secondary">

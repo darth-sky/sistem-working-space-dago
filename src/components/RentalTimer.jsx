@@ -3,17 +3,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // 💎 1. Tambahkan prop 'onNotify' dengan nilai default fungsi kosong
-const RentalTimer = ({ startTime, endTime, visualOnly = false, onNotify = () => {} }) => {
-  
+const RentalTimer = ({ startTime, endTime, visualOnly = false, onNotify = () => { } }) => {
+
   const notificationSound = useRef(null);
   const [hasPlayedNotification, setHasPlayedNotification] = useState(false);
 
   useEffect(() => {
-    if (visualOnly) return; 
+    if (visualOnly) return;
 
     // 💡 INGAT: Pastikan path ini benar (dari root folder 'public')
-    notificationSound.current = new Audio("/sounds/notification.mp3");
-  }, [visualOnly]); 
+    notificationSound.current = new Audio("/sounds/notification_ruangan.mp3");
+  }, [visualOnly]);
 
   // --- Fungsi calculateTimeLeft biarkan sama ---
   const calculateTimeLeft = () => {
@@ -57,7 +57,7 @@ const RentalTimer = ({ startTime, endTime, visualOnly = false, onNotify = () => 
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [startTime, endTime, visualOnly]); 
+  }, [startTime, endTime, visualOnly]);
 
   // 💎 2. Modifikasi useEffect untuk notifikasi
   useEffect(() => {
@@ -66,15 +66,15 @@ const RentalTimer = ({ startTime, endTime, visualOnly = false, onNotify = () => 
     if (
       !hasPlayedNotification &&
       timeLeft.status === 'ACTIVE' &&
-      timeLeft.totalSeconds <= 900 && // 15 menit
+      timeLeft.totalSeconds <= 900 &&
       timeLeft.totalSeconds > 0
     ) {
       // 1. Putar suara (seperti sebelumnya)
       notificationSound.current.play().catch(e => console.error("Gagal memutar suara:", e));
-      
+
       // 2. Panggil callback 'onNotify' (untuk memicu pop-up)
-      onNotify(); 
-      
+      onNotify();
+
       // 3. Tandai sudah notifikasi
       setHasPlayedNotification(true);
     }
@@ -91,7 +91,7 @@ const RentalTimer = ({ startTime, endTime, visualOnly = false, onNotify = () => 
 
   const { color } = getTimeLevelAndColor();
   const { hours, minutes, seconds } = timeLeft;
-  
+
   let formattedTime;
   let prefix = '';
 

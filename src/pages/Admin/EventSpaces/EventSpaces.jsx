@@ -172,7 +172,7 @@ const DetailView = ({ selectedEvent, handleBackToList, handleApprove, setRejectM
             {/* Rejection Reason */}
             {selectedEvent?.rejectionReason && (<div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"><h4 className="font-semibold text-red-900 mb-2">Alasan Penolakan</h4><p className="text-red-700">{selectedEvent.rejectionReason}</p></div>)}
             {/* Action Buttons */}
-            {(selectedEvent?.status === 'Baru' || selectedEvent?.status === 'Confirmed') && (
+            {(selectedEvent?.status === 'Baru') && (
                 <div className="border-t pt-6"><div className="flex justify-end space-x-4">
                     <button onClick={() => setRejectModalVisible(true)} className="px-6 py-2 text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium flex items-center">
                         <XCircle className="w-5 h-5 mr-2" /> {selectedEvent?.status === 'Confirmed' ? 'Batalkan Event' : 'Tolak Event'}

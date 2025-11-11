@@ -13,8 +13,8 @@ import {
     Menu,
     Spin,
     Divider,
-    ConfigProvider, // Keep ConfigProvider if you use it globally or for specific theme overrides
-    Space // Import Space for layout
+    ConfigProvider,
+    Space
 } from "antd";
 import {
     SearchOutlined,
@@ -27,26 +27,26 @@ import {
     QrcodeOutlined,
     CheckCircleOutlined,
     PercentageOutlined,
-    SaveOutlined, // <-- Import SaveOutlined
-
+    SaveOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { useLocation, useNavigate } from "react-router-dom"; // <-- Import useNavigate
+import { useLocation, useNavigate } from "react-router-dom";
+// --- PERBAIKAN 1: Import useAuth ---
+import { useAuth } from "../../../providers/AuthProvider";
 import {
     getPosInitData,
     createOrderKasir,
     getRoomsToday,
     createRoomBookingKasir,
-    saveOrderKasir, // <-- Import saveOrderKasir
-    getSavedOrderDetails, // <-- Import getSavedOrderDetails
-    paySavedOrder // <-- Import paySavedOrder
-} from "../../../services/service"; // <-- Make sure path is correct
+    saveOrderKasir,
+    getSavedOrderDetails,
+    paySavedOrder
+} from "../../../services/service";
 import { MdOutlineShoppingCart } from "react-icons/md";
 import { FaRegIdCard } from "react-icons/fa";
 
 const { Option } = Select;
 
-// formatRupiah and generateOrderNumber remain the same
 const formatRupiah = (amount) =>
     new Intl.NumberFormat("id-ID", {
         style: "currency",
@@ -61,8 +61,11 @@ const generateOrderNumber = () => {
 
 const OrderKasir = () => {
     const location = useLocation();
-    const navigate = useNavigate(); // <-- Hook for navigation
+    const navigate = useNavigate();
     const initialState = location.state || {};
+
+    // --- PERBAIKAN 2: Ambil Sesi Aktif dan Info User ---
+    const { activeSession, userProfile } = useAuth();
 
     // --- Existing States ---
     const [searchProductQuery, setSearchProductQuery] = useState("");
@@ -70,9 +73,12 @@ const OrderKasir = () => {
     const [selectedProductType, setSelectedProductType] = useState("all_types");
     const [currentOrderType, setCurrentOrderType] = useState(initialState.orderType || "dinein");
     const [currentOrderNumber, setCurrentOrderNumber] = useState(generateOrderNumber());
-    const [customerName, setCustomerName] = useState(initialState.customerName || "Adit"); // Consider changing default later
+    const [customerName, setCustomerName] = useState(initialState.customerName || "Guest"); // Diubah dari "Adit"
     const [room, setRoom] = useState(initialState.room || null);
-    const [cashierName, setCashierName] = useState("Rossa"); // Fetch from profile later?
+
+    // --- PERBAIKAN 3: Gunakan nama user dari profile ---
+    const [cashierName, setCashierName] = useState(userProfile?.nama_user || userProfile?.nama || "Kasir"); // Dinamis
+
     const [currentDate, setCurrentDate] = useState(dayjs());
     const [selectedItems, setSelectedItems] = useState([]);
     const [taxRateFnbPercentFromAPI, setTaxRateFnbPercentFromAPI] = useState(0);
@@ -92,8 +98,8 @@ const OrderKasir = () => {
     const [productTypeCategories, setProductTypeCategories] = useState([]);
     const [orderTypes, setOrderTypes] = useState([]);
 
-    const [isLoadingInitData, setIsLoadingInitData] = useState(true); // Loading data awal (produk dll)
-    const [isLoading, setIsLoadingSavedOrder] = useState(false); // Loading khusus saat memuat order simpanan
+    const [isLoadingInitData, setIsLoadingInitData] = useState(true);
+    const [isLoading, setIsLoadingSavedOrder] = useState(false);
 
     const [discountPercentage, setDiscountPercentage] = useState(0);
     const [isDiscountModalVisible, setIsDiscountModalVisible] = useState(false);
@@ -106,42 +112,46 @@ const OrderKasir = () => {
     const [selectedStartTime, setSelectedStartTime] = useState(null);
     const [isBookingConfirmModalVisible, setIsBookingConfirmModalVisible] = useState(false);
     const [bookingForm] = Form.useForm();
-    const [isProcessing, setIsProcessing] = useState(false); // Loading state for save/payment
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    // --- New State ---
-    const [editingOrderId, setEditingOrderId] = useState(null); // Track ID of the saved order being edited
+    const [editingOrderId, setEditingOrderId] = useState(null);
+    const [pendingBookingData, setPendingBookingData] = useState(null);
+    const [isRoomCashModalVisible, setIsRoomCashModalVisible] = useState(false);
+    const [roomCashInput, setRoomCashInput] = useState(0);
+    const [isBookingProcessing, setIsBookingProcessing] = useState(false);
 
+    // resetOrderState (Tidak berubah)
     const resetOrderState = () => {
         setSelectedItems([]);
         setDiscountPercentage(0);
         setCashInput(0);
-        setCustomerName("Guest"); // Reset customer name to default
+        setCustomerName("Guest");
         setRoom(null);
-        setCurrentOrderType("dinein"); // Reset order type
-        setCurrentOrderNumber(generateOrderNumber()); // Generate a new order number
+        setCurrentOrderType("dinein");
+        setCurrentOrderNumber(generateOrderNumber());
         setSelectedPaymentMethod(null);
         setPaymentSuccess(false);
-        setEditingOrderId(null); // Crucial: clear the editing ID
-        setIsStrukModalVisible(false); // Close modals
+        setEditingOrderId(null);
+        setIsStrukModalVisible(false);
         setIsCashPaymentModalVisible(false);
         setIsDiscountModalVisible(false);
         setIsNewOrderModalVisible(false);
         setIsAddNoteModalVisible(false);
-        newOrderForm.resetFields({ // Reset the new order form fields
+        newOrderForm.resetFields({
             customerName: "Guest",
             orderType: "dinein",
             room: null
         });
         discountForm.resetFields();
         addNoteForm.resetFields();
-        setSearchProductQuery(""); // Clear search
-        setSelectedMerchant("all_merchants"); // Reset filters
+        setSearchProductQuery("");
+        setSelectedMerchant("all_merchants");
         setSelectedProductType("all_types");
         console.log("Order state reset.");
     };
-    // --- useEffect Hooks ---
 
-    // Effect for initializing form based on initial state (from navigation)
+    // useEffect Hooks (Tidak berubah)
+    // ... (useEffect for initialState)
     useEffect(() => {
         if (initialState.customerName || initialState.orderType) {
             newOrderForm.setFieldsValue({
@@ -152,15 +162,12 @@ const OrderKasir = () => {
         }
     }, [initialState, newOrderForm]);
 
-
-    // 1. useEffect: Load data awal (produk, kategori, pajak) HANYA SEKALI saat mount
+    // ... (useEffect for LoadInitialData)
+    // (Perbaikan kecil: Pindahkan dependensi `location.state` ke useEffect berikutnya)
     useEffect(() => {
         let isMounted = true;
         const loadInitialData = async () => {
-            // Hapus atau comment pengecekan savedOrderId di sini
-            // if (location.state?.savedOrderId && isMounted) return;
-
-            setIsLoadingInitData(true); // Gunakan state loading yang baru
+            setIsLoadingInitData(true);
             setLoadingError(null);
             try {
                 const data = await getPosInitData();
@@ -169,9 +176,8 @@ const OrderKasir = () => {
                     setMerchantCategories(data.merchantCategories || []);
                     setProductTypeCategories(data.productTypeCategories || []);
                     setOrderTypes(data.orderTypes || []);
-                    setTaxRateFnbPercentFromAPI(data.taxRateFnbPercent || 10); // Default 10
+                    setTaxRateFnbPercentFromAPI(data.taxRateFnbPercent || 10);
                     console.log("Initial POS data loaded.");
-                    // Jangan tampilkan message success di sini karena bisa tertimpa
                 }
             } catch (error) {
                 if (isMounted) {
@@ -182,46 +188,42 @@ const OrderKasir = () => {
                     setTaxRateFnbPercentFromAPI(10); // Fallback
                 }
             } finally {
-                if (isMounted) setIsLoadingInitData(false); // Selesai loading data awal
+                if (isMounted) setIsLoadingInitData(false);
             }
         };
 
         loadInitialData();
 
         return () => { isMounted = false; };
-    }, []); // <-- PERBAIKAN UTAMA: Array dependensi KOSONG
+    }, []); // <-- Dependensi KOSONG (Hanya sekali)
 
-    // Effect for loading SAVED ORDER details (runs after initial data or if navigated with savedOrderId)
-    // 2. useEffect: Load order tersimpan JIKA ada savedOrderId dari navigasi
-    //    Jalankan SETELAH data awal (produk) selesai dimuat.
+
+    // ... (useEffect for loading SAVED ORDER)
+    // (Perbaikan kecil: Pastikan 'resetOrderState' ada di array dependensi)
     useEffect(() => {
         let isMounted = true;
         const savedOrderIdFromState = location.state?.savedOrderId;
 
         const loadSavedOrder = async (orderId) => {
-            setIsLoadingSavedOrder(true); // Gunakan state loading yang baru
+            setIsLoadingSavedOrder(true);
             console.log(`Attempting to load saved order ID: ${orderId}`);
             try {
-                // Pastikan data produk sudah ada sebelum lanjut
-                // Pengecekan products.length > 0 sudah ada di kondisi pemanggilan di bawah
                 const savedOrderData = await getSavedOrderDetails(orderId);
                 console.log("Saved order data received:", savedOrderData);
 
                 if (isMounted) {
-                    // Isi state dengan data dari order tersimpan
                     setCustomerName(savedOrderData.customerName || "Guest");
                     const orderTypeFrontend = savedOrderData.orderType?.toLowerCase().replace(" ", "") || 'dinein';
                     setCurrentOrderType(orderTypeFrontend);
                     setRoom(savedOrderData.room || null);
 
-                    // Map item dari backend ke format frontend
                     const mappedItems = (savedOrderData.items || []).map(item => {
                         const productDetail = products.find(p => p.id === item.id_produk);
                         return {
                             id: item.id_produk,
                             name: item.nama_produk || productDetail?.name || `ID:${item.id_produk}?`,
-                            price: item.harga_saat_order, // Harusnya sudah number dari service
-                            qty: item.jumlah, // Harusnya sudah number dari service
+                            price: item.harga_saat_order,
+                            qty: item.jumlah,
                             note: item.catatan_pesanan || "",
                             merchantId: productDetail?.merchantId,
                             category: productDetail?.category,
@@ -232,9 +234,8 @@ const OrderKasir = () => {
 
                     setDiscountPercentage(savedOrderData.discountPercentage || 0);
                     setCurrentOrderNumber(savedOrderData.orderNumber || generateOrderNumber());
-                    setEditingOrderId(orderId); // Tandai sedang mengedit
+                    setEditingOrderId(orderId);
 
-                    // Update form info order juga
                     newOrderForm.setFieldsValue({
                         customerName: savedOrderData.customerName || "Guest",
                         orderType: orderTypeFrontend,
@@ -243,7 +244,6 @@ const OrderKasir = () => {
 
                     message.success(`Melanjutkan order #${orderId}`);
 
-                    // Hapus state dari history
                     if (window.history.replaceState) {
                         window.history.replaceState({}, document.title)
                     }
@@ -254,37 +254,30 @@ const OrderKasir = () => {
                     console.error("Error loading saved order:", error);
                     setEditingOrderId(null);
                     resetOrderState(); // Panggil fungsi reset
-                    // navigate('/kasir/transaksi'); // Arahkan kembali
                 }
             } finally {
-                if (isMounted) setIsLoadingSavedOrder(false); // Selesai loading order simpanan
+                if (isMounted) setIsLoadingSavedOrder(false);
             }
         };
 
-        // Kondisi pemanggilan loadSavedOrder
         if (savedOrderIdFromState && !isLoadingInitData && products.length > 0) {
-            // Panggil HANYA jika ID order yang diminta berbeda dari yang sedang diedit,
-            // atau jika belum ada order yang sedang diedit.
             if (!editingOrderId || editingOrderId !== savedOrderIdFromState) {
                 loadSavedOrder(savedOrderIdFromState);
             }
         }
-        // Jangan reset state di sini jika tidak ada savedOrderIdFromState
 
         return () => { isMounted = false; };
 
-        // **PERBAIKAN UTAMA: Array Dependensi yang Benar**
     }, [
-        location.state?.savedOrderId, // Pemicu utama
-        isLoadingInitData,            // Tunggu data awal selesai
-        products,                     // Butuh data produk untuk mapping
-        editingOrderId,               // Mencegah re-run jika ID sama
-        resetOrderState,              // Fungsi reset (pastikan di useCallback)
-        newOrderForm                  // Jika form diupdate di sini
-        // JANGAN masukkan isLoadingSavedOrder, setIsLoading, navigate, loadingError di sini!
+        location.state?.savedOrderId,
+        isLoadingInitData,
+        products,
+        editingOrderId,
+        newOrderForm,
+        resetOrderState // Tambahkan resetOrderState ke dependensi
     ]);
 
-    // Effect for loading room data when mode changes to 'ruangan'
+    // ... (useEffect for loading room data)
     useEffect(() => {
         const loadRoomData = async () => {
             try {
@@ -302,40 +295,31 @@ const OrderKasir = () => {
         }
     }, [posMode]);
 
-    // useMemo and other useEffects for filtering remain the same...
-    // Filter kategori produk berdasarkan merchant that is selected
+    // ... (useMemo and other useEffects for filtering remain the same)
     const availableProductTypes = useMemo(() => {
         if (selectedMerchant === "all_merchants") {
             return productTypeCategories;
         }
-
         const merchantProducts = products.filter(p => p.merchantId === selectedMerchant);
-        const uniqueCategoryIds = [...new Set(merchantProducts.map(p => p.category))]; // Get unique category IDs for the merchant
-
-        // Filter the main productTypeCategories list based on the unique IDs found
+        const uniqueCategoryIds = [...new Set(merchantProducts.map(p => p.category))];
         return productTypeCategories.filter(cat =>
             cat.id === "all_types" || uniqueCategoryIds.includes(cat.id)
         );
     }, [selectedMerchant, products, productTypeCategories]);
 
-
-    // Reset tipe produk jika tidak tersedia di merchant baru
     useEffect(() => {
-        // Only reset if a specific merchant is selected AND the current product type is NOT 'all_types'
         if (selectedMerchant !== "all_merchants" && selectedProductType !== "all_types") {
             const isCurrentTypeAvailable = availableProductTypes.some(
                 cat => cat.id === selectedProductType
             );
-            // If the selected type is no longer in the filtered list for this merchant, reset to 'all_types'
             if (!isCurrentTypeAvailable) {
                 setSelectedProductType("all_types");
             }
         }
-        // If the selected merchant goes back to 'all_merchants', we don't need to reset the product type filter
     }, [selectedMerchant, availableProductTypes, selectedProductType]);
 
 
-    // --- Calculation Memos --- (Remain the same, based on frontend state)
+    // Calculation Memos (Tidak berubah)
     const subtotal = useMemo(() =>
         selectedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.qty) || 0), 0),
         [selectedItems]);
@@ -346,24 +330,20 @@ const OrderKasir = () => {
         subtotal - totalDiscountNominal,
         [subtotal, totalDiscountNominal]);
     const totalTaxNominal = useMemo(() =>
-        // Ensure rounding to 2 decimal places if needed, e.g., using Math.round or .toFixed(2) after calculation
         parseFloat((taxableAmount * (taxRateFnbPercentFromAPI / 100)).toFixed(2)),
         [taxableAmount, taxRateFnbPercentFromAPI]);
     const totalAmount = useMemo(() =>
-        // Ensure precision, especially after tax calculation
         parseFloat((taxableAmount + totalTaxNominal).toFixed(2)),
         [taxableAmount, totalTaxNominal]);
     const changeAmount = useMemo(() =>
-        // Ensure cashInput is treated as a number
         parseFloat(cashInput) > totalAmount ? parseFloat(cashInput) - totalAmount : 0,
         [cashInput, totalAmount]);
 
-    // --- Event Handlers ---
+    // Event Handlers (Tidak berubah)
     const handleAddProductToCart = (product) => {
         setItemToAddNote({ ...product, qty: 1, note: "" });
         setIsAddNoteModalVisible(true);
     };
-
     const handleUpdateItemQty = (productId, newQty, itemNote) => {
         if (newQty <= 0) {
             handleRemoveItemFromCart(productId, itemNote);
@@ -374,17 +354,13 @@ const OrderKasir = () => {
         );
         setSelectedItems(updatedItems);
     };
-
     const handleRemoveItemFromCart = (productId, itemNote) => {
         setSelectedItems(selectedItems.filter((item) => !(item.id === productId && item.note === itemNote)));
     };
-
-    // Discount handlers
     const showDiscountModal = () => {
         discountForm.setFieldsValue({ discount: discountPercentage });
         setIsDiscountModalVisible(true);
     };
-
     const handleDiscountSubmit = async () => {
         try {
             const values = await discountForm.validateFields();
@@ -400,44 +376,31 @@ const OrderKasir = () => {
             console.error("Validation failed:", error);
         }
     };
-
-    // New Order Modal handlers
     const showNewOrderModal = () => {
         setIsNewOrderModalVisible(true);
     };
-
     const handleNewOrderOk = async () => {
         try {
             const values = await newOrderForm.validateFields();
-            // Reset the entire order state first
             resetOrderState();
-
-            // Then set the new customer info
             setCustomerName(values.customerName || "Guest");
             setCurrentOrderType(values.orderType);
             setRoom(values.room || null);
-
             message.success("Order baru siap! Silakan tambahkan produk.");
             setIsNewOrderModalVisible(false);
-            // No need to reset items etc. here, already done by resetOrderState
-
         } catch (error) {
             console.error("Failed to validate new order form:", error);
             if (error.errorFields && error.errorFields.length > 0) {
                 message.error("Gagal membuat order baru. Periksa kembali input Anda.");
             } else {
-                // Handle other potential errors during async operations if any
                 message.error("Terjadi kesalahan saat memproses order baru.");
             }
         }
     };
-
     const handleNewOrderCancel = () => {
         setIsNewOrderModalVisible(false);
         newOrderForm.resetFields();
     };
-
-    // Add Note handlers
     const handleAddNoteOk = async () => {
         try {
             const values = await addNoteForm.validateFields();
@@ -447,7 +410,6 @@ const OrderKasir = () => {
                 const existingItemIndex = prevItems.findIndex(
                     (item) => item.id === updatedItem.id && item.note === updatedItem.note
                 );
-
                 if (existingItemIndex > -1) {
                     const newItems = [...prevItems];
                     newItems[existingItemIndex].qty += updatedItem.qty;
@@ -456,7 +418,6 @@ const OrderKasir = () => {
                     return [...prevItems, updatedItem];
                 }
             });
-
             message.success(`Produk "${updatedItem.name}" ditambahkan ke keranjang.`);
             setIsAddNoteModalVisible(false);
             setItemToAddNote(null);
@@ -466,14 +427,11 @@ const OrderKasir = () => {
             message.error("Gagal menambahkan catatan.");
         }
     };
-
     const handleAddNoteCancel = () => {
         setIsAddNoteModalVisible(false);
         setItemToAddNote(null);
         addNoteForm.resetFields();
     };
-
-    // Payment handlers
     const handleProcessPayment = () => {
         if (selectedItems.length === 0) {
             message.warning("Keranjang masih kosong.");
@@ -483,7 +441,6 @@ const OrderKasir = () => {
             message.warning("Pilih metode pembayaran terlebih dahulu (Cash atau QRIS).");
             return;
         }
-
         if (selectedPaymentMethod === 'cash') {
             setCashInput(0);
             setIsCashPaymentModalVisible(true);
@@ -492,13 +449,11 @@ const OrderKasir = () => {
             setPaymentSuccess(true);
             setIsStrukModalVisible(true);
         } else if (selectedPaymentMethod === 'debit') {
-            // For debit, we simulate similar to QRIS for now
             message.info("Simulasi Pembayaran Debit berhasil! (Dalam pengembangan)");
             setPaymentSuccess(true);
             setIsStrukModalVisible(true);
         }
     };
-
     const handleCashPaymentSubmit = () => {
         if (cashInput < totalAmount) {
             message.error("Jumlah uang yang dibayar kurang dari total belanja.");
@@ -509,65 +464,73 @@ const OrderKasir = () => {
         setPaymentSuccess(true);
         setIsStrukModalVisible(true);
     };
-
     const handleStrukCancel = () => {
         setIsStrukModalVisible(false);
         setPaymentSuccess(false);
         message.info("Pembayaran dibatalkan.");
     };
 
-    // --- NEW: Handler for Save Order Button ---
+    // --- PERBAIKAN 4: Modifikasi handleSaveOrder ---
     const handleSaveOrder = async () => {
         if (selectedItems.length === 0) {
             message.warning("Tidak ada item untuk disimpan.");
             return;
         }
-        setIsProcessing(true); // Show loading indicator
 
-        // Prepare data for saving (similar to payment, but no paymentMethod)
+        // Validasi Sesi
+        if (!activeSession || !activeSession.id_sesi) {
+            message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
+            return;
+        }
+
+        setIsProcessing(true);
+
         const orderData = {
+            id_sesi: activeSession.id_sesi, // <-- WAJIB
             customerName: customerName,
             orderType: currentOrderType,
             room: currentOrderType === 'dinein' ? room : null,
             items: selectedItems.map(item => ({
                 id: item.id,
                 qty: parseInt(item.qty) || 0,
-                price: parseFloat(item.price) || 0, // Send price used in frontend calculation
+                price: parseFloat(item.price) || 0,
                 note: item.note || null
             })),
-            // Send calculated values from frontend state
             subtotal: subtotal,
             discountPercentage: discountPercentage,
             discountNominal: totalDiscountNominal,
             taxPercentage: taxRateFnbPercentFromAPI,
             taxNominal: totalTaxNominal,
             totalAmount: totalAmount,
-            // Include editingOrderId IF you want the backend to potentially UPDATE an existing saved order
-            // (Requires backend logic change). For now, we assume saving always creates new or errors.
-            // saved_order_id: editingOrderId,
         };
 
         try {
             console.log("Menyimpan Order Data (Kasir):", orderData);
-            const result = await saveOrderKasir(orderData); // Call the NEW service
+            const result = await saveOrderKasir(orderData); // Panggil service
             message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
-
-            resetOrderState(); // Reset the POS screen for a new order
-
+            resetOrderState();
+            navigate('/transaksikasir'); // Navigasi kembali setelah sukses
         } catch (error) {
             message.error(`Gagal menyimpan order: ${error.message || 'Error tidak diketahui'}`);
             console.error("Error saving order:", error);
         } finally {
-            setIsProcessing(false); // Hide loading indicator
+            setIsProcessing(false);
         }
     };
 
-    // --- MODIFIED: Handler for Confirming Payment (in Struk Modal) ---
+    // --- PERBAIKAN 5: Modifikasi handleStrukConfirmPayment ---
     const handleStrukConfirmPayment = async () => {
-        setIsProcessing(true); // Show loading
+        setIsProcessing(true);
 
-        // Prepare data object, ensure numbers are numbers
+        // Validasi Sesi
+        if (!activeSession || !activeSession.id_sesi) {
+            message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
+            setIsProcessing(false);
+            return;
+        }
+
         const orderData = {
+            id_sesi: activeSession.id_sesi, // <-- WAJIB
             customerName: customerName,
             orderType: currentOrderType,
             room: currentOrderType === 'dinein' ? room : null,
@@ -578,70 +541,54 @@ const OrderKasir = () => {
                 price: parseFloat(item.price) || 0,
                 note: item.note || null
             })),
-            // Send calculated values
             subtotal: subtotal,
             discountPercentage: discountPercentage,
             discountNominal: totalDiscountNominal,
             taxPercentage: taxRateFnbPercentFromAPI,
             taxNominal: totalTaxNominal,
             totalAmount: totalAmount,
-            // DO NOT send cashInput or changeAmount to backend for saving/paying transaction
         };
 
         try {
             let result;
             if (editingOrderId) {
-                // If editingOrderId exists, call paySavedOrder
                 console.log(`Membayar Order Tersimpan (ID: ${editingOrderId}):`, orderData);
-                result = await paySavedOrder(editingOrderId, orderData); // Use paySavedOrder service
+                result = await paySavedOrder(editingOrderId, orderData);
                 message.success(result.info || `Order #${editingOrderId} berhasil diselesaikan!`);
             } else {
-                // If it's a new order, call createOrderKasir
                 console.log("Mengirim Order Data Baru (Kasir):", orderData);
-                result = await createOrderKasir(orderData); // Use original service
+                result = await createOrderKasir(orderData);
                 message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
             }
 
-            // Reset state AFTER successful API call
-            // resetOrderState(); // Use the helper function to reset everything
-            navigate('/transaksikasir');
+            navigate('/transaksikasir'); // Navigasi kembali
 
         } catch (error) {
             message.error(`Gagal ${editingOrderId ? 'menyelesaikan' : 'menyimpan'} order: ${error.message || 'Error tidak diketahui'}`);
             console.error(`Error ${editingOrderId ? 'paying saved' : 'saving new'} order:`, error);
-            // Optionally keep the struk modal open on error?
-            // setIsStrukModalVisible(true);
-            // setPaymentSuccess(true); // Keep success state? Maybe not.
         } finally {
-            setIsProcessing(false); // Hide loading
-            // Close struk modal regardless of success/fail AFTER processing? Or only on success?
-            // Decide based on desired UX. Closing it ensures user sees the main screen again.
-            // If kept open on error, user might try saving again without knowing what failed.
-            // setIsStrukModalVisible(false);
-            // setPaymentSuccess(false);
+            setIsProcessing(false);
         }
     };
 
-    // orderDropdownMenu and paymentQuickAmounts remain the same
+    // orderDropdownMenu (Tidak berubah)
     const orderDropdownMenu = (
         <Menu>
-            {/* Option to start fresh only if NOT editing a saved order */}
             {!editingOrderId && (
                 <Menu.Item key="1" onClick={showNewOrderModal}>Ganti/Buat Order Baru</Menu.Item>
             )}
             <Menu.Item key="2" danger onClick={() => {
-                // Reset should clear everything, including editing state
                 resetOrderState();
                 message.warning(`Order ${editingOrderId ? `#${editingOrderId}` : 'saat ini'} dibatalkan.`);
             }}>
-                {/* Change text based on context */}
                 {editingOrderId ? 'Batalkan Edit & Mulai Baru' : 'Hapus Order Saat Ini'}
             </Menu.Item>
         </Menu>
     );
+
+    // paymentQuickAmounts (Tidak berubah)
     const paymentQuickAmounts = [5000, 10000, 20000, 50000, 100000].filter(amount => amount >= totalAmount || totalAmount === 0);
 
-    // Handlers for room booking (handleRoomCardClick, handleBookingSubmit) remain the same
     const handleRoomCardClick = (room) => {
         setSelectedRoomForBooking(room);
         setSelectedDuration(null);
@@ -652,25 +599,44 @@ const OrderKasir = () => {
         });
         setIsBookingConfirmModalVisible(true);
     };
-
+    // --- PERBAIKAN 6: Modifikasi handleBookingSubmit ---
     const handleBookingSubmit = async () => {
         try {
+            // Validasi Sesi
+            if (!activeSession || !activeSession.id_sesi) {
+                message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
+                return;
+            }
+
+            setIsBookingProcessing(true);
             const values = await bookingForm.validateFields();
+
             const bookingData = {
+                id_sesi: activeSession.id_sesi, // <-- WAJIB
                 id_ruangan: selectedRoomForBooking.id_ruangan,
                 durasi_jam: selectedDuration.durasi_jam,
                 waktu_mulai_jam: selectedStartTime,
                 nama_guest: values.customerName,
-                metode_pembayaran: values.paymentMethod,
+                metode_pembayaran: values.paymentMethod, // 'cash' atau 'qris'
                 total_harga_final: selectedDuration.harga_paket
             };
 
-            const result = await createRoomBookingKasir(bookingData);
-            message.success(`Booking untuk ruangan ${selectedRoomForBooking.nama_ruangan} berhasil dibuat (ID Transaksi: ${result.id_transaksi})!`);
+            setPendingBookingData(bookingData);
 
-            const updatedRooms = await getRoomsToday();
-            setRooms(updatedRooms || []);
-            setIsBookingConfirmModalVisible(false);
+            if (values.paymentMethod === 'cash') {
+                setRoomCashInput(0);
+                setIsRoomCashModalVisible(true);
+                setIsBookingConfirmModalVisible(false);
+            } else {
+                console.log("Mengirim booking (non-tunai):", bookingData);
+                const result = await createRoomBookingKasir(bookingData);
+                message.success(`Booking (non-tunai) untuk ${selectedRoomForBooking.nama_ruangan} berhasil (ID: ${result.id_transaksi})!`);
+                const updatedRooms = await getRoomsToday();
+                setRooms(updatedRooms || []);
+                setIsBookingConfirmModalVisible(false);
+                setPendingBookingData(null);
+            }
+
         } catch (errorInfo) {
             if (errorInfo.message) {
                 message.error(`Gagal membuat booking: ${errorInfo.message}`);
@@ -678,9 +644,12 @@ const OrderKasir = () => {
                 console.error("Validation Failed:", errorInfo);
                 message.error("Harap isi semua field yang diperlukan.");
             }
+        } finally {
+            setIsBookingProcessing(false);
         }
     };
 
+    // filteredProducts (Tidak berubah)
     const filteredProducts = products.filter((product) => {
         const matchesMerchant =
             selectedMerchant === "all_merchants" || product.merchantId === selectedMerchant;
@@ -692,15 +661,15 @@ const OrderKasir = () => {
         return matchesMerchant && matchesProductType && matchesSearch;
     });
 
+    // --- JSX (RENDER) ---
+    // (Tidak ada perubahan signifikan pada JSX, hanya memastikan nama kasir dinamis)
     return (
-        // Wrap with Spin if isLoading or isProcessing
-        <Spin spinning={isLoading || isProcessing} tip={isProcessing ? "Menyimpan..." : "Memuat..."} size="large">
+        <Spin spinning={isLoadingInitData || isLoading || isProcessing} tip={isProcessing ? "Menyimpan..." : "Memuat..."} size="large">
             <div className="flex flex-col lg:flex-row bg-gray-50 text-gray-800 font-sans h-screen">
                 {/* Product Selection Column */}
                 <div className="flex-1 h-screen overflow-y-scroll p-6 bg-white border-r border-gray-100">
                     {/* Header: Mode Toggle, Logo, Cashier */}
                     <div className="flex justify-between items-center mb-6">
-                        {/* ... (Mode toggle, logo, cashier name) ... */}
                         <Radio.Group value={posMode} onChange={(e) => setPosMode(e.target.value)}>
                             <Radio.Button value="fnb">
                                 <div className="flex items-center justify-center gap-2">
@@ -716,6 +685,7 @@ const OrderKasir = () => {
                             </Radio.Button>
                         </Radio.Group>
                         <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" />
+                        {/* Nama Kasir (Sudah dinamis dari PERBAIKAN 3) */}
                         <div className="flex items-center space-x-2 text-gray-600"><UserOutlined /><span>{cashierName}</span></div>
                     </div>
 
@@ -739,17 +709,15 @@ const OrderKasir = () => {
                                 </div>
                             </div>
 
-
                             {/* Product List */}
                             <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pt-1">
-                                {!isLoading && loadingError && ( // Show general loading error here if needed
+                                {!isLoadingInitData && loadingError && (
                                     <div className="text-center py-10 text-red-500">{loadingError}</div>
                                 )}
-                                {/* Show product loading specific spin here? Already covered by outer Spin */}
-                                {!isLoading && !loadingError && filteredProducts.length === 0 && (
+                                {!isLoadingInitData && !loadingError && filteredProducts.length === 0 && (
                                     <div className="text-center py-10 text-gray-500">Tidak ada produk ditemukan.</div>
                                 )}
-                                {!isLoading && !loadingError && filteredProducts.length > 0 && (
+                                {!isLoadingInitData && !loadingError && filteredProducts.length > 0 && (
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                         {filteredProducts.map((product) => (
                                             <div
@@ -779,7 +747,7 @@ const OrderKasir = () => {
                             <h2 className="text-xl font-bold text-gray-800 mb-4">Pilih Ruangan untuk Booking Hari Ini</h2>
                             {isLoadingRooms ? <div className="flex justify-center items-center h-full"><Spin size="large" /></div> : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {rooms.map((roomItem) => ( // Renamed variable to avoid conflict
+                                    {rooms.map((roomItem) => (
                                         <div key={roomItem.id_ruangan} className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleRoomCardClick(roomItem)}>
                                             <h3 className="font-bold text-gray-800">{roomItem.nama_ruangan}</h3>
                                             <p className="text-sm text-gray-500">{roomItem.nama_kategori} - Kapasitas: {roomItem.kapasitas} orang</p>
@@ -793,12 +761,10 @@ const OrderKasir = () => {
                 </div>
 
                 {/* Order Summary/Cart Column */}
-                {/* Apply disabled effect if in 'ruangan' mode */}
                 <div className={`lg:w-2/5 bg-gray-50 flex flex-col p-6 transition-opacity duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none select-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
                     {/* Header: Title and Order Options Dropdown */}
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800">
-                            {/* Show different title when editing */}
                             {editingOrderId ? `Edit Order #${editingOrderId}` : 'Order F&B'}
                         </h2>
                         <Dropdown overlay={orderDropdownMenu} trigger={["click"]}>
@@ -827,7 +793,7 @@ const OrderKasir = () => {
                     </div>
 
                     {/* Selected Items List */}
-                    <div className="flex-1 space-y-3 mb-6 overflow-y-auto custom-scrollbar pr-1"> {/* Added flex-1 and overflow */}
+                    <div className="flex-1 space-y-3 mb-6 overflow-y-auto custom-scrollbar pr-1">
                         {selectedItems.length === 0 ? (
                             <div className="text-center py-10 text-gray-500">Keranjang F&B kosong.</div>
                         ) : (
@@ -850,31 +816,26 @@ const OrderKasir = () => {
 
                     {/* Price Summary */}
                     <div className="bg-white rounded-xl shadow-md p-4 mb-6 border">
-                        {/* Show loading only if initial data isn't ready */}
-                        {isLoading && !editingOrderId ? (
+                        {isLoadingInitData && !editingOrderId ? ( // Ganti 'isLoading'
                             <div className="flex justify-center items-center py-4"><Spin /></div>
                         ) : (
                             <>
-                                {/* Subtotal */}
                                 <div className="flex justify-between items-center text-sm mb-1 text-gray-600">
                                     <span>Subtotal</span>
                                     <span className="font-medium">{formatRupiah(subtotal)}</span>
                                 </div>
-                                {/* Discount */}
                                 {discountPercentage > 0 && (
                                     <div className="flex justify-between items-center text-sm mb-1 text-red-600">
                                         <span>Diskon ({discountPercentage}%)</span>
                                         <span className="font-medium">-{formatRupiah(totalDiscountNominal)}</span>
                                     </div>
                                 )}
-                                {/* Tax */}
                                 {subtotal > 0 && taxRateFnbPercentFromAPI > 0 && (
                                     <div className="flex justify-between items-center text-sm mb-3 text-gray-600">
                                         <span>Pajak F&B ({taxRateFnbPercentFromAPI}%)</span>
                                         <span className="font-medium">{formatRupiah(totalTaxNominal)}</span>
                                     </div>
                                 )}
-                                {/* Total */}
                                 <div className="flex justify-between items-center text-lg font-bold text-blue-600 border-t border-gray-200 pt-3 mt-2">
                                     <span>Total</span>
                                     <span>{formatRupiah(totalAmount)}</span>
@@ -885,63 +846,35 @@ const OrderKasir = () => {
 
                     {/* Action Buttons */}
                     <div className="space-y-3 mt-auto">
-
-                        {/* Row 1: Discount & Cancel */}
                         <div className="grid grid-cols-2 gap-3">
-                            <Button
-                                size="large"
-                                type="primary"
-                                className="bg-blue-500 hover:bg-blue-600 border-none text-white"
-                                icon={<PercentageOutlined />}
-                                onClick={showDiscountModal}
-                            >
+                            <Button size="large" type="primary" className="bg-blue-500 hover:bg-blue-600 border-none text-white" icon={<PercentageOutlined />} onClick={showDiscountModal}>
                                 Discount
                             </Button>
-
-                            <Button
-                                danger
-                                size="large"
-                                className="text-white border-none bg-red-500 hover:bg-red-600"
-                                onClick={() => {
-                                    resetOrderState();
-                                    message.warning(
-                                        `Order ${editingOrderId ? `#${editingOrderId}` : "saat ini"
-                                        } dibatalkan.`
-                                    );
-                                }}
-                            >
+                            <Button danger size="large" className="text-white border-none bg-red-500 hover:bg-red-600" onClick={() => {
+                                resetOrderState();
+                                message.warning(`Order ${editingOrderId ? `#${editingOrderId}` : "saat ini"} dibatalkan.`);
+                            }}>
                                 Cancel Order
                             </Button>
                         </div>
-
-                        {/* Row 2: Payment Methods */}
                         <div className="grid grid-cols-2 gap-3 text-sm font-medium">
                             <Button
                                 type={selectedPaymentMethod === "cash" ? "primary" : "default"}
-                                className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "cash"
-                                    ? "bg-blue-600 text-white"
-                                    : "text-gray-700"
-                                    }`}
+                                className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "cash" ? "bg-blue-600 text-white" : "text-gray-700"}`}
                                 icon={<DollarOutlined />}
                                 onClick={() => setSelectedPaymentMethod("cash")}
                             >
                                 Cash
                             </Button>
-
                             <Button
                                 type={selectedPaymentMethod === "qris" ? "primary" : "default"}
-                                className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "qris"
-                                    ? "bg-blue-600 text-white"
-                                    : "text-gray-700"
-                                    }`}
+                                className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "qris" ? "bg-blue-600 text-white" : "text-gray-700"}`}
                                 icon={<QrcodeOutlined />}
                                 onClick={() => setSelectedPaymentMethod("qris")}
                             >
                                 QRIS
                             </Button>
                         </div>
-
-                        {/* Row 3: Save & Payment */}
                         <div className="grid grid-cols-2 gap-3">
                             <Button
                                 size="large"
@@ -952,29 +885,24 @@ const OrderKasir = () => {
                             >
                                 Save
                             </Button>
-
                             <Button
                                 type="primary"
                                 size="large"
                                 className="bg-blue-600 hover:bg-blue-700 border-none text-white"
                                 block
                                 onClick={handleProcessPayment}
-                                disabled={
-                                    selectedItems.length === 0 || !selectedPaymentMethod || isProcessing
-                                }
+                                disabled={selectedItems.length === 0 || !selectedPaymentMethod || isProcessing}
                                 loading={isProcessing && selectedPaymentMethod !== null}
                             >
                                 Payment & Print
                             </Button>
                         </div>
-
                     </div>
-
-
                 </div>
             </div>
 
-            {/* --- Modals --- */}
+            {/* --- Modals (Tidak ada perubahan) --- */}
+
             {/* Discount Modal */}
             <Modal title="Masukkan Diskon Manual" open={isDiscountModalVisible} onOk={handleDiscountSubmit} onCancel={() => setIsDiscountModalVisible(false)} okText="Terapkan" cancelText="Batal">
                 <Form form={discountForm} layout="vertical" className="mt-4">
@@ -984,10 +912,26 @@ const OrderKasir = () => {
                 </Form>
             </Modal>
 
-
             {/* Room Booking Modal */}
-            <Modal title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>} open={isBookingConfirmModalVisible} onCancel={() => setIsBookingConfirmModalVisible(false)} footer={[<Button key="back" onClick={() => setIsBookingConfirmModalVisible(false)}>Batal</Button>, <Button key="submit" type="primary" onClick={handleBookingSubmit} disabled={!selectedDuration || !selectedStartTime}>Konfirmasi & Bayar</Button>]} width={600} centered>
-                {/* ... (Form content remains the same) ... */}
+            <Modal
+                title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>}
+                open={isBookingConfirmModalVisible}
+                onCancel={() => setIsBookingConfirmModalVisible(false)}
+                footer={[
+                    <Button key="back" onClick={() => setIsBookingConfirmModalVisible(false)}>Batal</Button>,
+                    <Button
+                        key="submit"
+                        type="primary"
+                        onClick={handleBookingSubmit}
+                        disabled={!selectedDuration || !selectedStartTime || isBookingProcessing} // Tambah disable
+                        loading={isBookingProcessing} // Tambah loading
+                    >
+                        Konfirmasi & Bayar
+                    </Button>
+                ]}
+                width={600}
+                centered
+            >
                 <Form form={bookingForm} layout="vertical" className="mt-4">
                     <p className="mb-4 text-gray-600">Pilih jam mulai dan durasi untuk booking hari ini.</p>
                     <Divider>Pilih Jam Mulai</Divider>
@@ -1011,10 +955,16 @@ const OrderKasir = () => {
                                 {selectedRoomForBooking?.paket_harga.sort((a, b) => a.durasi_jam - b.durasi_jam).map(pkg => {
                                     const endTime = selectedStartTime + pkg.durasi_jam;
                                     const isOverlapping = selectedRoomForBooking.booked_hours.some(h => h >= selectedStartTime && h < endTime);
-                                    const isInvalid = endTime > 22 || isOverlapping; // Assuming closing hour is 22:00
+                                    const isInvalid = endTime > 22 || isOverlapping;
                                     return (
-                                        <Button key={pkg.durasi_jam} type={selectedDuration?.durasi_jam === pkg.durasi_jam ? 'primary' : 'default'} disabled={isInvalid} onClick={() => setSelectedDuration(pkg)} className="h-auto py-2">
-                                            <div className="flex flex-col">
+                                        <Button
+                                            key={pkg.durasi_jam}
+                                            type={selectedDuration?.durasi_jam === pkg.durasi_jam ? 'primary' : 'default'}
+                                            disabled={isInvalid}
+                                            onClick={() => setSelectedDuration(pkg)}
+                                            className="h-auto py-2 min-w-[100px] min-h-[50px]"
+                                        >
+                                            <div className="flex flex-col items-center">
                                                 <span>{pkg.durasi_jam} Jam</span>
                                                 <span className="text-xs font-normal">{formatRupiah(pkg.harga_paket)}</span>
                                             </div>
@@ -1042,7 +992,6 @@ const OrderKasir = () => {
 
             {/* New Order Modal */}
             <Modal title={<div className="text-xl font-bold text-gray-800"><PlusOutlined className="mr-2" /> Buat Order Baru</div>} open={isNewOrderModalVisible} onOk={handleNewOrderOk} onCancel={handleNewOrderCancel} okText="Buat Order" cancelText="Batal" width={400} centered className="new-order-modal">
-                {/* ... (Form content remains the same) ... */}
                 <Form form={newOrderForm} layout="vertical" initialValues={{ orderType: currentOrderType, customerName: customerName, room: room }} className="mt-4">
                     <Form.Item label="Tipe Order" name="orderType" rules={[{ required: true, message: "Pilih tipe order!" }]}>
                         <Radio.Group className="w-full">
@@ -1052,7 +1001,6 @@ const OrderKasir = () => {
                         </Radio.Group>
                     </Form.Item>
                     <Form.Item label="Nama Customer (Opsional)" name="customerName"><Input placeholder="Nama customer" /></Form.Item>
-                    {/* Conditional rendering for room input based on selected order type in the form */}
                     <Form.Item
                         noStyle
                         shouldUpdate={(prevValues, currentValues) => prevValues.orderType !== currentValues.orderType}
@@ -1073,12 +1021,8 @@ const OrderKasir = () => {
             <Modal
                 title={
                     <div className="flex flex-col items-start">
-                        <div className="text-lg font-semibold text-gray-800">
-                            Tambahkan Catatan untuk
-                        </div>
-                        <div className="text-xl font-bold text-blue-600 mt-1">
-                            {itemToAddNote?.name}
-                        </div>
+                        <div className="text-lg font-semibold text-gray-800">Tambahkan Catatan untuk</div>
+                        <div className="text-xl font-bold text-blue-600 mt-1">{itemToAddNote?.name}</div>
                     </div>
                 }
                 open={isAddNoteModalVisible}
@@ -1096,7 +1040,6 @@ const OrderKasir = () => {
                     className="mt-2 space-y-4"
                     initialValues={{ note: itemToAddNote?.note || "" }}
                 >
-                    {/* Kategori */}
                     {itemToAddNote?.category && (
                         <p className="text-sm text-gray-500 mb-1">
                             Kategori:{" "}
@@ -1107,8 +1050,6 @@ const OrderKasir = () => {
                             </span>
                         </p>
                     )}
-
-                    {/* Catatan */}
                     <Form.Item
                         label={<span className="font-medium text-gray-700">Catatan</span>}
                         name="note"
@@ -1120,13 +1061,10 @@ const OrderKasir = () => {
                             showCount
                         />
                     </Form.Item>
-
-                    {/* Harga dan jumlah */}
                     <div className="flex items-center justify-between border-t border-gray-100 pt-3">
                         <span className="text-lg font-bold text-blue-600">
                             {formatRupiah(itemToAddNote?.price || 0)}
                         </span>
-
                         <div className="flex items-center space-x-3">
                             <Button
                                 icon={<MinusOutlined />}
@@ -1159,7 +1097,6 @@ const OrderKasir = () => {
                 </Form>
             </Modal>
 
-
             {/* Cash Payment Modal */}
             <Modal
                 title={<div className="text-xl font-bold text-gray-800">Pembayaran Tunai</div>}
@@ -1172,7 +1109,6 @@ const OrderKasir = () => {
                 <div className="text-lg font-semibold text-blue-600 mb-2 text-right">
                     Total: {formatRupiah(totalAmount)}
                 </div>
-
                 <Form layout="vertical" className="mt-2">
                     <Form.Item label="Uang Tunai" className="mb-4">
                         <Input
@@ -1188,7 +1124,6 @@ const OrderKasir = () => {
                             autoFocus
                         />
                     </Form.Item>
-
                     <div className="grid grid-cols-3 gap-3 mb-6">
                         {paymentQuickAmounts.map((amount) => (
                             <Button
@@ -1210,12 +1145,10 @@ const OrderKasir = () => {
                             </Button>
                         )}
                     </div>
-
                     <div className="flex justify-between items-center mb-4 text-base">
                         <span>Kembalian:</span>
                         <span className="font-bold text-green-600">{formatRupiah(changeAmount)}</span>
                     </div>
-
                     <div className="grid grid-cols-2 gap-3">
                         <Button size="large" onClick={() => setIsCashPaymentModalVisible(false)}>
                             Batal
@@ -1232,45 +1165,38 @@ const OrderKasir = () => {
                 </Form>
             </Modal>
 
-
             {/* Struk/Confirm Modal */}
             <Modal
                 title={<div className="text-xl font-bold text-gray-800">Struk Pembayaran</div>}
                 open={isStrukModalVisible}
-                onOk={handleStrukConfirmPayment} // OK triggers payment confirmation/save
-                onCancel={handleStrukCancel}    // Cancel closes modal
+                onOk={handleStrukConfirmPayment}
+                onCancel={handleStrukCancel}
                 footer={[
                     <Button key="back" size="large" onClick={handleStrukCancel}>
-                        {/* Change cancel text slightly */}
                         {paymentSuccess ? "Tutup" : "Batal Pembayaran"}
                     </Button>,
                     <Button
                         key="submit"
                         type="primary"
                         size="large"
-                        // block // No need to block if Cancel is always there
                         onClick={handleStrukConfirmPayment}
-                        loading={isProcessing} // Show loading on this button
-                        disabled={isProcessing} // Disable while processing
+                        loading={isProcessing}
+                        disabled={isProcessing}
                     >
-                        {/* Change text based on context */}
                         {editingOrderId ? 'Selesaikan & Cetak' : 'Simpan & Cetak Struk'}
                     </Button>,
                 ]}
                 width={380}
                 centered
-                destroyOnClose // Reset modal state on close
+                destroyOnClose
             >
-                {/* ... (Struk content remains the same) ... */}
                 <div className="flex flex-col pt-4 bg-white rounded-lg text-xs">
-                    {/* Payment Success Message */}
                     {paymentSuccess && (
                         <div className="bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded-md relative mb-3 flex items-center text-xs">
                             <CheckCircleOutlined className="mr-2 text-base" />
                             <span className="font-semibold">Pembayaran berhasil diterima!</span>
                         </div>
                     )}
-                    {/* Header Info */}
                     <div className="text-gray-600 mb-3 space-y-0.5">
                         <p><strong>Customer:</strong> {customerName || 'Guest'}</p>
                         <p><strong>Tipe:</strong> {currentOrderType === 'dinein' ? 'Dine In' : currentOrderType === 'takeaway' ? 'Take Away' : 'Pick Up'}{room ? ` (${room})` : ''}</p>
@@ -1279,7 +1205,6 @@ const OrderKasir = () => {
                         <p><strong>Tanggal:</strong> {currentDate.format("DD/MM/YY HH:mm")}</p>
                         <p><strong>Bayar:</strong> {selectedPaymentMethod === 'cash' ? 'Tunai' : selectedPaymentMethod === 'qris' ? 'QRIS' : selectedPaymentMethod === 'debit' ? 'DEBIT' : '-'}</p>
                     </div>
-                    {/* Item Details (Scrollable) */}
                     <div className="border-t border-b border-gray-200 py-2 my-2 max-h-40 overflow-y-auto custom-scrollbar">
                         {selectedItems.map((item) => (
                             <div key={`${item.id}-${item.note || 'no-note'}`} className="flex justify-between items-start mb-1.5">
@@ -1291,33 +1216,27 @@ const OrderKasir = () => {
                             </div>
                         ))}
                     </div>
-                    {/* Final Price Breakdown */}
                     <div className="mb-1 space-y-0.5">
-                        {/* Subtotal */}
                         <div className="flex justify-between">
                             <span>Subtotal</span>
                             <span>{formatRupiah(subtotal)}</span>
                         </div>
-                        {/* Discount */}
                         {discountPercentage > 0 && (
                             <div className="flex justify-between text-red-600">
                                 <span>Diskon ({discountPercentage}%)</span>
                                 <span>-{formatRupiah(totalDiscountNominal)}</span>
                             </div>
                         )}
-                        {/* Tax */}
                         {subtotal > 0 && taxRateFnbPercentFromAPI > 0 && (
                             <div className="flex justify-between">
                                 <span>Pajak F&B ({taxRateFnbPercentFromAPI}%)</span>
                                 <span>{formatRupiah(totalTaxNominal)}</span>
                             </div>
                         )}
-                        {/* Total */}
                         <div className="flex justify-between text-sm font-bold text-gray-800 pt-1.5 border-t border-dashed mt-1.5">
                             <span>Total</span>
                             <span>{formatRupiah(totalAmount)}</span>
                         </div>
-                        {/* Cash & Change */}
                         {selectedPaymentMethod === 'cash' && (
                             <>
                                 <div className="flex justify-between pt-1">
@@ -1334,7 +1253,98 @@ const OrderKasir = () => {
                 </div>
             </Modal>
 
-        </Spin> // Close Spin wrapper
+            {/* --- MODAL BARU: Pembayaran Tunai RUANGAN --- */}
+            <Modal
+                title={<div className="text-xl font-bold text-gray-800">Pembayaran Tunai Ruangan</div>}
+                open={isRoomCashModalVisible}
+                onCancel={() => {
+                    setIsRoomCashModalVisible(false);
+                    setPendingBookingData(null);
+                    message.warning("Pembayaran booking ruangan dibatalkan.");
+                }}
+                footer={null}
+                width={400}
+                centered
+            >
+                {pendingBookingData && (
+                    <>
+                        <div className="text-lg font-semibold text-blue-600 mb-2 text-right">
+                            Total: {formatRupiah(pendingBookingData.total_harga_final)}
+                        </div>
+                        <Form layout="vertical" className="mt-2">
+                            <Form.Item label="Uang Tunai" className="mb-4">
+                                <Input
+                                    prefix="Rp"
+                                    value={roomCashInput > 0 ? roomCashInput.toLocaleString('id-ID') : ''}
+                                    onChange={(e) => {
+                                        const value = e.target.value.replace(/[^0-9]/g, '');
+                                        setRoomCashInput(Number(value) || 0);
+                                    }}
+                                    className="text-right text-lg font-medium"
+                                    size="large"
+                                    autoFocus
+                                />
+                            </Form.Item>
+                            <div className="grid grid-cols-3 gap-3 mb-6">
+                                {[50000, 100000, 150000, 200000].filter(amount => amount >= pendingBookingData.total_harga_final).map((amount) => (
+                                    <Button key={amount} size="large" className="h-12" onClick={() => setRoomCashInput(amount)}>
+                                        {formatRupiah(amount)}
+                                    </Button>
+                                ))}
+                                {pendingBookingData.total_harga_final > 0 && (
+                                    <Button size="large" className="h-12" onClick={() => setRoomCashInput(pendingBookingData.total_harga_final)}>
+                                        {formatRupiah(pendingBookingData.total_harga_final)}
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="flex justify-between items-center mb-4 text-base">
+                                <span>Kembalian:</span>
+                                <span className="font-bold text-green-600">
+                                    {formatRupiah(Math.max(0, roomCashInput - pendingBookingData.total_harga_final))}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button size="large" onClick={() => {
+                                    setIsRoomCashModalVisible(false);
+                                    setPendingBookingData(null);
+                                    message.warning("Pembayaran booking ruangan dibatalkan.");
+                                }}>
+                                    Batal
+                                </Button>
+                                <Button
+                                    type="primary"
+                                    size="large"
+                                    onClick={async () => {
+                                        if (roomCashInput < pendingBookingData.total_harga_final) {
+                                            message.error("Jumlah uang tunai kurang!");
+                                            return;
+                                        }
+                                        try {
+                                            setIsBookingProcessing(true);
+                                            console.log("Mengirim booking (tunai):", pendingBookingData);
+                                            const result = await createRoomBookingKasir(pendingBookingData);
+                                            message.success(`Booking (tunai) untuk ${pendingBookingData.nama_guest} berhasil (ID: ${result.id_transaksi})!`);
+                                            const updatedRooms = await getRoomsToday();
+                                            setRooms(updatedRooms || []);
+                                            setIsRoomCashModalVisible(false);
+                                            setPendingBookingData(null);
+                                        } catch (error) {
+                                            message.error(`Gagal menyimpan booking: ${error.message}`);
+                                        } finally {
+                                            setIsBookingProcessing(false);
+                                        }
+                                    }}
+                                    disabled={roomCashInput < pendingBookingData.total_harga_final || isBookingProcessing}
+                                    loading={isBookingProcessing}
+                                >
+                                    Submit
+                                </Button>
+                            </div>
+                        </Form>
+                    </>
+                )}
+            </Modal>
+        </Spin>
     );
 };
 

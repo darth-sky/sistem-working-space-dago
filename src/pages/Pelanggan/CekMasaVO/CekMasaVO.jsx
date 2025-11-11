@@ -140,7 +140,7 @@ const CekMasaVO = () => {
 
     const handlePerpanjang = () => {
         if (data?.id_paket_vo) {
-            navigate(`/virtual-office/paket/${data.id_paket_vo}`);
+            navigate('/virtual-office');
         } else {
             navigate('/virtual-office');
         }

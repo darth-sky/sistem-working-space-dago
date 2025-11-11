@@ -18,6 +18,7 @@ import {
   message,
   Modal,
   Image,
+  Select,
 } from "antd";
 import locale from "antd/locale/id_ID";
 import dayjs from "dayjs";
@@ -49,9 +50,11 @@ import * as XLSX from "xlsx";
 
 dayjs.locale("id");
 
+// (opsional) plugin datalabels jika tersedia
 if (typeof window !== "undefined" && window.ChartDataLabels) {
   ChartJS.register(window.ChartDataLabels);
 }
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -69,8 +72,7 @@ const { RangePicker } = DatePicker;
 const { Title, Text } = Typography;
 
 const formatRupiah = (num) => {
-  if (num === null || num === undefined || Number.isNaN(Number(num)))
-    return "0";
+  if (num === null || num === undefined || Number.isNaN(Number(num))) return "0";
   return new Intl.NumberFormat("id-ID").format(Math.round(Number(num)));
 };
 
@@ -90,11 +92,22 @@ const normalizeCategory = (name = "") => {
   return "Lainnya";
 };
 
+const WEEK_COLORS = [
+  { border: "rgba(37,99,235,1)", bg: "rgba(37,99,235,0.18)" },
+  { border: "rgba(16,185,129,1)", bg: "rgba(16,185,129,0.18)" },
+  { border: "rgba(245,158,11,1)", bg: "rgba(245,158,11,0.18)" },
+  { border: "rgba(239,68,68,1)", bg: "rgba(239,68,68,0.18)" },
+  { border: "rgba(99,102,241,1)", bg: "rgba(99,102,241,0.18)" },
+];
+
+const startOfIsoWeek = (d) => {
+  const day = d.day();
+  const diff = day === 0 ? -6 : 1 - day;
+  return d.add(diff, "day").startOf("day");
+};
+
 const WorkingSpace = () => {
-  const [dateRange, setDateRange] = useState([
-    dayjs().startOf("month"),
-    dayjs(),
-  ]);
+  const [dateRange, setDateRange] = useState([dayjs().startOf("month"), dayjs()]);
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -149,75 +162,7 @@ const WorkingSpace = () => {
     [dashboardData]
   );
 
-  // ===== Performance Overview per Category =====
-  const categoryPerf = useMemo(() => {
-    if (Array.isArray(dashboardData?.categoryPerformance)) {
-      return dashboardData.categoryPerformance.map((r) => ({
-        category: r.category,
-        bookings: Number(r.bookings || 0),
-        revenue: Number(r.revenue || 0),
-        avgDuration: Number(r.avg_duration_jam || r.avgDuration || 0),
-      }));
-    }
-    const byCat = dashboardData?.packageByDurationByCategory;
-    const contr = dashboardData?.categoryContribution || [];
-    const bookingsMap = {
-      "Open Space": 0,
-      "Space Monitor": 0,
-      "Meeting Room": 0,
-    };
-    if (byCat) {
-      Object.keys(bookingsMap).forEach((cat) => {
-        bookingsMap[cat] = (byCat[cat] || []).reduce(
-          (s, r) => s + Number(r.total_booking || 0),
-          0
-        );
-      });
-    }
-    const revenueMap = contr.reduce((acc, r) => {
-      const cat = r.name.includes("Meeting") ? "Meeting Room" : r.name;
-      acc[cat] = (acc[cat] || 0) + Number(r.value || 0);
-      return acc;
-    }, {});
-    const avgMap = { "Open Space": 0, "Space Monitor": 0, "Meeting Room": 0 };
-    if (byCat) {
-      Object.keys(avgMap).forEach((cat) => {
-        const arr = byCat[cat] || [];
-        const totalBk = arr.reduce(
-          (s, r) => s + Number(r.total_booking || 0),
-          0
-        );
-        const weighted = arr.reduce(
-          (s, r) =>
-            s + Number(r.durasi_jam || 0) * Number(r.total_booking || 0),
-          0
-        );
-        avgMap[cat] = totalBk ? weighted / totalBk : 0;
-      });
-    }
-    return Object.keys(bookingsMap).map((cat) => ({
-      category: cat,
-      bookings: bookingsMap[cat],
-      revenue: Number(revenueMap[cat] || 0),
-      avgDuration: avgMap[cat],
-    }));
-  }, [dashboardData]);
-
   // === RADAR (Booking Pattern by Day per Minggu) ===
-  const WEEK_COLORS = [
-    { border: "rgba(37,99,235,1)", bg: "rgba(37,99,235,0.18)" },
-    { border: "rgba(16,185,129,1)", bg: "rgba(16,185,129,0.18)" },
-    { border: "rgba(245,158,11,1)", bg: "rgba(245,158,11,0.18)" },
-    { border: "rgba(239,68,68,1)", bg: "rgba(239,68,68,0.18)" },
-    { border: "rgba(99,102,241,1)", bg: "rgba(99,102,241,0.18)" },
-  ];
-
-  const startOfIsoWeek = (d) => {
-    const day = d.day();
-    const diff = day === 0 ? -6 : 1 - day;
-    return d.add(diff, "day").startOf("day");
-  };
-
   const { radarData, radarOptions } = useMemo(() => {
     const labels = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
     const detailed = dashboardData?.bookingsByDateDetailed || {};
@@ -271,6 +216,7 @@ const WorkingSpace = () => {
 
     const options = {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           display: true,
@@ -279,7 +225,6 @@ const WorkingSpace = () => {
             const chart = legend.chart;
             const index = legendItem.datasetIndex;
             const meta = chart.getDatasetMeta(index);
-
             meta.hidden =
               meta.hidden === null ? !chart.data.datasets[index].hidden : null;
 
@@ -287,7 +232,6 @@ const WorkingSpace = () => {
               .filter((ds, i) => !chart.getDatasetMeta(i).hidden)
               .flatMap((ds) => ds.data);
             const maxVisible = Math.max(0, ...visibleData);
-
             chart.options.scales.r.suggestedMax = Math.max(
               5,
               Math.ceil(maxVisible * 1.2)
@@ -307,9 +251,8 @@ const WorkingSpace = () => {
             afterLabel: (it) => {
               const d = dateIndexResolver(it.datasetIndex, it.dataIndex);
               const key = d.format("YYYY-MM-DD");
-              const node = breakdownByDate[key];
+              const node = detailed[key];
               if (!node?.breakdown) return undefined;
-
               const lines = [];
               Object.entries(node.breakdown).forEach(([cat, durMap]) => {
                 Object.entries(durMap)
@@ -331,7 +274,8 @@ const WorkingSpace = () => {
       scales: {
         r: {
           beginAtZero: true,
-          ticks: { precision: 0 },
+          ticks: { precision: 0, backdropColor: "transparent", maxTicksLimit: 5 },
+          pointLabels: { font: { size: 10 } },
           suggestedMax: Math.max(5, Math.ceil(maxVal * 1.2)),
         },
       },
@@ -399,10 +343,8 @@ const WorkingSpace = () => {
       acc[item.name] = (acc[item.name] || 0) + (item.value || 0);
       return acc;
     }, {});
-
     const totalMeetingRoom =
-      (dataMap["Room Meeting Besar"] || 0) +
-      (dataMap["Room Meeting Kecil"] || 0);
+      (dataMap["Room Meeting Besar"] || 0) + (dataMap["Room Meeting Kecil"] || 0);
 
     return {
       labels: ["Open Space", "Space Monitor", "Meeting Room"],
@@ -463,7 +405,7 @@ const WorkingSpace = () => {
 
     const labels = allDurations.map((d) => `${d} Jam`);
     const valFrom = (arr, dur) => {
-      const hit = (arr || []).find((r) => Number(r?.durasi_jam ?? 0) === dur);
+      const hit = (arr || []).find((r) => Number(r?.durasi_jam || 0) === dur);
       return Number(hit?.total_booking ?? hit?.total_user ?? 0);
     };
 
@@ -497,33 +439,33 @@ const WorkingSpace = () => {
     };
   }, [dashboardData]);
 
-  // ===== Peak Hours =====
-  const breakdownMap = useMemo(() => {
-    return dashboardData?.hourlyBookingsByCategory || {};
-  }, [dashboardData]);
+  // ===== Peak Hours (+ durasi per kategori di tooltip) =====
+  const breakdownMap = useMemo(
+    () => dashboardData?.hourlyBookingsByCategory || {},
+    [dashboardData]
+  );
+  const durationBreakdownMap = useMemo(
+    () => dashboardData?.hourlyBookingsByCategoryAndDuration || {},
+    [dashboardData]
+  );
 
   const rawHourlyMap = dashboardData?.hourlyBookings || {};
-  const hourlyPairs = useMemo(() => {
-    return Object.entries(rawHourlyMap)
-      .map(([h, v]) => [Number(h), Number(v) || 0])
-      .filter(([h, v]) => h >= 8 && h <= 22 && v > 0)
-      .sort((a, b) => a[0] - b[0]);
-  }, [rawHourlyMap]);
+  const hourlyPairs = useMemo(
+    () =>
+      Object.entries(rawHourlyMap)
+        .map(([h, v]) => [Number(h), Number(v) || 0])
+        .filter(([h, v]) => h >= 8 && h <= 22 && v > 0)
+        .sort((a, b) => a[0] - b[0]),
+    [rawHourlyMap]
+  );
 
   const hourLabels = useMemo(
     () => hourlyPairs.map(([h]) => dayjs().hour(h).minute(0).format("HH:mm")),
     [hourlyPairs]
   );
+  const hourlyInRange = useMemo(() => hourlyPairs.map(([, v]) => v), [hourlyPairs]);
 
-  const hourlyInRange = useMemo(
-    () => hourlyPairs.map(([, v]) => v),
-    [hourlyPairs]
-  );
-
-  const topHourIdx = useMemo(
-    () => getTopNIndices(hourlyInRange, 3),
-    [hourlyInRange]
-  );
+  const topHourIdx = useMemo(() => getTopNIndices(hourlyInRange, 3), [hourlyInRange]);
   const hourBg = useMemo(() => {
     const keep = new Set(topHourIdx);
     return hourlyInRange.map((_, i) => (keep.has(i) ? "#EF4444" : "#93C5FD"));
@@ -605,13 +547,8 @@ const WorkingSpace = () => {
       },
       datalabels: {
         formatter: (value, ctx) => {
-          const total = ctx.chart.data.datasets[0].data.reduce(
-            (a, b) => a + b,
-            0
-          );
-          return total === 0
-            ? "0.0%"
-            : ((value / total) * 100).toFixed(1) + "%";
+          const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+          return total === 0 ? "0.0%" : ((value / total) * 100).toFixed(1) + "%";
         },
         color: "#fff",
         font: { weight: "bold", size: 16 },
@@ -626,11 +563,7 @@ const WorkingSpace = () => {
       y: {
         beginAtZero: true,
         title: { display: true, text: "Jumlah Booking" },
-        ticks: {
-          callback: (v) => `${Math.trunc(v)}`,
-          precision: 0,
-          autoSkip: true,
-        },
+        ticks: { callback: (v) => `${Math.trunc(v)}`, precision: 0, autoSkip: true },
       },
       x: { title: { display: true, text: "Paket Durasi" }, stacked: false },
     },
@@ -647,14 +580,41 @@ const WorkingSpace = () => {
           title: (items) => items?.[0]?.label ?? "",
           label: (ctx) => `Booking: ${Math.trunc(Number(ctx.parsed?.y ?? 0))}`,
           afterBody: (items) => {
+            // HH dari label (format "HH:mm")
             const hh = Number((items?.[0]?.label || "00:00").split(":")[0]);
-            const b = breakdownMap?.[String(hh)];
-            if (!b) return [];
-            const order = ["Open Space", "Space Monitor", "Meeting Room"];
-            const lines = order
-              .filter((k) => Number(b[k]) > 0)
-              .map((k) => `${k}: ${b[k]}`);
-            return lines.length ? ["", ...lines] : [];
+
+            // ringkas per kategori
+            const byCat = breakdownMap?.[String(hh)];
+            const catOrder = ["Open Space", "Space Monitor", "Meeting Room"];
+            const catLines = byCat
+              ? catOrder
+                  .filter((k) => Number(byCat[k]) > 0)
+                  .map((k) => `${k}: ${byCat[k]}`)
+              : [];
+
+            // rincian durasi per kategori
+            const byDur = durationBreakdownMap?.[String(hh)];
+            const durLines = [];
+            if (byDur) {
+              catOrder.forEach((cat) => {
+                const durMap = byDur[cat] || {};
+                const entries = Object.entries(durMap)
+                  .map(([dur, cnt]) => ({ dur: Number(dur), cnt: Number(cnt) }))
+                  .filter(({ cnt }) => cnt > 0)
+                  .sort((a, b) => b.cnt - a.cnt || a.dur - b.dur);
+                if (entries.length) {
+                  durLines.push(
+                    `• ${cat} (durasi):`,
+                    ...entries.map(({ dur, cnt }) => `   - ${dur} jam: ${cnt}`)
+                  );
+                }
+              });
+            }
+
+            const out = [];
+            if (catLines.length) out.push("", ...catLines);
+            if (durLines.length) out.push("", ...durLines);
+            return out;
           },
         },
       },
@@ -754,25 +714,17 @@ const WorkingSpace = () => {
     }
   };
 
-  // ===== RENDER =====
   return (
     <>
       <ConfigProvider locale={locale}>
         <div style={{ padding: 20 }} ref={reportRef}>
           {/* Header */}
-          <Row
-            gutter={[16, 16]}
-            justify="space-between"
-            align="middle"
-            style={{ marginBottom: 14 }}
-          >
+          <Row gutter={[16, 16]} justify="space-between" align="middle" style={{ marginBottom: 14 }}>
             <Col>
               <Title level={4} style={{ margin: 0 }}>
                 Working Space Dashboard
               </Title>
-              <Text type="secondary">
-                Dago Creative Hub &amp; Coffee Lab — Working Space
-              </Text>
+              <Text type="secondary">Dago Creative Hub &amp; Coffee Lab — Working Space</Text>
             </Col>
             <Col>
               <Space align="center">
@@ -781,13 +733,29 @@ const WorkingSpace = () => {
                   value={dateRange}
                   onChange={(vals) => {
                     if (!vals) return;
-                    setDateRange([
-                      vals[0].startOf("day"),
-                      vals[1].endOf("day"),
-                    ]);
+                    setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]);
                   }}
                   format="DD-MM-YYYY"
-                  disabled={loading}
+                />
+                <Select
+                  defaultValue="mtm"
+                  style={{ width: 140 }}
+                  options={[
+                    { value: "mtm", label: "Month to date" },
+                    { value: "lw", label: "Last 7d" },
+                  ]}
+                  onChange={(val) => {
+                    if (val === "lw")
+                      setDateRange([
+                        dayjs().subtract(7, "day").startOf("day"),
+                        dayjs().endOf("day"),
+                      ]);
+                    else
+                      setDateRange([
+                        dayjs().startOf("month").startOf("day"),
+                        dayjs().endOf("day"),
+                      ]);
+                  }}
                 />
               </Space>
             </Col>
@@ -835,10 +803,7 @@ const WorkingSpace = () => {
           {/* Statistic Cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
                 <Card>
                   <Spin spinning={loading}>
                     <Statistic
@@ -851,11 +816,7 @@ const WorkingSpace = () => {
               </motion.div>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
                 <Card>
                   <Spin spinning={loading}>
                     <Statistic
@@ -868,35 +829,19 @@ const WorkingSpace = () => {
               </motion.div>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                 <Card>
                   <Spin spinning={loading}>
-                    <Statistic
-                      title="Jumlah Booking"
-                      value={stats.totalBookings}
-                      prefix={<FieldTimeOutlined />}
-                    />
+                    <Statistic title="Jumlah Booking" value={stats.totalBookings} prefix={<FieldTimeOutlined />} />
                   </Spin>
                 </Card>
               </motion.div>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                 <Card>
                   <Spin spinning={loading}>
-                    <Statistic
-                      title="Rata-rata Harian"
-                      value={`Rp ${formatRupiah(avgDaily)}`}
-                      prefix={<ArrowUpOutlined />}
-                    />
+                    <Statistic title="Rata-rata Harian" value={`Rp ${formatRupiah(avgDaily)}`} prefix={<ArrowUpOutlined />} />
                   </Spin>
                 </Card>
               </motion.div>
@@ -919,14 +864,10 @@ const WorkingSpace = () => {
                 <Spin spinning={loading}>
                   <Title level={5}>Trafik Booking per Durasi</Title>
                   <Text type="secondary">
-                    Menampilkan jumlah booking per paket durasi dan kategori
-                    space pada periode {totalDays} hari.
+                    Menampilkan jumlah booking per paket durasi dan kategori space pada periode {totalDays} hari.
                   </Text>
                   <div style={{ height: 300, marginTop: 10 }}>
-                    <Bar
-                      data={trafficByDurationClusteredData}
-                      options={trafficClusterOptions}
-                    />
+                    <Bar data={trafficByDurationClusteredData} options={trafficClusterOptions} />
                   </div>
                 </Spin>
               </Card>
@@ -940,39 +881,20 @@ const WorkingSpace = () => {
                     <Doughnut data={doughnutData} options={doughnutOptions} />
                   </div>
                   <Divider />
-                  <Space
-                    direction="vertical"
-                    size="small"
-                    style={{ width: "100%" }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
+                  <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <Text>
                         <Tag color="#2563eb" /> Open Space
                       </Text>
                       <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <Text>
                         <Tag color="#10B981" /> Space Monitor
                       </Text>
                       <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <Text>
                         <Tag color="#F59E0B" /> Meeting Room
                       </Text>
@@ -996,7 +918,7 @@ const WorkingSpace = () => {
                         cursor: "pointer",
                       }}
                     >
-                      📄 Cetak Laporan (Gambar)
+                      📄 Cetak Gambar
                     </button>
                   </Tooltip>
                   <Tooltip title="Unduh seluruh data yang tampil ke Excel (multi-sheet)">
@@ -1010,7 +932,7 @@ const WorkingSpace = () => {
                         cursor: "pointer",
                       }}
                     >
-                      ⬇ Export Data (Excel)
+                      ⬇ Cetak Laporan (CSV/Excel)
                     </button>
                   </Tooltip>
                 </Space>
@@ -1024,8 +946,7 @@ const WorkingSpace = () => {
                 <Spin spinning={loading}>
                   <Title level={5}>Peak Hours</Title>
                   <Text type="secondary">
-                    Menampilkan jam berdasarkan mulai booking. Bar merah
-                    merupakan top 3 jumlah booking tertinggi.
+                    Menampilkan jam berdasarkan mulai booking. Bar merah merupakan top 3 jumlah booking tertinggi.
                   </Text>
                   <div style={{ height: 300, marginTop: 10 }}>
                     <Bar data={peakHoursData} options={peakHoursOptions} />
@@ -1037,21 +958,9 @@ const WorkingSpace = () => {
             <Col xs={24} lg={8}>
               <Card title="Popular Space" loading={loading}>
                 <Table
-                  tableLayout="fixed"
                   columns={[
-                    {
-                      title: "Kategori (Durasi)",
-                      dataIndex: "item",
-                      key: "item",
-                      width: 170,
-                    },
-                    {
-                      title: "Jumlah Terjual",
-                      dataIndex: "qty",
-                      key: "qty",
-                      align: "right",
-                      width: 70,
-                    },
+                    { title: "Kategori (Durasi)", dataIndex: "item", key: "item", width: 170 },
+                    { title: "Jumlah Terjual", dataIndex: "qty", key: "qty", align: "right", width: 70 },
                     {
                       title: "Total Penjualan (Rp)",
                       dataIndex: "total",
@@ -1062,9 +971,7 @@ const WorkingSpace = () => {
                     },
                   ]}
                   dataSource={topWs}
-                  rowKey={(r) =>
-                    `${r.item}-${String(r.qty)}-${String(r.total)}`
-                  }
+                  rowKey={(r) => `${r.item}-${String(r.qty)}-${String(r.total)}`}
                   pagination={false}
                   size="small"
                   locale={{ emptyText: <Empty description="Tidak ada data" /> }}
@@ -1079,62 +986,17 @@ const WorkingSpace = () => {
                 <Title level={5} style={{ marginBottom: 8 }}>
                   Booking Pattern by Day
                 </Title>
-                <Text type="secondary">
-                  Distribusi booking per hari (Senin - Minggu)
-                </Text>
-                <div style={{ height: 2 }}>
+                <Text type="secondary">Distribusi booking per hari (Senin - Minggu)</Text>
+                <div style={{ height: 220 }}>
                   <Radar data={radarData} options={radarOptions} />
                 </div>
-              </Card>
-            </Col>
-
-            <Col xs={24} lg={8}>
-              <Card title="Performance Overview per Category">
-                <Table
-                  size="small"
-                  pagination={false}
-                  dataSource={categoryPerf}
-                  rowKey={(r) => r.category}
-                  columns={[
-                    {
-                      title: "Kategori",
-                      dataIndex: "category",
-                      key: "category",
-                    },
-                    {
-                      title: "Booking",
-                      dataIndex: "bookings",
-                      key: "bookings",
-                      align: "right",
-                    },
-                    {
-                      title: "Pendapatan",
-                      dataIndex: "revenue",
-                      key: "revenue",
-                      align: "right",
-                      render: (v) => `Rp ${formatRupiah(v)}`,
-                    },
-                    {
-                      title: "Rata-rata Durasi (Jam)",
-                      dataIndex: "avgDuration",
-                      key: "avgDuration",
-                      align: "right",
-                      render: (v) => Number(v).toFixed(1),
-                    },
-                  ]}
-                />
               </Card>
             </Col>
           </Row>
         </div>
       </ConfigProvider>
 
-      <Modal
-        open={previewOpen}
-        onCancel={() => setPreviewOpen(false)}
-        footer={null}
-        width={900}
-      >
+      <Modal open={previewOpen} onCancel={() => setPreviewOpen(false)} footer={null} width={900}>
         <Image src={previewSrc} alt="Preview" style={{ width: "100%" }} />
       </Modal>
     </>

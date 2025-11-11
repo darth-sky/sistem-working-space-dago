@@ -14,7 +14,7 @@ import {
   Space,
   Spin,
   Collapse,
-  
+
 } from "antd";
 import {
   CalendarOutlined,
@@ -51,6 +51,8 @@ const RiwayatTransaksi = () => {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedDates, setSelectedDates] = useState([]);
+
 
   const [width] = useWindowSize();
   const isMobile = width < 768;
@@ -161,19 +163,28 @@ const RiwayatTransaksi = () => {
         <Row gutter={[12, 12]} justify="start" align="middle">
           <Col xs={24} sm={18}>
             <RangePicker
-              onChange={handleFilter}
+              value={selectedDates}
+              onChange={(dates) => {
+                setSelectedDates(dates);
+                handleFilter(dates);
+              }}
               style={{ width: "100%", borderRadius: "8px" }}
               placeholder={["Tanggal mulai", "Tanggal akhir"]}
             />
+
           </Col>
           <Col xs={24} sm={6}>
             <Button
               block
-              onClick={() => handleFilter([])}
+              onClick={() => {
+                setSelectedDates([]); // reset tampilan tanggal di RangePicker
+                handleFilter([]); // reset filter transaksi
+              }}
               style={{ borderRadius: "8px" }}
             >
               Reset Filter
             </Button>
+
           </Col>
         </Row>
 

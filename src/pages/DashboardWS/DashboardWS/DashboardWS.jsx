@@ -152,12 +152,12 @@ const DashboardWS = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
           <Link to="/" className="flex items-center gap-2">
             <img src={logo} alt="Logo" className="h-8 sm:h-9 w-auto" />
-            <span className="font-bold text-lg sm:text-xl text-gray-800 tracking-tight">Workspace</span>
+            <span className="font-bold text-lg sm:text-xl text-gray-800 tracking-tight">Creative Hub & Coffee Lab</span>
           </Link>
 
           <div className="flex gap-2 sm:gap-4 items-center">
             <button
-              onClick={() => window.open("https://wa.me/62123123123", "_blank")}
+              onClick={() => window.open("https://wa.me/6285695330109", "_blank")}
               className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium shadow-md transition whitespace-nowrap"
             >
               <FaWhatsapp className="text-base sm:text-lg" />

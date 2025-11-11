@@ -5,6 +5,55 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
+
+// (Hapus getTransactionHistory lama)
+
+// Service untuk TAB 1 (Laporan Detail F&B)
+export const getFnbSalesDetail = async (startDate, endDate) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    const url = `${baseUrl}/api/v1/admin/fnb-sales-detail?startDate=${startDate}&endDate=${endDate}`;
+    
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Gagal mengambil data F&B');
+    }
+    const result = await response.json();
+    return result.datas; // Mengembalikan array [item1, item2, ...]
+  } catch (error) {
+    console.error("Error fetching F&B sales detail:", error);
+    throw error;
+  }
+};
+
+// Service untuk TAB 2 (Ruangan & Lainnya)
+export const getNonFnbTransactions = async (startDate, endDate) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    const url = `${baseUrl}/api/v1/admin/non-fnb-transactions?startDate=${startDate}&endDate=${endDate}`;
+    
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Gagal mengambil transaksi non-F&B');
+    }
+    const result = await response.json();
+    return result.datas; // Mengembalikan { transactions: [], summary: {} }
+  } catch (error) {
+    console.error("Error fetching non-F&B transactions:", error);
+    throw error;
+  }
+};
+
+
+
 export const changePassword = async (old_password, new_password) => {
   try {
     const formData = new FormData();
@@ -73,6 +122,43 @@ export const getRekapLive = async (startDate, endDate) => {
     return result.datas;
   } catch (error) {
     console.error("Error fetching rekap live:", error);
+    throw error;
+  }
+};
+
+// (Asumsi 'jwtStorage' dan 'baseUrl' sudah diimpor di file ini)
+
+export const getBagiHasilDetail = async (startDate, endDate) => {
+  try {
+    // 1. Ambil token DENGAN await
+    const token = await jwtStorage.retrieveToken();
+
+    // 2. Tambahkan pengecekan token (best practice)
+    if (!token) {
+      throw new Error("Token tidak ditemukan. Sesi Anda mungkin telah berakhir.");
+    }
+
+    const url = `${baseUrl}/api/v1/admin/export-bagi-hasil-detail?start_date=${startDate}&end_date=${endDate}`;
+
+    const response = await fetch(url, {
+      headers: {
+        // 'token' sekarang akan menjadi string JWT yang benar
+        'Authorization': `Bearer ${token}`
+      },
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      // Melempar error dengan pesan dari backend
+      throw new Error(result.error || 'Gagal mengambil data export');
+    }
+
+    // Mengembalikan data (sesuai logika asli Anda)
+    return result.datas;
+
+  } catch (error) {
+    console.error("Error fetching export data:", error);
+    // Melempar error lagi agar bisa ditangkap oleh component (misal: React Query)
     throw error;
   }
 };
@@ -1204,7 +1290,7 @@ export const getWorkingSpaceDashboardData = async (startDate, endDate) => {
     const token = jwtStorage.retrieveToken();
 
     // Endpoint baru yang spesifik untuk working space
-    let url = `${baseUrl}/api/v1/admin/ws-dashboard-data`;
+    let url = `${baseUrl}/api/v1/owner/ws-dashboard-data`;
     if (startDate && endDate) {
       url += `?startDate=${startDate}&endDate=${endDate}`;
     }
@@ -1287,12 +1373,31 @@ export const getBagiHasilReport = async (startDate, endDate) => {
 };
 
 
+// File: src/services/service.js (atau yang setara)
+
 export const getExpenses = async (startDate, endDate) => {
   try {
-    const response = await fetch(`${baseUrl}/api/v1/admin/costBulananRead?startDate=${startDate}&endDate=${endDate}`);
-    if (!response.ok) {
-      throw new Error("Gagal mengambil data pengeluaran");
+    // 1. Ambil token
+    const token = await jwtStorage.retrieveToken(); // <--- TAMBAHKAN await DI SINI
+
+    // Tambahkan pengecekan token untuk keamanan
+    if (!token) {
+      throw new Error("Token tidak ditemukan, silakan login ulang.");
     }
+
+    const response = await fetch(`${baseUrl}/api/v1/admin/costBulananRead?startDate=${startDate}&endDate=${endDate}`, {
+      // 2. Tambahkan header Authorization
+      headers: {
+        "Authorization": `Bearer ${token}` // 'token' sekarang akan berisi string yang benar
+      }
+    });
+
+    if (!response.ok) {
+      // Coba parse error dari backend
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || "Gagal mengambil data pengeluaran");
+    }
+
     const data = await response.json();
     return data;
   } catch (error) {
@@ -1301,34 +1406,55 @@ export const getExpenses = async (startDate, endDate) => {
   }
 };
 
-// POST: Membuat pengeluaran baru
 export const createExpense = async (expenseData) => {
   try {
+    // 1. Ambil token DENGAN await
+    const token = await jwtStorage.retrieveToken();
+
+    // 2. Tambahkan pengecekan token
+    if (!token) {
+      throw new Error("Token tidak ditemukan. Sesi Anda mungkin telah berakhir.");
+    }
+
     const response = await fetch(`${baseUrl}/api/v1/admin/costBulananCreate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        // Token sekarang adalah string yang benar
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify(expenseData),
     });
+
+    // 3. Kembalikan status dan data (sesuai yang diharapkan CostBulanan.jsx)
     const result = await response.json();
     return { status: response.status, data: result };
   } catch (error) {
     console.error("Error in createExpense:", error);
-    throw error;
+    throw error; // Lempar error agar bisa ditangkap oleh component
   }
 };
 
-// PUT: Memperbarui pengeluaran
 export const updateExpense = async (id, expenseData) => {
   try {
+    // 1. Ambil token DENGAN await
+    const token = await jwtStorage.retrieveToken();
+
+    // 2. Tambahkan pengecekan token
+    if (!token) {
+      throw new Error("Token tidak ditemukan. Sesi Anda mungkin telah berakhir.");
+    }
+
     const response = await fetch(`${baseUrl}/api/v1/admin/costBulananUpdate/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
+        // Token sekarang adalah string yang benar
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify(expenseData),
     });
+
     const result = await response.json();
     return { status: response.status, data: result };
   } catch (error) {
@@ -1337,12 +1463,24 @@ export const updateExpense = async (id, expenseData) => {
   }
 };
 
-// DELETE: Menghapus pengeluaran
 export const deleteExpense = async (id) => {
   try {
+    // 1. Ambil token DENGAN await
+    const token = await jwtStorage.retrieveToken();
+
+    // 2. Tambahkan pengecekan token
+    if (!token) {
+      throw new Error("Token tidak ditemukan. Sesi Anda mungkin telah berakhir.");
+    }
+
     const response = await fetch(`${baseUrl}/api/v1/admin/costBulananDelete/${id}`, {
       method: "DELETE",
+      headers: {
+        // Token sekarang adalah string yang benar
+        "Authorization": `Bearer ${token}`
+      },
     });
+
     const result = await response.json();
     return { status: response.status, data: result };
   } catch (error) {
@@ -1350,8 +1488,6 @@ export const deleteExpense = async (id) => {
     throw error;
   }
 };
-
-
 
 export const getAdminDashboardData = async (startDate, endDate) => {
   try {
@@ -2142,28 +2278,28 @@ export const getPosInitData = async () => {
 // SERVICE 2: Mengirim data order baru ke server
 //=========================================================================================
 
+// Contoh di src/services/service.js
+
+// Asumsi Anda punya fungsi seperti ini, Anda HARUS memodifikasinya
 export const createOrderKasir = async (orderData) => {
   try {
     const token = await jwtStorage.retrieveToken();
+    if (!token) throw new Error("Token tidak ditemukan");
+
+    // 'orderData' SEKARANG HARUS BERISI 'id_sesi'
+    // Contoh: { id_sesi: 123, customerName: 'Rose', ... items: [...] }
+
     const response = await fetch(`${baseUrl}/api/v1/kasir/order`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(orderData), // Mengirim data order dalam format JSON
+      body: JSON.stringify(orderData), // Kirim semua data
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result; // Mengembalikan respons sukses dari server (termasuk id_transaksi baru)
-
+    return handleResponse(response); // (Asumsi Anda punya handleResponse)
   } catch (error) {
-    console.error("Error creating new order:", error);
+    console.error("Error creating kasir order:", error);
     throw error;
   }
 };

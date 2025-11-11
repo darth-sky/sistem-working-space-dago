@@ -15,7 +15,9 @@ const { Text } = Typography;
 const { Search } = Input;
 const { TextArea } = Input;
 
-const UPLOAD_URL = `${import.meta.env.VITE_BASE_URL}/static/`;
+// --- PERBAIKAN: Gunakan import.meta.env.VITE_BASE_URL dinamis ---
+// Hapus /api/v1 jika ada, karena static file biasanya di root
+const UPLOAD_URL = `${import.meta.env.VITE_BASE_URL.replace('/api/v1', '')}/static/`;
 
 const RuanganKategoriTab = () => {
     const [open, setOpen] = useState(false);
@@ -26,6 +28,9 @@ const RuanganKategoriTab = () => {
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
     const [fileList, setFileList] = useState([]);
+    
+    // --- TAMBAHAN: State untuk validasi ---
+    const [validationError, setValidationError] = useState(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -72,7 +77,12 @@ const RuanganKategoriTab = () => {
             width: 120,
             render: (filename) =>
                 filename ? (
-                    <Image width={80} src={`${UPLOAD_URL}${filename}`} />
+                    <Image 
+                      width={80} 
+                      src={`${UPLOAD_URL}${filename}`} 
+                      // Fallback jika gambar error
+                      onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/80?text=Error" }}
+                    />
                 ) : (
                     <Text type="secondary">No Image</Text>
                 ),
@@ -103,9 +113,10 @@ const RuanganKategoriTab = () => {
             title: "Deskripsi",
             dataIndex: "deskripsi",
             key: "deskripsi",
-            filters: uniqueFilters("deskripsi"),
-            onFilter: (value, record) =>
-                record.deskripsi && record.deskripsi.indexOf(value) === 0,
+            // Hapus filter deskripsi karena terlalu banyak variasi
+            // filters: uniqueFilters("deskripsi"), 
+            // onFilter: (value, record) =>
+            //     record.deskripsi && record.deskripsi.indexOf(value) === 0,
             ellipsis: true,
         },
         {
@@ -140,6 +151,7 @@ const RuanganKategoriTab = () => {
                     <Tooltip title="Delete Kategori">
                         <Popconfirm
                             title="Yakin ingin menghapus kategori ini?"
+                            description="Menghapus kategori dapat mempengaruhi ruangan terkait."
                             onConfirm={() => handleDelete(record.id_kategori_ruangan)}
                         >
                             <Button type="link" danger icon={<DeleteOutlined />} />
@@ -152,13 +164,21 @@ const RuanganKategoriTab = () => {
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
+        // --- PERBAIKAN: Hapus error saat user mulai mengetik ---
+        if (field === 'nama_kategori' && value.trim() !== "") {
+            setValidationError(null);
+        }
     };
 
     const handleSave = async () => {
-        if (!formData.nama_kategori) {
-            message.error("Nama Kategori wajib diisi!");
+        // --- PERBAIKAN: Validasi Penuh ---
+        if (!formData.nama_kategori || formData.nama_kategori.trim() === "") {
+            setValidationError("Nama Kategori wajib diisi."); // Set error
+            message.warning("Harap isi semua bidang yang wajib diisi.");
             return;
         }
+        
+        setValidationError(null); // Lolos validasi, bersihkan error
         setLoading(true);
 
         const formDataToSend = new FormData();
@@ -190,7 +210,9 @@ const RuanganKategoriTab = () => {
             handleCancel();
         } catch (err) {
             console.error("Error save kategori ruangan:", err);
-            message.error(err.data?.error || "Gagal menyimpan kategori");
+            // Cek error dari response server
+            const errorMsg = err.response?.data?.error || "Gagal menyimpan kategori";
+            message.error(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -205,7 +227,9 @@ const RuanganKategoriTab = () => {
             }
         } catch (err) {
             console.error("Gagal menghapus kategori:", err);
-            message.error("Gagal menghapus kategori");
+            // --- PERBAIKAN: Tampilkan pesan error dari server ---
+            const errorMsg = err.response?.data?.error || "Gagal menghapus kategori";
+            message.error(errorMsg);
         }
     };
 
@@ -213,6 +237,7 @@ const RuanganKategoriTab = () => {
         setEditingCategory(null);
         setFormData({ status: "Active" });
         setFileList([]);
+        setValidationError(null); // Bersihkan error
         setOpen(true);
     };
 
@@ -231,6 +256,7 @@ const RuanganKategoriTab = () => {
         } else {
             setFileList([]);
         }
+        setValidationError(null); // Bersihkan error
         setOpen(true);
     };
 
@@ -239,6 +265,7 @@ const RuanganKategoriTab = () => {
         setFormData({ status: "Active" });
         setEditingCategory(null);
         setFileList([]);
+        setValidationError(null); // Bersihkan error
     };
 
     return (
@@ -269,7 +296,7 @@ const RuanganKategoriTab = () => {
                 </Col>
             </Row>
 
-            <Card style={{ borderRadius: "12px" }}>
+            <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
                 <Table
                     columns={columns}
                     dataSource={filteredData}
@@ -280,6 +307,7 @@ const RuanganKategoriTab = () => {
                         pageSizeOptions: ["5", "10", "20"],
                         onShowSizeChange: (c, size) => setPageSize(size),
                     }}
+                    scroll={{ x: 900 }} // Tambahkan scroll horizontal
                 />
             </Card>
 
@@ -289,6 +317,7 @@ const RuanganKategoriTab = () => {
                 onCancel={handleCancel}
                 onOk={handleSave}
                 confirmLoading={loading}
+                destroyOnClose // Reset state internal AntD saat modal ditutup
             >
                 <div style={{ marginTop: 24 }}>
                     <Text strong>
@@ -298,7 +327,14 @@ const RuanganKategoriTab = () => {
                         value={formData.nama_kategori || ""}
                         onChange={(e) => handleChange("nama_kategori", e.target.value)}
                         style={{ marginTop: 8 }}
+                        status={validationError ? 'error' : ''} // <-- PERBAIKAN VALIDASI
                     />
+                    {/* --- PESAN ERROR SPESIFIK --- */}
+                    {validationError && (
+                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                            {validationError}
+                        </Text>
+                    )}
                 </div>
                 <div style={{ marginTop: 16 }}>
                     <Text strong>Deskripsi</Text>
@@ -316,15 +352,21 @@ const RuanganKategoriTab = () => {
                         listType="picture-card"
                         fileList={fileList}
                         onChange={({ fileList: newFileList }) => setFileList(newFileList)}
-                        beforeUpload={() => false}
+                        beforeUpload={() => false} // Selalu return false untuk handle manual
                         maxCount={1}
                         style={{ marginTop: 8 }}
+                        accept="image/png, image/jpeg" // Batasi tipe file
                     >
-                        <div>
-                            <PlusOutlined />
-                            <div style={{ marginTop: 8 }}>Upload</div>
-                        </div>
+                        {fileList.length < 1 && ( // Hanya tampilkan jika belum ada file
+                            <div>
+                                <PlusOutlined />
+                                <div style={{ marginTop: 8 }}>Upload</div>
+                            </div>
+                        )}
                     </Upload>
+                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                        (JPG/PNG, Max 2MB).
+                    </Text>
                 </div>
 
                 <div
