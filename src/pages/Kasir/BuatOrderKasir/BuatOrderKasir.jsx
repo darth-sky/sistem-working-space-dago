@@ -4,12 +4,22 @@ import { useNavigate } from "react-router-dom";
 import { UserOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
+// --- TAMBAHAN: Impor useAuth untuk mendapatkan data user ---
+import { useAuth } from "../../../providers/AuthProvider";
+// --- AKHIR TAMBAHAN ---
+
 const BuatOrderKasir = () => {
     const navigate = useNavigate();
     const [form] = Form.useForm();
-    const orderType = Form.useWatch("orderType", form); // Memantau perubahan field 'orderType'
+    const orderType = Form.useWatch("orderType", form);
 
-    const cashierName = "Rossa"; // Bisa diambil dari state global/login
+    // --- TAMBAHAN: Panggil hook useAuth ---
+    const { userProfile } = useAuth();
+    // --- AKHIR TAMBAHAN ---
+
+    // --- PERUBAHAN: Ambil nama dari userProfile, dengan fallback ---
+    const cashierName = userProfile?.detail?.nama || userProfile?.email || "Kasir";
+    // --- AKHIR PERUBAHAN ---
 
     // Fungsi yang akan dijalankan setelah form di-submit
     const onFinish = (values) => {
@@ -18,7 +28,7 @@ const BuatOrderKasir = () => {
         navigate('/orderkasir', {
             state: {
                 orderType: values.orderType,
-                customerName: values.customerName || "Guest", // Default ke 'Guest' jika kosong
+                customerName: values.customerName || "Guest",
                 room: values.room || null,
             }
         });
@@ -39,7 +49,7 @@ const BuatOrderKasir = () => {
                     form={form}
                     layout="vertical"
                     onFinish={onFinish}
-                    initialValues={{ orderType: "dinein" }} // Nilai default
+                    initialValues={{ orderType: "dinein" }}
                 >
                     <Form.Item
                         label="Tipe Order"
@@ -66,15 +76,22 @@ const BuatOrderKasir = () => {
                         <Input placeholder="Contoh: Budi" />
                     </Form.Item>
 
-                    {/* Input Ruangan/Meja akan muncul hanya jika tipe order adalah 'dinein' */}
                     {orderType === "dinein" && (
-                        <Form.Item
-                            label="Nomor Meja/Ruangan"
-                            name="room"
-                            rules={[{ required: true, message: "Nomor meja/ruangan harus diisi untuk Dine In!" }]}
-                        >
-                            <Input placeholder="Contoh: Meja 5, RM2" />
-                        </Form.Item>
+                        <>
+                            <Form.Item
+                                label="Nomor Meja/Ruangan"
+                                name="room"
+                                rules={[{ required: true, message: "Nomor meja/ruangan harus diisi untuk Dine In!" }]}
+                            >
+                                <Input placeholder="Contoh: Meja 5, RM2" />
+                            </Form.Item>
+                            
+                            {/* Tampilan kasir sekarang sudah dinamis */}
+                            <div className="flex items-center text-sm text-gray-500 -mt-2 mb-4 ml-1">
+                                <UserOutlined className="mr-2" />
+                                <span>Kasir: {cashierName}</span>
+                            </div>
+                        </>
                     )}
 
                     <Form.Item className="mt-6">

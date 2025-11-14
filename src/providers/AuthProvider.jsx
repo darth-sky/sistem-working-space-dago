@@ -8,7 +8,7 @@ import {
     apiOpenSession,
     apiCloseSession,
     apiGetLastSaldo
-} from "../services/service";
+} from "../services/service"; // Pastikan service.js mengekspor fungsi-fungsi ini
 
 
 export const AuthContext = createContext(null);
@@ -86,7 +86,7 @@ const AuthProvider = ({ children }) => {
     /**
      * FUNGSI BARU
      * Menyimpan sesi yang dipilih kasir ke sessionStorage dan state.
-     * Ini dipanggil dari BukaSesi.jsx saat kasir klik "Masuk Sesi".
+     * Ini dipanggil dari BukaSesi.jsx saat kasir klik "Masuk Sesi" atau "Gabung Sesi".
      */
     const joinSession = (sessionData) => {
         if (!sessionData || !sessionData.id_sesi) {
@@ -94,6 +94,7 @@ const AuthProvider = ({ children }) => {
             return;
         }
         try {
+            // Kita simpan seluruh objek sesi
             sessionStorage.setItem('activeKasirSession', JSON.stringify(sessionData));
             setActiveSession(sessionData);
         } catch (e) {
@@ -104,7 +105,7 @@ const AuthProvider = ({ children }) => {
     /**
      * FUNGSI BARU
      * Membersihkan sesi yang dipilih dari sessionStorage dan state.
-     * Dipanggil saat logout atau saat menutup sesi.
+     * Dipanggil saat logout atau saat *sengaja* meninggalkan sesi (misal kembali ke BukaSesi).
      */
     const leaveSession = () => {
         try {
@@ -117,7 +118,8 @@ const AuthProvider = ({ children }) => {
 
     /**
      * PERBAIKAN: Fungsi ini sekarang membaca dari sessionStorage,
-     * BUKAN memanggil API.
+     * BUKAN memanggil API untuk cek sesi milik user.
+     * Ini hanya mengecek "Apakah browser ini sedang 'mengikuti' sebuah sesi?"
      */
     const checkActiveSession = () => {
         setIsSessionLoading(true);
@@ -125,10 +127,13 @@ const AuthProvider = ({ children }) => {
             const storedSession = sessionStorage.getItem('activeKasirSession');
             if (storedSession) {
                 const sessionData = JSON.parse(storedSession);
-                // TODO Opsional: Tambahkan API call di sini untuk memvalidasi
+                
+                // TODO Opsional (Best Practice): 
+                // Tambahkan API call di sini untuk memvalidasi
                 // apakah sessionData.id_sesi masih 'Dibuka' di database.
-                // Jika tidak, panggil leaveSession().
+                // Jika tidak, panggil leaveSession() dan redirect ke /bukasesi.
                 // Untuk saat ini, kita percaya sessionStorage.
+                
                 setActiveSession(sessionData);
             } else {
                 setActiveSession(null);
@@ -147,6 +152,8 @@ const AuthProvider = ({ children }) => {
      */
     const openSession = async (nama_sesi, saldo_awal) => {
         try {
+            // apiOpenSession di backend harus diubah untuk TIDAK memerlukan id_user_kasir
+            // dan harus mengecek apakah sudah ada sesi aktif (lihat respons saya sebelumnya)
             const response = await apiOpenSession({ nama_sesi, saldo_awal });
             if (response.session) {
                 // Otomatis bergabung ke sesi yang baru dibuat
@@ -162,6 +169,7 @@ const AuthProvider = ({ children }) => {
     /**
      * PERBAIKAN: closeSession sekarang harus memanggil leaveSession()
      * untuk membersihkan sessionStorage.
+     * Endpoint backend juga harus diubah untuk menerima ID sesi.
      */
     const closeSession = async (saldo_akhir_aktual, nama_kasir_penutup) => {
         try {
@@ -171,16 +179,14 @@ const AuthProvider = ({ children }) => {
                 throw new Error("Tidak ada sesi aktif untuk ditutup.");
             }
 
-            // --- PERUBAHAN DI SINI ---
-            // Tambahkan id_sesi ke dalam objek sessionData
             const sessionData = {
-                id_sesi: sessionIdToClose, // <-- TAMBAHKAN INI
+                id_sesi: sessionIdToClose, // <-- KIRIM ID SESI
                 saldo_akhir_aktual: saldo_akhir_aktual,
                 nama_kasir_penutup: nama_kasir_penutup
             };
-            // --- AKHIR PERUBAHAN ---
 
-            // Panggil API dengan data yang benar
+            // Panggil API (pastikan endpoint apiCloseSession di backend diubah
+            // untuk menerima id_sesi dan tidak mengambilnya dari token)
             const response = await apiCloseSession(sessionData);
 
             // Bersihkan sesi dari browser
@@ -192,9 +198,12 @@ const AuthProvider = ({ children }) => {
         }
     };
 
-    // ... (getLastSaldo tidak berubah)
+    // ... (getLastSaldo tidak berubah, tapi endpoint-nya mungkin perlu diubah
+    // menjadi global, bukan per-kasir)
     const getLastSaldo = async () => {
         try {
+            // Pastikan apiGetLastSaldo di backend mengambil saldo global terakhir,
+            // bukan saldo terakhir milik kasir ini.
             const response = await apiGetLastSaldo();
             return response.saldo_terakhir;
         } catch (error) {
@@ -209,7 +218,7 @@ const AuthProvider = ({ children }) => {
      */
     useEffect(() => {
         if (isLoggedIn && userRole === 'kasir') {
-            // Cek sessionStorage untuk sesi yang "diikuti"
+            // Saat refresh halaman, cek sessionStorage untuk sesi yang "diikuti"
             checkActiveSession();
         } else {
             // Jika bukan kasir, pastikan tidak ada sesi aktif
@@ -244,7 +253,7 @@ const AuthProvider = ({ children }) => {
                         navigate("/virtualofficeadmin", { replace: true });
                         break;
                     case "kasir":
-                        // Arahkan ke halaman pemilihan sesi
+                        // SELALU arahkan ke halaman pemilihan sesi
                         navigate("/kasir/buka-sesi", { replace: true });
                         break;
                     case "admin_tenant":

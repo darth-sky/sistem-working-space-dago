@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import {
     Table, Button, Modal, Form, Input, DatePicker, TimePicker, Space,
-    message, Popconfirm, Upload, Image, Typography, Tag, Row, Col, Switch
+    message, Popconfirm, Upload, Image, Typography, Tag, Row, Col, Switch, notification
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import {
     getAdminAcara, createAcara, updateAcara, deleteAcara, updateAcaraStatus
 } from "../../../../services/service";
@@ -17,7 +17,7 @@ const normFile = (e) => Array.isArray(e) ? e : e && e.fileList;
 
 const AcaraTab = () => {
     const [acaraList, setAcaraList] = useState([]);
-    const [filteredData, setFilteredData] = useState([]); // 🔹 Data hasil filter
+    const [filteredData, setFilteredData] = useState([]);
     const [filters, setFilters] = useState({
         judul: "",
         lokasi: "",
@@ -32,6 +32,22 @@ const AcaraTab = () => {
     const [form] = Form.useForm();
     const [updatingStatusId, setUpdatingStatusId] = useState(null);
 
+    const [api, contextHolder] = notification.useNotification();
+
+    const openNotif = (type, title, desc) => {
+        api[type]({
+            message: title,
+            description: desc,
+            placement: "topRight",
+            duration: 3,
+            icon: type === "success" ? (
+                <CheckCircleOutlined style={{ color: "#52c41a" }} />
+            ) : (
+                <CloseCircleOutlined style={{ color: "#ff4d4f" }} />
+            ),
+        });
+    };
+
     const fetchAcara = async () => {
         setLoading(true);
         try {
@@ -44,10 +60,10 @@ const AcaraTab = () => {
                 setAcaraList(data);
                 setFilteredData(data);
             } else {
-                message.error("Gagal memuat data acara!");
+                openNotif("error", "Gagal Memuat Data", "Gagal memuat data acara dari server.");
             }
         } catch (error) {
-            message.error("Kesalahan: " + error.message);
+            openNotif("error", "Kesalahan", error.message);
         } finally {
             setLoading(false);
         }
@@ -57,7 +73,6 @@ const AcaraTab = () => {
         fetchAcara();
     }, []);
 
-    // 🔹 FILTER otomatis saat input berubah
     useEffect(() => {
         let filtered = acaraList.filter(item =>
             (!filters.judul || item.judul_acara.toLowerCase().includes(filters.judul.toLowerCase())) &&
@@ -75,13 +90,13 @@ const AcaraTab = () => {
         try {
             const res = await updateAcaraStatus(id_acara, newStatus);
             if (res.status === 200) {
-                message.success("Status diperbarui!");
+                openNotif("success", "Status Diperbarui", `Status acara berhasil diubah menjadi ${newStatus.toUpperCase()}`);
                 setAcaraList(prev =>
                     prev.map(item => item.id_acara === id_acara ? { ...item, status_acara: newStatus } : item)
                 );
             }
         } catch (error) {
-            message.error("Kesalahan: " + error.message);
+            openNotif("error", "Kesalahan", error.message);
         } finally {
             setUpdatingStatusId(null);
         }
@@ -122,13 +137,13 @@ const AcaraTab = () => {
             setLoading(true);
             const res = await deleteAcara(id_acara);
             if (res.status === 200) {
-                message.success("Acara dihapus!");
+                openNotif("success", "Acara Dihapus", "Data acara telah dihapus.");
                 fetchAcara();
             } else {
-                message.error("Gagal menghapus acara.");
+                openNotif("error", "Gagal Menghapus", "Tidak dapat menghapus data acara.");
             }
         } catch (error) {
-            message.error("Kesalahan: " + error.message);
+            openNotif("error", "Kesalahan", error.message);
         } finally {
             setLoading(false);
         }
@@ -156,14 +171,20 @@ const AcaraTab = () => {
                     : await createAcara(formData);
 
                 if (res.status === 200 || res.status === 201) {
-                    message.success(editingAcara ? "Diperbarui!" : "Ditambahkan!");
+                    openNotif(
+                        "success",
+                        editingAcara ? "Acara Diperbarui" : "Acara Ditambahkan",
+                        editingAcara
+                            ? "Data acara berhasil diperbarui!"
+                            : "Data acara berhasil ditambahkan!"
+                    );
                     setOpen(false);
                     fetchAcara();
                 } else {
-                    message.error("Operasi gagal.");
+                    openNotif("error", "Operasi Gagal", "Tidak dapat menyimpan data acara.");
                 }
             } catch (error) {
-                message.error("Kesalahan: " + error.message);
+                openNotif("error", "Kesalahan", error.message);
             } finally {
                 setLoading(false);
             }
@@ -194,7 +215,7 @@ const AcaraTab = () => {
                     />
                 ) : (
                     <Image
-                        src="/default-event.jpg" // kamu bisa ganti ke asset lokal default
+                        src="/default-event.jpg"
                         alt="default"
                         width={60}
                         height={60}
@@ -202,7 +223,6 @@ const AcaraTab = () => {
                     />
                 ),
         },
-
         {
             title: "Judul Acara",
             dataIndex: "judul_acara",
@@ -317,6 +337,7 @@ const AcaraTab = () => {
 
     return (
         <div>
+            {contextHolder}
             <div className="flex justify-end mb-3">
                 <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>Tambah Acara</Button>
             </div>
@@ -329,7 +350,6 @@ const AcaraTab = () => {
                 scroll={{ x: 1300 }}
             />
 
-            {/* Modal Tambah/Edit */}
             <Modal
                 title={editingAcara ? "Edit Acara" : "Tambah Acara"}
                 open={open}

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import {
   Table, Button, Modal, Input, Typography, Row, Col, Card, Space,
-  Select, message, Popconfirm, Tooltip, Upload, InputNumber, Switch,
-  Tag, List, Divider, Image, Alert
+  Select, Popconfirm, Tooltip, Upload, InputNumber, Switch,
+  Tag, List, Divider, Image, Alert, notification
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, SearchOutlined } from "@ant-design/icons";
+import {
+  PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined,
+  SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined
+} from "@ant-design/icons";
 import {
   getRuangan, createRuangan, updateRuangan, deleteRuangan,
   getKategoriRuangan, getPaketHargaByRuangan,
@@ -26,6 +29,7 @@ const initialFormData = {
 };
 
 const RuanganTab = () => {
+  const [api, contextHolder] = notification.useNotification();
   const [data, setData] = useState([]);
   const [kategoriRuanganList, setKategoriRuanganList] = useState([]);
   const [open, setOpen] = useState(false);
@@ -35,13 +39,34 @@ const RuanganTab = () => {
   const [fileGambar, setFileGambar] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [pageSize, setPageSize] = useState(5);
-
   const [paketHargaList, setPaketHargaList] = useState([]);
   const [newPaket, setNewPaket] = useState({ durasi_jam: "", harga_paket: "" });
   const [editingPaket, setEditingPaket] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
+  // === Fungsi Notifikasi Custom ===
+  const showNotif = (type, title, desc) => {
+    const icon =
+      type === "success" ? (
+        <CheckCircleOutlined style={{ color: "#52c41a" }} />
+      ) : type === "error" ? (
+        <CloseCircleOutlined style={{ color: "#ff4d4f" }} />
+      ) : (
+        <WarningOutlined style={{ color: "#faad14" }} />
+      );
+
+    api.open({
+      message: title,
+      description: desc,
+      icon,
+      placement: "topRight",
+      style: {
+        borderRadius: 8,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+      },
+    });
+  };
 
   // === Ambil Data dari Backend ===
   const fetchData = async () => {
@@ -57,8 +82,8 @@ const RuanganTab = () => {
       if (resKategori.status === 200) {
         setKategoriRuanganList(resKategori.data.datas);
       }
-    } catch (err) {
-      message.error("Gagal mengambil data dari server");
+    } catch {
+      showNotif("error", "Gagal mengambil data", "Terjadi kesalahan saat mengambil data dari server.");
     } finally {
       setLoading(false);
     }
@@ -73,7 +98,7 @@ const RuanganTab = () => {
       const res = await getPaketHargaByRuangan(id_ruangan);
       setPaketHargaList(res.data.datas || []);
     } catch {
-      message.error("Gagal mengambil data paket harga");
+      showNotif("error", "Gagal mengambil paket harga", "Terjadi kesalahan saat mengambil data paket harga.");
     }
   };
 
@@ -97,9 +122,7 @@ const RuanganTab = () => {
     setFileGambar(null);
     setPaketHargaList([]);
     setNewPaket({ durasi_jam: "", harga_paket: "" });
-    if (previewImage) {
-      URL.revokeObjectURL(previewImage); // Bersihkan memori
-    }
+    if (previewImage) URL.revokeObjectURL(previewImage);
     setPreviewImage(null);
     setValidationErrors({});
   };
@@ -107,91 +130,84 @@ const RuanganTab = () => {
   const handleChange = (field, value) => setFormData({ ...formData, [field]: value });
 
   const handleAddOrUpdateRuangan = async () => {
-    // --- VALIDASI BARU DIMULAI ---
     const errors = {};
-    if (!formData.nama_ruangan || formData.nama_ruangan.trim() === "") errors.nama_ruangan = true;
+    if (!formData.nama_ruangan?.trim()) errors.nama_ruangan = true;
     if (!formData.id_kategori_ruangan) errors.id_kategori_ruangan = true;
-    // Pengecekan untuk InputNumber yang bisa jadi null atau undefined
-    if (formData.harga_per_jam === null || formData.harga_per_jam === undefined) errors.harga_per_jam = true;
+    if (formData.harga_per_jam === null || formData.harga_per_jam === undefined)
+      errors.harga_per_jam = true;
     if (!formData.kapasitas) errors.kapasitas = true;
 
-    // Jika ada error (panjang 'errors' > 0)
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      message.warning("Harap isi semua form yang wajib diisi (ditandai *).");
-      return; // Hentikan eksekusi fungsi
+      showNotif("warning", "Validasi gagal", "Harap isi semua form wajib (ditandai *).");
+      return;
     }
-    // --- VALIDASI BARU SELESAI ---
 
-    setValidationErrors({}); // Bersihkan error jika validasi lolos
+    setValidationErrors({});
     setLoading(true);
 
     const formPayload = new FormData();
-    for (const key in formData) {
-      if (formData[key] !== null) formPayload.append(key, formData[key]);
-    }
+    for (const key in formData) if (formData[key] !== null) formPayload.append(key, formData[key]);
     if (fileGambar) formPayload.append("gambar_ruangan", fileGambar);
 
     try {
       if (editingRuangan) {
         await updateRuangan(editingRuangan.id_ruangan, formPayload);
-        message.success("Ruangan berhasil diperbarui!");
+        showNotif("success", "Ruangan Diperbarui", "Data ruangan berhasil diperbarui.");
       } else {
         await createRuangan(formPayload);
-        message.success("Ruangan baru berhasil ditambahkan!");
+        showNotif("success", "Ruangan Ditambahkan", "Ruangan baru berhasil ditambahkan!");
       }
       fetchData();
       handleCancel();
     } catch {
-      message.error("Gagal menyimpan data");
+      showNotif("error", "Gagal Menyimpan", "Terjadi kesalahan saat menyimpan data.");
     } finally {
       setLoading(false);
     }
   };
 
-
   const handleDelete = async (id) => {
     try {
       await deleteRuangan(id);
-      message.success("Ruangan dihapus!");
+      showNotif("success", "Ruangan Dihapus", "Data ruangan berhasil dihapus.");
       fetchData();
     } catch {
-      message.error("Gagal hapus ruangan");
+      showNotif("error", "Gagal Menghapus", "Terjadi kesalahan saat menghapus ruangan.");
     }
   };
 
   // === Logika Paket Harga ===
   const handleSavePaket = async () => {
     if (!newPaket.durasi_jam || !newPaket.harga_paket) {
-      return message.warning("Durasi & harga wajib diisi!");
+      return showNotif("warning", "Validasi Paket Gagal", "Durasi & harga wajib diisi!");
     }
     try {
       if (editingPaket) {
         await updatePaketHarga(editingPaket.id_paket, newPaket);
-        message.success("Paket diperbarui!");
+        showNotif("success", "Paket Diperbarui", "Paket harga berhasil diperbarui.");
       } else {
         await addPaketHarga({ ...newPaket, id_ruangan: editingRuangan.id_ruangan });
-        message.success("Paket baru ditambahkan!");
+        showNotif("success", "Paket Ditambahkan", "Paket harga baru berhasil ditambahkan.");
       }
       fetchPaketHarga(editingRuangan.id_ruangan);
       setEditingPaket(null);
       setNewPaket({ durasi_jam: "", harga_paket: "" });
     } catch {
-      message.error("Gagal simpan paket");
+      showNotif("error", "Gagal Menyimpan Paket", "Terjadi kesalahan saat menyimpan paket harga.");
     }
   };
 
   const handleDeletePaket = async (id_paket) => {
     try {
       await deletePaketHarga(id_paket);
-      message.success("Paket dihapus!");
+      showNotif("success", "Paket Dihapus", "Data paket harga berhasil dihapus.");
       fetchPaketHarga(editingRuangan.id_ruangan);
     } catch {
-      message.error("Gagal hapus paket");
+      showNotif("error", "Gagal Menghapus Paket", "Terjadi kesalahan saat menghapus paket harga.");
     }
   };
 
-  // === Filter di Tiap Kolom ===
   const getColumnSearchProps = (dataIndex, placeholder) => ({
     filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
       <div style={{ padding: 8 }}>
@@ -205,20 +221,10 @@ const RuanganTab = () => {
           style={{ marginBottom: 8, display: "block" }}
         />
         <Space>
-          <Button
-            type="primary"
-            onClick={() => confirm()}
-            icon={<SearchOutlined />}
-            size="small"
-            style={{ width: 90 }}
-          >
+          <Button type="primary" onClick={() => confirm()} icon={<SearchOutlined />} size="small" style={{ width: 90 }}>
             Cari
           </Button>
-          <Button
-            onClick={() => clearFilters && clearFilters()}
-            size="small"
-            style={{ width: 90 }}
-          >
+          <Button onClick={() => clearFilters && clearFilters()} size="small" style={{ width: 90 }}>
             Reset
           </Button>
         </Space>
@@ -257,10 +263,7 @@ const RuanganTab = () => {
       title: "Kategori",
       dataIndex: "nama_kategori",
       key: "nama_kategori",
-      filters: kategoriRuanganList.map((k) => ({
-        text: k.nama_kategori,
-        value: k.nama_kategori,
-      })),
+      filters: kategoriRuanganList.map((k) => ({ text: k.nama_kategori, value: k.nama_kategori })),
       onFilter: (value, record) => record.nama_kategori === value,
     },
     {
@@ -300,16 +303,9 @@ const RuanganTab = () => {
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="Edit Ruangan">
-            <Button
-              type="link"
-              icon={<EditOutlined />}
-              onClick={() => handleOpenModal(record)}
-            />
+            <Button type="link" icon={<EditOutlined />} onClick={() => handleOpenModal(record)} />
           </Tooltip>
-          <Popconfirm
-            title="Yakin hapus ruangan ini?"
-            onConfirm={() => handleDelete(record.id_ruangan)}
-          >
+          <Popconfirm title="Yakin hapus ruangan ini?" onConfirm={() => handleDelete(record.id_ruangan)}>
             <Button type="link" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -317,9 +313,9 @@ const RuanganTab = () => {
     },
   ];
 
-  // === Render ===
   return (
     <div style={{ padding: "24px" }}>
+      {contextHolder}
       <Row gutter={[16, 16]} justify="space-between" style={{ marginBottom: 24 }}>
         <Col flex="1">
           <Search
@@ -330,12 +326,7 @@ const RuanganTab = () => {
           />
         </Col>
         <Col flex="none">
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => handleOpenModal()}
-            size="large"
-          >
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()} size="large">
             Tambah Ruangan Baru
           </Button>
         </Col>
@@ -360,7 +351,6 @@ const RuanganTab = () => {
         />
       </Card>
 
-      {/* === MODAL TAMBAH/EDIT RUANGAN === */}
       {/* === MODAL TAMBAH/EDIT RUANGAN === */}
       <Modal
         title={<Title level={4}>{editingRuangan ? "Edit Ruangan" : "Tambah Ruangan Baru"}</Title>}
@@ -625,3 +615,4 @@ const RuanganTab = () => {
 };
 
 export default RuanganTab;
+

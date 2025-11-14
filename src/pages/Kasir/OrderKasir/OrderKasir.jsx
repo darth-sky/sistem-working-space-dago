@@ -5,7 +5,7 @@ import {
     Select,
     Tag,
     Modal,
-    Form,
+    Form, // <-- 'Form' masih di-import untuk modal LAIN (seperti addNoteForm)
     InputNumber,
     Radio,
     message,
@@ -31,16 +31,15 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useLocation, useNavigate } from "react-router-dom";
-// --- PERBAIKAN 1: Import useAuth ---
 import { useAuth } from "../../../providers/AuthProvider";
 import {
     getPosInitData,
-    createOrderKasir,
+    createOrderKasir, // Akan menangani F&B dan Ruangan
     getRoomsToday,
-    createRoomBookingKasir,
-    saveOrderKasir,
+    // createRoomBookingKasir, // Service ini tidak lagi dipakai di sini
+    saveOrderKasir, // Akan menangani F&B dan Ruangan
     getSavedOrderDetails,
-    paySavedOrder
+    paySavedOrder // Akan menangani F&B dan Ruangan
 } from "../../../services/service";
 import { MdOutlineShoppingCart } from "react-icons/md";
 import { FaRegIdCard } from "react-icons/fa";
@@ -64,21 +63,17 @@ const OrderKasir = () => {
     const navigate = useNavigate();
     const initialState = location.state || {};
 
-    // --- PERBAIKAN 2: Ambil Sesi Aktif dan Info User ---
     const { activeSession, userProfile } = useAuth();
 
-    // --- Existing States ---
+    // --- States ---
     const [searchProductQuery, setSearchProductQuery] = useState("");
     const [selectedMerchant, setSelectedMerchant] = useState("all_merchants");
     const [selectedProductType, setSelectedProductType] = useState("all_types");
     const [currentOrderType, setCurrentOrderType] = useState(initialState.orderType || "dinein");
     const [currentOrderNumber, setCurrentOrderNumber] = useState(generateOrderNumber());
-    const [customerName, setCustomerName] = useState(initialState.customerName || "Guest"); // Diubah dari "Adit"
+    const [customerName, setCustomerName] = useState(initialState.customerName || "Guest");
     const [room, setRoom] = useState(initialState.room || null);
-
-    // --- PERBAIKAN 3: Gunakan nama user dari profile ---
-    const [cashierName, setCashierName] = useState(userProfile?.nama_user || userProfile?.nama || "Kasir"); // Dinamis
-
+    const [cashierName, setCashierName] = useState(userProfile?.nama_user || userProfile?.nama || "Kasir");
     const [currentDate, setCurrentDate] = useState(dayjs());
     const [selectedItems, setSelectedItems] = useState([]);
     const [taxRateFnbPercentFromAPI, setTaxRateFnbPercentFromAPI] = useState(0);
@@ -97,10 +92,8 @@ const OrderKasir = () => {
     const [merchantCategories, setMerchantCategories] = useState([]);
     const [productTypeCategories, setProductTypeCategories] = useState([]);
     const [orderTypes, setOrderTypes] = useState([]);
-
     const [isLoadingInitData, setIsLoadingInitData] = useState(true);
     const [isLoading, setIsLoadingSavedOrder] = useState(false);
-
     const [discountPercentage, setDiscountPercentage] = useState(0);
     const [isDiscountModalVisible, setIsDiscountModalVisible] = useState(false);
     const [discountForm] = Form.useForm();
@@ -111,16 +104,11 @@ const OrderKasir = () => {
     const [selectedDuration, setSelectedDuration] = useState(null);
     const [selectedStartTime, setSelectedStartTime] = useState(null);
     const [isBookingConfirmModalVisible, setIsBookingConfirmModalVisible] = useState(false);
-    const [bookingForm] = Form.useForm();
     const [isProcessing, setIsProcessing] = useState(false);
-
+    const [isBookingProcessing, setIsBookingProcessing] = useState(false); // State untuk loading di modal booking
     const [editingOrderId, setEditingOrderId] = useState(null);
-    const [pendingBookingData, setPendingBookingData] = useState(null);
-    const [isRoomCashModalVisible, setIsRoomCashModalVisible] = useState(false);
-    const [roomCashInput, setRoomCashInput] = useState(0);
-    const [isBookingProcessing, setIsBookingProcessing] = useState(false);
 
-    // resetOrderState (Tidak berubah)
+    
     const resetOrderState = () => {
         setSelectedItems([]);
         setDiscountPercentage(0);
@@ -150,8 +138,7 @@ const OrderKasir = () => {
         console.log("Order state reset.");
     };
 
-    // useEffect Hooks (Tidak berubah)
-    // ... (useEffect for initialState)
+    // useEffect for initialState
     useEffect(() => {
         if (initialState.customerName || initialState.orderType) {
             newOrderForm.setFieldsValue({
@@ -162,8 +149,7 @@ const OrderKasir = () => {
         }
     }, [initialState, newOrderForm]);
 
-    // ... (useEffect for LoadInitialData)
-    // (Perbaikan kecil: Pindahkan dependensi `location.state` ke useEffect berikutnya)
+    // useEffect for LoadInitialData
     useEffect(() => {
         let isMounted = true;
         const loadInitialData = async () => {
@@ -191,15 +177,12 @@ const OrderKasir = () => {
                 if (isMounted) setIsLoadingInitData(false);
             }
         };
-
         loadInitialData();
-
         return () => { isMounted = false; };
-    }, []); // <-- Dependensi KOSONG (Hanya sekali)
+    }, []);
 
 
-    // ... (useEffect for loading SAVED ORDER)
-    // (Perbaikan kecil: Pastikan 'resetOrderState' ada di array dependensi)
+    // useEffect for loading SAVED ORDER
     useEffect(() => {
         let isMounted = true;
         const savedOrderIdFromState = location.state?.savedOrderId;
@@ -216,22 +199,7 @@ const OrderKasir = () => {
                     const orderTypeFrontend = savedOrderData.orderType?.toLowerCase().replace(" ", "") || 'dinein';
                     setCurrentOrderType(orderTypeFrontend);
                     setRoom(savedOrderData.room || null);
-
-                    const mappedItems = (savedOrderData.items || []).map(item => {
-                        const productDetail = products.find(p => p.id === item.id_produk);
-                        return {
-                            id: item.id_produk,
-                            name: item.nama_produk || productDetail?.name || `ID:${item.id_produk}?`,
-                            price: item.harga_saat_order,
-                            qty: item.jumlah,
-                            note: item.catatan_pesanan || "",
-                            merchantId: productDetail?.merchantId,
-                            category: productDetail?.category,
-                            available: productDetail?.available ?? true,
-                        };
-                    });
-                    setSelectedItems(mappedItems);
-
+                    setSelectedItems(savedOrderData.items || []);
                     setDiscountPercentage(savedOrderData.discountPercentage || 0);
                     setCurrentOrderNumber(savedOrderData.orderNumber || generateOrderNumber());
                     setEditingOrderId(orderId);
@@ -253,14 +221,14 @@ const OrderKasir = () => {
                     message.error(`Gagal memuat order tersimpan #${orderId}: ${error.message}`);
                     console.error("Error loading saved order:", error);
                     setEditingOrderId(null);
-                    resetOrderState(); // Panggil fungsi reset
+                    resetOrderState();
                 }
             } finally {
                 if (isMounted) setIsLoadingSavedOrder(false);
             }
         };
 
-        if (savedOrderIdFromState && !isLoadingInitData && products.length > 0) {
+        if (savedOrderIdFromState && !isLoadingInitData) {
             if (!editingOrderId || editingOrderId !== savedOrderIdFromState) {
                 loadSavedOrder(savedOrderIdFromState);
             }
@@ -271,13 +239,13 @@ const OrderKasir = () => {
     }, [
         location.state?.savedOrderId,
         isLoadingInitData,
-        products,
         editingOrderId,
-        newOrderForm,
-        resetOrderState // Tambahkan resetOrderState ke dependensi
+        newOrderForm
+        // 'resetOrderState' tidak perlu di sini, bisa menyebabkan loop. 
+        // Dipanggil di 'catch' sudah cukup.
     ]);
 
-    // ... (useEffect for loading room data)
+    // useEffect for loading room data
     useEffect(() => {
         const loadRoomData = async () => {
             try {
@@ -295,7 +263,7 @@ const OrderKasir = () => {
         }
     }, [posMode]);
 
-    // ... (useMemo and other useEffects for filtering remain the same)
+    // useMemo and other useEffects for filtering
     const availableProductTypes = useMemo(() => {
         if (selectedMerchant === "all_merchants") {
             return productTypeCategories;
@@ -319,44 +287,73 @@ const OrderKasir = () => {
     }, [selectedMerchant, availableProductTypes, selectedProductType]);
 
 
-    // Calculation Memos (Tidak berubah)
-    const subtotal = useMemo(() =>
-        selectedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.qty) || 0), 0),
-        [selectedItems]);
+    // --- Logika Kalkulasi Harga Total (Campuran) ---
+    const subtotalFnb = useMemo(() =>
+        selectedItems
+            .filter(item => item.type === 'fnb')
+            .reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.qty) || 0), 0),
+        [selectedItems]
+    );
+
+    const subtotalRoom = useMemo(() =>
+        selectedItems
+            .filter(item => item.type === 'room')
+            .reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (parseInt(item.qty) || 0), 0),
+        [selectedItems]
+    );
+
+    const subtotal = useMemo(() => subtotalFnb + subtotalRoom, [subtotalFnb, subtotalRoom]);
+
     const totalDiscountNominal = useMemo(() =>
         subtotal * (discountPercentage / 100),
-        [subtotal, discountPercentage]);
-    const taxableAmount = useMemo(() =>
-        subtotal - totalDiscountNominal,
-        [subtotal, totalDiscountNominal]);
+        [subtotal, discountPercentage]
+    );
+
+    const fnbTaxableAmount = useMemo(() => {
+        if (subtotal === 0) return 0;
+        const fnbDiscountPortion = (subtotalFnb / subtotal) * totalDiscountNominal;
+        const taxable = subtotalFnb - fnbDiscountPortion;
+        return taxable > 0 ? taxable : 0;
+    }, [subtotalFnb, subtotal, totalDiscountNominal]);
+
     const totalTaxNominal = useMemo(() =>
-        parseFloat((taxableAmount * (taxRateFnbPercentFromAPI / 100)).toFixed(2)),
-        [taxableAmount, taxRateFnbPercentFromAPI]);
+        parseFloat((fnbTaxableAmount * (taxRateFnbPercentFromAPI / 100)).toFixed(2)),
+        [fnbTaxableAmount, taxRateFnbPercentFromAPI]
+    );
+
     const totalAmount = useMemo(() =>
-        parseFloat((taxableAmount + totalTaxNominal).toFixed(2)),
-        [taxableAmount, totalTaxNominal]);
+        parseFloat((subtotal - totalDiscountNominal + totalTaxNominal).toFixed(2)),
+        [subtotal, totalDiscountNominal, totalTaxNominal]
+    );
+    
     const changeAmount = useMemo(() =>
         parseFloat(cashInput) > totalAmount ? parseFloat(cashInput) - totalAmount : 0,
         [cashInput, totalAmount]);
+    // --- AKHIR KALKULASI ---
 
-    // Event Handlers (Tidak berubah)
+
+    // --- Event Handlers Keranjang ---
     const handleAddProductToCart = (product) => {
         setItemToAddNote({ ...product, qty: 1, note: "" });
         setIsAddNoteModalVisible(true);
     };
-    const handleUpdateItemQty = (productId, newQty, itemNote) => {
+
+    const handleUpdateItemQty = (cartId, newQty) => {
         if (newQty <= 0) {
-            handleRemoveItemFromCart(productId, itemNote);
+            handleRemoveItemFromCart(cartId);
             return;
         }
         const updatedItems = selectedItems.map((item) =>
-            item.id === productId && item.note === itemNote ? { ...item, qty: newQty } : item
+            item.cartId === cartId ? { ...item, qty: newQty } : item
         );
         setSelectedItems(updatedItems);
     };
-    const handleRemoveItemFromCart = (productId, itemNote) => {
-        setSelectedItems(selectedItems.filter((item) => !(item.id === productId && item.note === itemNote)));
+
+    const handleRemoveItemFromCart = (cartId) => {
+        setSelectedItems(selectedItems.filter((item) => item.cartId !== cartId));
     };
+
+    // --- Event Handlers Modal ---
     const showDiscountModal = () => {
         discountForm.setFieldsValue({ discount: discountPercentage });
         setIsDiscountModalVisible(true);
@@ -390,26 +387,31 @@ const OrderKasir = () => {
             setIsNewOrderModalVisible(false);
         } catch (error) {
             console.error("Failed to validate new order form:", error);
-            if (error.errorFields && error.errorFields.length > 0) {
-                message.error("Gagal membuat order baru. Periksa kembali input Anda.");
-            } else {
-                message.error("Terjadi kesalahan saat memproses order baru.");
-            }
+            message.error("Gagal membuat order baru. Periksa kembali input Anda.");
         }
     };
     const handleNewOrderCancel = () => {
         setIsNewOrderModalVisible(false);
         newOrderForm.resetFields();
     };
+
+    // Penambahan item F&B ke keranjang
     const handleAddNoteOk = async () => {
         try {
             const values = await addNoteForm.validateFields();
-            const updatedItem = { ...itemToAddNote, note: values.note };
+            const cartId = `fnb_${itemToAddNote.id}_${values.note || 'no-note'}`;
+            const updatedItem = {
+                ...itemToAddNote,
+                note: values.note,
+                type: 'fnb',
+                cartId: cartId
+            };
 
             setSelectedItems((prevItems) => {
                 const existingItemIndex = prevItems.findIndex(
-                    (item) => item.id === updatedItem.id && item.note === updatedItem.note
+                    (item) => item.cartId === cartId
                 );
+
                 if (existingItemIndex > -1) {
                     const newItems = [...prevItems];
                     newItems[existingItemIndex].qty += updatedItem.qty;
@@ -418,6 +420,7 @@ const OrderKasir = () => {
                     return [...prevItems, updatedItem];
                 }
             });
+
             message.success(`Produk "${updatedItem.name}" ditambahkan ke keranjang.`);
             setIsAddNoteModalVisible(false);
             setItemToAddNote(null);
@@ -427,11 +430,14 @@ const OrderKasir = () => {
             message.error("Gagal menambahkan catatan.");
         }
     };
+
     const handleAddNoteCancel = () => {
         setIsAddNoteModalVisible(false);
         setItemToAddNote(null);
         addNoteForm.resetFields();
     };
+    
+    // --- Event Handlers Pembayaran ---
     const handleProcessPayment = () => {
         if (selectedItems.length === 0) {
             message.warning("Keranjang masih kosong.");
@@ -454,6 +460,7 @@ const OrderKasir = () => {
             setIsStrukModalVisible(true);
         }
     };
+    
     const handleCashPaymentSubmit = () => {
         if (cashInput < totalAmount) {
             message.error("Jumlah uang yang dibayar kurang dari total belanja.");
@@ -464,52 +471,63 @@ const OrderKasir = () => {
         setPaymentSuccess(true);
         setIsStrukModalVisible(true);
     };
+    
     const handleStrukCancel = () => {
         setIsStrukModalVisible(false);
         setPaymentSuccess(false);
         message.info("Pembayaran dibatalkan.");
     };
 
-    // --- PERBAIKAN 4: Modifikasi handleSaveOrder ---
+    // --- Fungsi Helper untuk Membangun Data Order ---
+    const buildMixedOrderData = () => {
+        return {
+            id_sesi: activeSession.id_sesi,
+            customerName: customerName,
+            orderType: currentOrderType,
+            room: currentOrderType === 'dinein' ? room : null,
+            paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : selectedPaymentMethod === 'qris' ? 'QRIS' : 'DEBIT',
+            items: selectedItems.map(item => ({
+                id: item.id,
+                type: item.type,
+                qty: parseInt(item.qty) || 0,
+                price: parseFloat(item.price) || 0,
+                note: item.note || null,
+                bookingData: item.type === 'room' ? item.bookingData : null
+            })),
+            subtotal: subtotal,
+            discountPercentage: discountPercentage,
+            discountNominal: totalDiscountNominal,
+            taxDetails: {
+                fnbTaxableAmount: fnbTaxableAmount,
+                taxRate: taxRateFnbPercentFromAPI,
+                taxNominal: totalTaxNominal
+            },
+            taxPercentage: taxRateFnbPercentFromAPI,
+            taxNominal: totalTaxNominal,
+            totalAmount: totalAmount,
+        };
+    };
+
+    // --- Handler untuk Simpan & Bayar (Keranjang Campuran) ---
     const handleSaveOrder = async () => {
         if (selectedItems.length === 0) {
             message.warning("Tidak ada item untuk disimpan.");
             return;
         }
-
-        // Validasi Sesi
         if (!activeSession || !activeSession.id_sesi) {
             message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
             return;
         }
-
         setIsProcessing(true);
-
-        const orderData = {
-            id_sesi: activeSession.id_sesi, // <-- WAJIB
-            customerName: customerName,
-            orderType: currentOrderType,
-            room: currentOrderType === 'dinein' ? room : null,
-            items: selectedItems.map(item => ({
-                id: item.id,
-                qty: parseInt(item.qty) || 0,
-                price: parseFloat(item.price) || 0,
-                note: item.note || null
-            })),
-            subtotal: subtotal,
-            discountPercentage: discountPercentage,
-            discountNominal: totalDiscountNominal,
-            taxPercentage: taxRateFnbPercentFromAPI,
-            taxNominal: totalTaxNominal,
-            totalAmount: totalAmount,
-        };
+        const orderData = buildMixedOrderData();
+        delete orderData.paymentMethod; // Hapus data pembayaran
 
         try {
             console.log("Menyimpan Order Data (Kasir):", orderData);
-            const result = await saveOrderKasir(orderData); // Panggil service
+            const result = await saveOrderKasir(orderData);
             message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
+            navigate('/transaksikasir');
             resetOrderState();
-            navigate('/transaksikasir'); // Navigasi kembali setelah sukses
         } catch (error) {
             message.error(`Gagal menyimpan order: ${error.message || 'Error tidak diketahui'}`);
             console.error("Error saving order:", error);
@@ -518,36 +536,16 @@ const OrderKasir = () => {
         }
     };
 
-    // --- PERBAIKAN 5: Modifikasi handleStrukConfirmPayment ---
     const handleStrukConfirmPayment = async () => {
         setIsProcessing(true);
 
-        // Validasi Sesi
         if (!activeSession || !activeSession.id_sesi) {
             message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
             setIsProcessing(false);
             return;
         }
 
-        const orderData = {
-            id_sesi: activeSession.id_sesi, // <-- WAJIB
-            customerName: customerName,
-            orderType: currentOrderType,
-            room: currentOrderType === 'dinein' ? room : null,
-            paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : selectedPaymentMethod === 'qris' ? 'QRIS' : 'DEBIT',
-            items: selectedItems.map(item => ({
-                id: item.id,
-                qty: parseInt(item.qty) || 0,
-                price: parseFloat(item.price) || 0,
-                note: item.note || null
-            })),
-            subtotal: subtotal,
-            discountPercentage: discountPercentage,
-            discountNominal: totalDiscountNominal,
-            taxPercentage: taxRateFnbPercentFromAPI,
-            taxNominal: totalTaxNominal,
-            totalAmount: totalAmount,
-        };
+        const orderData = buildMixedOrderData();
 
         try {
             let result;
@@ -561,17 +559,20 @@ const OrderKasir = () => {
                 message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
             }
 
-            navigate('/transaksikasir'); // Navigasi kembali
+            navigate('/transaksikasir');
+            resetOrderState(); 
 
         } catch (error) {
             message.error(`Gagal ${editingOrderId ? 'menyelesaikan' : 'menyimpan'} order: ${error.message || 'Error tidak diketahui'}`);
             console.error(`Error ${editingOrderId ? 'paying saved' : 'saving new'} order:`, error);
         } finally {
             setIsProcessing(false);
+            setIsStrukModalVisible(false);
+            setPaymentSuccess(false);
         }
     };
 
-    // orderDropdownMenu (Tidak berubah)
+    // --- Event Handlers Ruangan ---
     const orderDropdownMenu = (
         <Menu>
             {!editingOrderId && (
@@ -586,70 +587,75 @@ const OrderKasir = () => {
         </Menu>
     );
 
-    // paymentQuickAmounts (Tidak berubah)
-    const paymentQuickAmounts = [5000, 10000, 20000, 50000, 100000].filter(amount => amount >= totalAmount || totalAmount === 0);
-
     const handleRoomCardClick = (room) => {
         setSelectedRoomForBooking(room);
         setSelectedDuration(null);
         setSelectedStartTime(null);
-        bookingForm.setFieldsValue({
-            customerName: "Guest",
-            paymentMethod: null,
-        });
         setIsBookingConfirmModalVisible(true);
     };
-    // --- PERBAIKAN 6: Modifikasi handleBookingSubmit ---
-    const handleBookingSubmit = async () => {
+
+    // Penambahan item Ruangan ke keranjang
+    const handleBookingSubmit = () => {
+        setIsBookingProcessing(true);
         try {
-            // Validasi Sesi
             if (!activeSession || !activeSession.id_sesi) {
                 message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
+                setIsBookingProcessing(false);
+                return;
+            }
+            if (!selectedRoomForBooking) {
+                message.error("Ruangan tidak dipilih. Silakan tutup modal dan coba lagi.");
+                setIsBookingProcessing(false);
+                return;
+            }
+            if (!selectedDuration || !selectedStartTime) {
+                message.error("Harap pilih jam mulai dan durasi.");
+                setIsBookingProcessing(false);
                 return;
             }
 
-            setIsBookingProcessing(true);
-            const values = await bookingForm.validateFields();
+            const cartId = `room_${selectedRoomForBooking.id_ruangan}_${selectedStartTime}`;
 
-            const bookingData = {
-                id_sesi: activeSession.id_sesi, // <-- WAJIB
-                id_ruangan: selectedRoomForBooking.id_ruangan,
-                durasi_jam: selectedDuration.durasi_jam,
-                waktu_mulai_jam: selectedStartTime,
-                nama_guest: values.customerName,
-                metode_pembayaran: values.paymentMethod, // 'cash' atau 'qris'
-                total_harga_final: selectedDuration.harga_paket
+            if (selectedItems.find(item => item.cartId === cartId)) {
+                message.error("Booking ruangan ini sudah ada di keranjang.");
+                setIsBookingConfirmModalVisible(false);
+                setIsBookingProcessing(false);
+                return;
+            }
+
+            const roomItem = {
+                id: selectedRoomForBooking.id_ruangan,
+                cartId: cartId,
+                name: `${selectedRoomForBooking.nama_ruangan}`,
+                price: selectedDuration.harga_paket,
+                qty: 1,
+                type: 'room',
+                note: `Booking ${selectedStartTime}:00 - ${selectedStartTime + selectedDuration.durasi_jam}:00`,
+                bookingData: {
+                    id_ruangan: selectedRoomForBooking.id_ruangan,
+                    durasi_jam: selectedDuration.durasi_jam,
+                    waktu_mulai_jam: selectedStartTime,
+                    total_harga_final: selectedDuration.harga_paket
+                }
             };
 
-            setPendingBookingData(bookingData);
+            setSelectedItems(prevItems => [...prevItems, roomItem]);
 
-            if (values.paymentMethod === 'cash') {
-                setRoomCashInput(0);
-                setIsRoomCashModalVisible(true);
-                setIsBookingConfirmModalVisible(false);
-            } else {
-                console.log("Mengirim booking (non-tunai):", bookingData);
-                const result = await createRoomBookingKasir(bookingData);
-                message.success(`Booking (non-tunai) untuk ${selectedRoomForBooking.nama_ruangan} berhasil (ID: ${result.id_transaksi})!`);
-                const updatedRooms = await getRoomsToday();
-                setRooms(updatedRooms || []);
-                setIsBookingConfirmModalVisible(false);
-                setPendingBookingData(null);
-            }
+            message.success(`${roomItem.name} ditambahkan ke keranjang.`);
+            setIsBookingConfirmModalVisible(false);
+            setSelectedRoomForBooking(null);
+            setSelectedDuration(null);
+            setSelectedStartTime(null);
 
         } catch (errorInfo) {
-            if (errorInfo.message) {
-                message.error(`Gagal membuat booking: ${errorInfo.message}`);
-            } else {
-                console.error("Validation Failed:", errorInfo);
-                message.error("Harap isi semua field yang diperlukan.");
-            }
+            console.error("Gagal menambah ruangan ke keranjang:", errorInfo);
+            message.error(`Gagal menambah ruangan: ${errorInfo.message}`);
         } finally {
             setIsBookingProcessing(false);
         }
     };
 
-    // filteredProducts (Tidak berubah)
+
     const filteredProducts = products.filter((product) => {
         const matchesMerchant =
             selectedMerchant === "all_merchants" || product.merchantId === selectedMerchant;
@@ -662,7 +668,6 @@ const OrderKasir = () => {
     });
 
     // --- JSX (RENDER) ---
-    // (Tidak ada perubahan signifikan pada JSX, hanya memastikan nama kasir dinamis)
     return (
         <Spin spinning={isLoadingInitData || isLoading || isProcessing} tip={isProcessing ? "Menyimpan..." : "Memuat..."} size="large">
             <div className="flex flex-col lg:flex-row bg-gray-50 text-gray-800 font-sans h-screen">
@@ -685,7 +690,6 @@ const OrderKasir = () => {
                             </Radio.Button>
                         </Radio.Group>
                         <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" />
-                        {/* Nama Kasir (Sudah dinamis dari PERBAIKAN 3) */}
                         <div className="flex items-center space-x-2 text-gray-600"><UserOutlined /><span>{cashierName}</span></div>
                     </div>
 
@@ -751,7 +755,7 @@ const OrderKasir = () => {
                                         <div key={roomItem.id_ruangan} className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleRoomCardClick(roomItem)}>
                                             <h3 className="font-bold text-gray-800">{roomItem.nama_ruangan}</h3>
                                             <p className="text-sm text-gray-500">{roomItem.nama_kategori} - Kapasitas: {roomItem.kapasitas} orang</p>
-                                            <Tag color="green" className="mt-2">Booking Cepat</Tag>
+                                            <Tag color="green" className="mt-2">Tambahkan ke Keranjang</Tag>
                                         </div>
                                     ))}
                                 </div>
@@ -760,12 +764,12 @@ const OrderKasir = () => {
                     )}
                 </div>
 
-                {/* Order Summary/Cart Column */}
-                <div className={`lg:w-2/5 bg-gray-50 flex flex-col p-6 transition-opacity duration-300 ${posMode === 'ruangan' ? 'opacity-30 pointer-events-none select-none' : 'opacity-100'} overflow-y-scroll h-screen`}>
+                {/* --- Kolom Keranjang (Kanan) --- */}
+                <div className={`lg:w-2/5 bg-gray-50 flex flex-col p-6 overflow-y-scroll h-screen`}>
                     {/* Header: Title and Order Options Dropdown */}
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800">
-                            {editingOrderId ? `Edit Order #${editingOrderId}` : 'Order F&B'}
+                            {editingOrderId ? `Edit Order #${editingOrderId}` : 'Detail Order'}
                         </h2>
                         <Dropdown overlay={orderDropdownMenu} trigger={["click"]}>
                             <Button type="text" icon={<MoreOutlined className="text-xl" />} />
@@ -792,50 +796,78 @@ const OrderKasir = () => {
                         <span className="text-lg font-bold">Order {customerName} {room && `(${room})`}</span>
                     </div>
 
-                    {/* Selected Items List */}
+                    {/* --- Daftar Item Keranjang Campuran --- */}
                     <div className="flex-1 space-y-3 mb-6 overflow-y-auto custom-scrollbar pr-1">
                         {selectedItems.length === 0 ? (
-                            <div className="text-center py-10 text-gray-500">Keranjang F&B kosong.</div>
+                            <div className="text-center py-10 text-gray-500">Keranjang kosong.</div>
                         ) : (
                             selectedItems.map((item) => (
-                                <div key={`${item.id}-${item.note || 'no-note'}`} className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                                <div key={item.cartId}
+                                    className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                                    
                                     <div className="flex flex-col flex-1 min-w-0 mr-2">
                                         <span className="font-semibold text-gray-800 truncate">{item.name}</span>
-                                        <span className="text-sm text-gray-500">{formatRupiah(item.price)} {item.note && <span className="text-gray-400">({item.note})</span>}</span>
+                                        <span className="text-sm text-gray-500">
+                                            {formatRupiah(item.price)}
+                                            {item.note && <span className="text-gray-400 italic"> ({item.note})</span>}
+                                        </span>
                                     </div>
+                                    
                                     <div className="flex items-center space-x-2">
-                                        <Button icon={<MinusOutlined />} size="small" onClick={() => handleUpdateItemQty(item.id, item.qty - 1, item.note)} />
-                                        <span className="font-medium w-6 text-center">{item.qty}</span>
-                                        <Button icon={<PlusOutlined />} size="small" onClick={() => handleUpdateItemQty(item.id, item.qty + 1, item.note)} />
-                                        <Button danger type="text" icon={<CloseOutlined />} size="small" onClick={() => handleRemoveItemFromCart(item.id, item.note)} />
+                                        {item.type === 'fnb' ? (
+                                            <>
+                                                <Button icon={<MinusOutlined />} size="small" onClick={() => handleUpdateItemQty(item.cartId, item.qty - 1)} />
+                                                <span className="font-medium w-6 text-center">{item.qty}</span>
+                                                <Button icon={<PlusOutlined />} size="small" onClick={() => handleUpdateItemQty(item.cartId, item.qty + 1)} />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-medium w-6 text-center">{item.qty}x</span>
+                                            </>
+                                        )}
+                                        <Button danger type="text" icon={<CloseOutlined />} size="small" onClick={() => handleRemoveItemFromCart(item.cartId)} />
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
 
-                    {/* Price Summary */}
+                    {/* --- Tampilan Rincian Harga --- */}
                     <div className="bg-white rounded-xl shadow-md p-4 mb-6 border">
-                        {isLoadingInitData && !editingOrderId ? ( // Ganti 'isLoading'
+                        {isLoadingInitData && !editingOrderId ? (
                             <div className="flex justify-center items-center py-4"><Spin /></div>
                         ) : (
                             <>
                                 <div className="flex justify-between items-center text-sm mb-1 text-gray-600">
-                                    <span>Subtotal</span>
-                                    <span className="font-medium">{formatRupiah(subtotal)}</span>
+                                    <span>Subtotal F&B</span>
+                                    <span className="font-medium">{formatRupiah(subtotalFnb)}</span>
                                 </div>
+                                <div className="flex justify-between items-center text-sm mb-1 text-gray-600">
+                                    <span>Subtotal Ruangan</span>
+                                    <span className="font-medium">{formatRupiah(subtotalRoom)}</span>
+                                </div>
+                                
                                 {discountPercentage > 0 && (
                                     <div className="flex justify-between items-center text-sm mb-1 text-red-600">
                                         <span>Diskon ({discountPercentage}%)</span>
                                         <span className="font-medium">-{formatRupiah(totalDiscountNominal)}</span>
                                     </div>
                                 )}
-                                {subtotal > 0 && taxRateFnbPercentFromAPI > 0 && (
+
+                                {subtotalFnb > 0 && subtotalRoom > 0 && (
+                                    <div className="flex justify-between items-center text-sm mb-1 text-gray-700 font-semibold border-t pt-1 mt-1">
+                                        <span>Subtotal (F&B + Ruangan)</span>
+                                        <span className="font-medium">{formatRupiah(subtotal)}</span>
+                                    </div>
+                                )}
+
+                                {totalTaxNominal > 0 && (
                                     <div className="flex justify-between items-center text-sm mb-3 text-gray-600">
                                         <span>Pajak F&B ({taxRateFnbPercentFromAPI}%)</span>
                                         <span className="font-medium">{formatRupiah(totalTaxNominal)}</span>
                                     </div>
                                 )}
+
                                 <div className="flex justify-between items-center text-lg font-bold text-blue-600 border-t border-gray-200 pt-3 mt-2">
                                     <span>Total</span>
                                     <span>{formatRupiah(totalAmount)}</span>
@@ -901,7 +933,7 @@ const OrderKasir = () => {
                 </div>
             </div>
 
-            {/* --- Modals (Tidak ada perubahan) --- */}
+            {/* --- Modals --- */}
 
             {/* Discount Modal */}
             <Modal title="Masukkan Diskon Manual" open={isDiscountModalVisible} onOk={handleDiscountSubmit} onCancel={() => setIsDiscountModalVisible(false)} okText="Terapkan" cancelText="Batal">
@@ -912,36 +944,51 @@ const OrderKasir = () => {
                 </Form>
             </Modal>
 
-            {/* Room Booking Modal */}
+            {/* --- Modal Booking Ruangan (Dengan Perbaikan) --- */}
+            {/* --- PERBAIKAN: Modal Booking Ruangan --- */}
             <Modal
                 title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>}
                 open={isBookingConfirmModalVisible}
                 onCancel={() => setIsBookingConfirmModalVisible(false)}
+                destroyOnClose
                 footer={[
                     <Button key="back" onClick={() => setIsBookingConfirmModalVisible(false)}>Batal</Button>,
                     <Button
                         key="submit"
                         type="primary"
                         onClick={handleBookingSubmit}
-                        disabled={!selectedDuration || !selectedStartTime || isBookingProcessing} // Tambah disable
-                        loading={isBookingProcessing} // Tambah loading
+                        disabled={!selectedDuration || !selectedStartTime || isBookingProcessing}
+                        loading={isBookingProcessing}
                     >
-                        Konfirmasi & Bayar
+                        Tambah ke Keranjang
                     </Button>
                 ]}
                 width={600}
                 centered
             >
-                <Form form={bookingForm} layout="vertical" className="mt-4">
+                {/* --- PERBAIKAN: <Form> diganti <div> --- */}
+                <div className="mt-4">
                     <p className="mb-4 text-gray-600">Pilih jam mulai dan durasi untuk booking hari ini.</p>
                     <Divider>Pilih Jam Mulai</Divider>
                     <div className="grid grid-cols-5 md:grid-cols-7 gap-2 mb-4">
                         {Array.from({ length: 14 }, (_, i) => 8 + i).map(hour => {
                             const isBooked = selectedRoomForBooking?.booked_hours.includes(hour);
                             const isPast = hour < dayjs().hour();
-                            const isDisabled = isBooked || isPast;
+                            const isInCart = selectedItems.some(item =>
+                                item.type === 'room' &&
+                                item.bookingData.id_ruangan === selectedRoomForBooking?.id_ruangan &&
+                                hour >= item.bookingData.waktu_mulai_jam &&
+                                hour < (item.bookingData.waktu_mulai_jam + item.bookingData.durasi_jam)
+                            );
+                            const isDisabled = isBooked || isPast || isInCart;
                             return (
-                                <Button key={hour} type={selectedStartTime === hour ? 'primary' : 'default'} disabled={isDisabled} onClick={() => { setSelectedStartTime(hour); setSelectedDuration(null); }}>
+                                <Button
+                                    key={hour}
+                                    type={selectedStartTime === hour ? 'primary' : 'default'}
+                                    disabled={isDisabled}
+                                    onClick={() => { setSelectedStartTime(hour); setSelectedDuration(null); }}
+                                    title={isInCart ? "Sudah ada di keranjang" : isBooked ? "Sudah di-booking" : isPast ? "Waktu lampau" : ""}
+                                >
                                     {`${hour}:00`}
                                 </Button>
                             );
@@ -955,7 +1002,15 @@ const OrderKasir = () => {
                                 {selectedRoomForBooking?.paket_harga.sort((a, b) => a.durasi_jam - b.durasi_jam).map(pkg => {
                                     const endTime = selectedStartTime + pkg.durasi_jam;
                                     const isOverlapping = selectedRoomForBooking.booked_hours.some(h => h >= selectedStartTime && h < endTime);
-                                    const isInvalid = endTime > 22 || isOverlapping;
+                                    const isOverlappingCart = selectedItems.some(item =>
+                                        item.type === 'room' &&
+                                        item.bookingData.id_ruangan === selectedRoomForBooking?.id_ruangan &&
+                                        (
+                                            (selectedStartTime < (item.bookingData.waktu_mulai_jam + item.bookingData.durasi_jam)) &&
+                                            (endTime > item.bookingData.waktu_mulai_jam)
+                                        )
+                                    );
+                                    const isInvalid = endTime > 22 || isOverlapping || isOverlappingCart;
                                     return (
                                         <Button
                                             key={pkg.durasi_jam}
@@ -963,6 +1018,7 @@ const OrderKasir = () => {
                                             disabled={isInvalid}
                                             onClick={() => setSelectedDuration(pkg)}
                                             className="h-auto py-2 min-w-[100px] min-h-[50px]"
+                                            title={isInvalid ? (isOverlapping ? "Bentrok jadwal" : isOverlappingCart ? "Bentrok keranjang" : "Melebihi jam 22:00") : ""}
                                         >
                                             <div className="flex flex-col items-center">
                                                 <span>{pkg.durasi_jam} Jam</span>
@@ -974,22 +1030,10 @@ const OrderKasir = () => {
                             </div>
                         </>
                     )}
-
                     <Divider />
-
-                    <Form.Item label="Nama Customer" name="customerName" rules={[{ required: true, message: "Nama customer harus diisi!" }]}>
-                        <Input placeholder="Masukkan nama customer" />
-                    </Form.Item>
-                    <Form.Item label="Metode Pembayaran" name="paymentMethod" rules={[{ required: true, message: "Pilih metode pembayaran!" }]}>
-                        <Radio.Group>
-                            <Radio.Button value="cash">Cash</Radio.Button>
-                            <Radio.Button value="qris">QRIS</Radio.Button>
-                        </Radio.Group>
-                    </Form.Item>
                     {selectedDuration && <div className="text-right font-bold text-lg text-blue-600">Total: {formatRupiah(selectedDuration.harga_paket)}</div>}
-                </Form>
+                </div>
             </Modal>
-
             {/* New Order Modal */}
             <Modal title={<div className="text-xl font-bold text-gray-800"><PlusOutlined className="mr-2" /> Buat Order Baru</div>} open={isNewOrderModalVisible} onOk={handleNewOrderOk} onCancel={handleNewOrderCancel} okText="Buat Order" cancelText="Batal" width={400} centered className="new-order-modal">
                 <Form form={newOrderForm} layout="vertical" initialValues={{ orderType: currentOrderType, customerName: customerName, room: room }} className="mt-4">
@@ -1109,8 +1153,9 @@ const OrderKasir = () => {
                 <div className="text-lg font-semibold text-blue-600 mb-2 text-right">
                     Total: {formatRupiah(totalAmount)}
                 </div>
+
                 <Form layout="vertical" className="mt-2">
-                    <Form.Item label="Uang Tunai" className="mb-4">
+                    <Form.Item label="Uang Tunai" className="mb-4 relative">
                         <Input
                             prefix="Rp"
                             value={cashInput > 0 ? cashInput.toLocaleString('id-ID') : ''}
@@ -1118,30 +1163,78 @@ const OrderKasir = () => {
                                 const value = e.target.value.replace(/[^0-9]/g, '');
                                 setCashInput(Number(value) || 0);
                             }}
-                            allowClear={false}
-                            className="text-right text-lg font-medium"
                             size="large"
+                            className="text-right text-lg font-medium pr-10"
                             autoFocus
+                            suffix={
+                                cashInput > 0 && (
+                                    <Button
+                                        type="text"
+                                        onClick={() => setCashInput(0)}
+                                        style={{
+                                            color: "red",
+                                            border: "none",
+                                            fontWeight: "bold",
+                                            fontSize: "16px",
+                                            padding: 0,
+                                        }}
+                                        icon={<span style={{ fontSize: "16px" }}>✕</span>}
+                                    />
+                                )
+                            }
                         />
                     </Form.Item>
+
                     <div className="grid grid-cols-3 gap-3 mb-6">
-                        {paymentQuickAmounts.map((amount) => (
+                        {[
+                            { amount: 5000, bg: "#FACC15", color: "black" },
+                            { amount: 10000, bg: "#8B5CF6", color: "white" },
+                            { amount: 20000, bg: "#22C55E", color: "white" },
+                            { amount: 50000, bg: "#3B82F6", color: "white" },
+                            { amount: 100000, bg: "#EF4444", color: "white" },
+                        ].map((denom) => (
                             <Button
-                                key={amount}
+                                key={denom.amount}
                                 size="large"
-                                className="h-12"
-                                onClick={() => setCashInput(amount)}
+                                style={{
+                                    backgroundColor: denom.bg,
+                                    color: denom.color,
+                                    fontWeight: "600",
+                                    border: "none",
+                                    height: "48px",
+                                }}
+                                onClick={() => setCashInput((prev) => prev + denom.amount)}
                             >
-                                {formatRupiah(amount)}
+                                {denom.amount.toLocaleString('id-ID')}
                             </Button>
                         ))}
-                        {totalAmount > 0 && !paymentQuickAmounts.includes(totalAmount) && (
+                        <Button
+                            size="large"
+                            style={{
+                                backgroundColor: "#9CA3AF",
+                                color: "white",
+                                fontWeight: "600",
+                                border: "none",
+                                height: "48px",
+                            }}
+                            onClick={() => setCashInput((prev) => (prev > 0 ? prev * 1000 : 0))}
+                        >
+                            + 000
+                        </Button>
+                        {totalAmount > 0 && (
                             <Button
                                 size="large"
-                                className="h-12"
+                                style={{
+                                    backgroundColor: "#2563EB",
+                                    color: "white",
+                                    fontWeight: "600",
+                                    border: "none",
+                                    height: "48px",
+                                    gridColumn: "span 3",
+                                }}
                                 onClick={() => setCashInput(totalAmount)}
                             >
-                                {formatRupiah(totalAmount)}
+                                {totalAmount.toLocaleString('id-ID')}
                             </Button>
                         )}
                     </div>
@@ -1207,7 +1300,7 @@ const OrderKasir = () => {
                     </div>
                     <div className="border-t border-b border-gray-200 py-2 my-2 max-h-40 overflow-y-auto custom-scrollbar">
                         {selectedItems.map((item) => (
-                            <div key={`${item.id}-${item.note || 'no-note'}`} className="flex justify-between items-start mb-1.5">
+                            <div key={item.cartId} className="flex justify-between items-start mb-1.5">
                                 <div className="mr-2">
                                     <p className="font-medium text-gray-800 leading-tight">{item.name} <span className="font-normal text-gray-500">x{item.qty}</span></p>
                                     {item.note && <p className="text-gray-500 italic">({item.note})</p>}
@@ -1217,17 +1310,25 @@ const OrderKasir = () => {
                         ))}
                     </div>
                     <div className="mb-1 space-y-0.5">
-                        <div className="flex justify-between">
-                            <span>Subtotal</span>
-                            <span>{formatRupiah(subtotal)}</span>
-                        </div>
+                        {subtotalFnb > 0 && (
+                             <div className="flex justify-between">
+                                <span>Subtotal F&B</span>
+                                <span>{formatRupiah(subtotalFnb)}</span>
+                            </div>
+                        )}
+                        {subtotalRoom > 0 && (
+                             <div className="flex justify-between">
+                                <span>Subtotal Ruangan</span>
+                                <span>{formatRupiah(subtotalRoom)}</span>
+                            </div>
+                        )}
                         {discountPercentage > 0 && (
                             <div className="flex justify-between text-red-600">
                                 <span>Diskon ({discountPercentage}%)</span>
                                 <span>-{formatRupiah(totalDiscountNominal)}</span>
                             </div>
                         )}
-                        {subtotal > 0 && taxRateFnbPercentFromAPI > 0 && (
+                        {totalTaxNominal > 0 && (
                             <div className="flex justify-between">
                                 <span>Pajak F&B ({taxRateFnbPercentFromAPI}%)</span>
                                 <span>{formatRupiah(totalTaxNominal)}</span>
@@ -1253,97 +1354,8 @@ const OrderKasir = () => {
                 </div>
             </Modal>
 
-            {/* --- MODAL BARU: Pembayaran Tunai RUANGAN --- */}
-            <Modal
-                title={<div className="text-xl font-bold text-gray-800">Pembayaran Tunai Ruangan</div>}
-                open={isRoomCashModalVisible}
-                onCancel={() => {
-                    setIsRoomCashModalVisible(false);
-                    setPendingBookingData(null);
-                    message.warning("Pembayaran booking ruangan dibatalkan.");
-                }}
-                footer={null}
-                width={400}
-                centered
-            >
-                {pendingBookingData && (
-                    <>
-                        <div className="text-lg font-semibold text-blue-600 mb-2 text-right">
-                            Total: {formatRupiah(pendingBookingData.total_harga_final)}
-                        </div>
-                        <Form layout="vertical" className="mt-2">
-                            <Form.Item label="Uang Tunai" className="mb-4">
-                                <Input
-                                    prefix="Rp"
-                                    value={roomCashInput > 0 ? roomCashInput.toLocaleString('id-ID') : ''}
-                                    onChange={(e) => {
-                                        const value = e.target.value.replace(/[^0-9]/g, '');
-                                        setRoomCashInput(Number(value) || 0);
-                                    }}
-                                    className="text-right text-lg font-medium"
-                                    size="large"
-                                    autoFocus
-                                />
-                            </Form.Item>
-                            <div className="grid grid-cols-3 gap-3 mb-6">
-                                {[50000, 100000, 150000, 200000].filter(amount => amount >= pendingBookingData.total_harga_final).map((amount) => (
-                                    <Button key={amount} size="large" className="h-12" onClick={() => setRoomCashInput(amount)}>
-                                        {formatRupiah(amount)}
-                                    </Button>
-                                ))}
-                                {pendingBookingData.total_harga_final > 0 && (
-                                    <Button size="large" className="h-12" onClick={() => setRoomCashInput(pendingBookingData.total_harga_final)}>
-                                        {formatRupiah(pendingBookingData.total_harga_final)}
-                                    </Button>
-                                )}
-                            </div>
-                            <div className="flex justify-between items-center mb-4 text-base">
-                                <span>Kembalian:</span>
-                                <span className="font-bold text-green-600">
-                                    {formatRupiah(Math.max(0, roomCashInput - pendingBookingData.total_harga_final))}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <Button size="large" onClick={() => {
-                                    setIsRoomCashModalVisible(false);
-                                    setPendingBookingData(null);
-                                    message.warning("Pembayaran booking ruangan dibatalkan.");
-                                }}>
-                                    Batal
-                                </Button>
-                                <Button
-                                    type="primary"
-                                    size="large"
-                                    onClick={async () => {
-                                        if (roomCashInput < pendingBookingData.total_harga_final) {
-                                            message.error("Jumlah uang tunai kurang!");
-                                            return;
-                                        }
-                                        try {
-                                            setIsBookingProcessing(true);
-                                            console.log("Mengirim booking (tunai):", pendingBookingData);
-                                            const result = await createRoomBookingKasir(pendingBookingData);
-                                            message.success(`Booking (tunai) untuk ${pendingBookingData.nama_guest} berhasil (ID: ${result.id_transaksi})!`);
-                                            const updatedRooms = await getRoomsToday();
-                                            setRooms(updatedRooms || []);
-                                            setIsRoomCashModalVisible(false);
-                                            setPendingBookingData(null);
-                                        } catch (error) {
-                                            message.error(`Gagal menyimpan booking: ${error.message}`);
-                                        } finally {
-                                            setIsBookingProcessing(false);
-                                        }
-                                    }}
-                                    disabled={roomCashInput < pendingBookingData.total_harga_final || isBookingProcessing}
-                                    loading={isBookingProcessing}
-                                >
-                                    Submit
-                                </Button>
-                            </div>
-                        </Form>
-                    </>
-                )}
-            </Modal>
+            {/* Modal Pembayaran Tunai Ruangan Dihapus */}
+
         </Spin>
     );
 };

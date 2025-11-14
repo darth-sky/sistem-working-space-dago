@@ -14,7 +14,8 @@ import {
     Tooltip,
     InputNumber,
     Tag,
-    Switch
+    Switch,
+    notification
 } from "antd";
 import {
     PlusOutlined,
@@ -22,6 +23,7 @@ import {
     DeleteOutlined,
     SearchOutlined,
     SolutionOutlined,
+    CheckCircleOutlined
 } from "@ant-design/icons";
 import {
     getPaketVOadmin,
@@ -31,24 +33,38 @@ import {
 } from "../../../../services/service";
 
 const { Text } = Typography;
-const { Search } = Input;
-const { TextArea } = Input;
+const { Search, TextArea } = Input;
 
 const VirtualOfficePackageTab = () => {
+    const [api, contextHolder] = notification.useNotification();
     const [open, setOpen] = useState(false);
     const [editingPackage, setEditingPackage] = useState(null);
     const [formData, setFormData] = useState({ status: "Active" });
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
-
-    // --- TAMBAHAN: State untuk validasi ---
     const [validationErrors, setValidationErrors] = useState({});
-
-    // untuk filter
     const [searchText, setSearchText] = useState("");
     const [searchedColumn, setSearchedColumn] = useState("");
     const searchInput = useRef(null);
+
+    // === Notifikasi ===
+    const showNotif = (type, title, description) => {
+        api.open({
+            message: (
+                <Space>
+                    {type === "success" && <CheckCircleOutlined style={{ color: "#52c41a" }} />}
+                    {type === "error" && <DeleteOutlined style={{ color: "#ff4d4f" }} />}
+                    {type === "warning" && <ExclamationCircleOutlined style={{ color: "#faad14" }} />}
+                    <span>{title}</span>
+                </Space>
+            ),
+            description: description,
+            placement: "topRight",
+            duration: 3,
+            style: { borderRadius: 10, padding: 10 },
+        });
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -63,7 +79,7 @@ const VirtualOfficePackageTab = () => {
             }
         } catch (err) {
             console.error("Gagal fetch paket VO:", err);
-            message.error("Gagal mengambil data paket virtual office");
+            showNotif("error", "Gagal", "Gagal mengambil data paket virtual office");
         } finally {
             setLoading(false);
         }
@@ -73,7 +89,6 @@ const VirtualOfficePackageTab = () => {
         fetchData();
     }, []);
 
-    // helper untuk pencarian kolom
     const getColumnSearchProps = (dataIndex, displayName) => ({
         filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
             <div style={{ padding: 8 }}>
@@ -120,11 +135,7 @@ const VirtualOfficePackageTab = () => {
             }
         },
         render: (text) =>
-            searchedColumn === dataIndex ? (
-                <Text mark>{text}</Text>
-            ) : (
-                text
-            ),
+            searchedColumn === dataIndex ? <Text mark>{text}</Text> : text,
     });
 
     const handleSearch = (selectedKeys, confirm, dataIndex) => {
@@ -162,8 +173,7 @@ const VirtualOfficePackageTab = () => {
             title: "Harga",
             dataIndex: "harga",
             key: "harga",
-            render: (text) =>
-                `Rp ${new Intl.NumberFormat("id-ID").format(text || 0)}`,
+            render: (text) => `Rp ${new Intl.NumberFormat("id-ID").format(text || 0)}`,
             sorter: (a, b) => a.harga - b.harga,
             ...getColumnSearchProps("harga", "Harga"),
         },
@@ -182,7 +192,6 @@ const VirtualOfficePackageTab = () => {
             sorter: (a, b) =>
                 a.benefit_jam_meeting_room_per_bulan -
                 b.benefit_jam_meeting_room_per_bulan,
-            ...getColumnSearchProps("benefit_jam_meeting_room_per_bulan", "Benefit Meeting Room"),
         },
         {
             title: "Status",
@@ -231,10 +240,9 @@ const VirtualOfficePackageTab = () => {
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
-        // --- PERBAIKAN: Hapus error saat user mulai mengisi ---
         if (validationErrors[field]) {
-            setValidationErrors(prevErrors => {
-                const newErrors = { ...prevErrors };
+            setValidationErrors((prev) => {
+                const newErrors = { ...prev };
                 delete newErrors[field];
                 return newErrors;
             });
@@ -242,19 +250,16 @@ const VirtualOfficePackageTab = () => {
     };
 
     const handleSave = async () => {
-        // --- PERBAIKAN: Validasi Penuh ---
         const errors = {};
-        if (!formData.nama_paket || formData.nama_paket.trim() === "") errors.nama_paket = true;
-        if (formData.harga === null || formData.harga === undefined || formData.harga < 0) errors.harga = true;
-        if (formData.durasi === null || formData.durasi === undefined || formData.durasi <= 0) errors.durasi = true;
+        if (!formData.nama_paket?.trim()) errors.nama_paket = true;
+        if (formData.harga == null || formData.harga < 0) errors.harga = true;
+        if (formData.durasi == null || formData.durasi <= 0) errors.durasi = true;
 
         if (Object.keys(errors).length > 0) {
             setValidationErrors(errors);
-            message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
+            showNotif("warning", "Validasi Gagal", "Harap isi semua bidang wajib diisi!");
             return;
         }
-        setValidationErrors({}); // Lolos validasi, bersihkan error
-        // --- AKHIR PERBAIKAN VALIDASI ---
 
         setLoading(true);
         try {
@@ -272,17 +277,19 @@ const VirtualOfficePackageTab = () => {
 
             if (editingPackage) {
                 const res = await updatePaketVO(editingPackage.id_paket_vo, payload);
-                if (res.status === 200) message.success("Paket berhasil diperbarui!");
+                if (res.status === 200)
+                    showNotif("success", "Paket Diperbarui", "Data paket berhasil diperbarui!");
             } else {
                 const res = await createPaketVO(payload);
-                if (res.status === 201) message.success("Paket baru berhasil ditambahkan!");
+                if (res.status === 201)
+                    showNotif("success", "Paket Ditambahkan", "Data paket berhasil ditambahkan!");
             }
+
             await fetchData();
             handleCancel();
         } catch (err) {
             console.error("Error save paket VO:", err);
-            const errorMsg = err.response?.data?.error || "Gagal menyimpan paket";
-            message.error(errorMsg);
+            showNotif("error", "Gagal", "Terjadi kesalahan saat menyimpan data.");
         } finally {
             setLoading(false);
         }
@@ -293,15 +300,14 @@ const VirtualOfficePackageTab = () => {
         try {
             const res = await deletePaketVO(id_paket_vo);
             if (res.status === 200) {
-                message.success("Paket berhasil dihapus!");
+                showNotif("success", "Paket Dihapus", "Data paket berhasil dihapus!");
                 await fetchData();
             } else {
-                message.error(res.data?.error || "Gagal menghapus paket");
+                showNotif("error", "Gagal", res.data?.error || "Gagal menghapus paket.");
             }
         } catch (err) {
             console.error("Error delete paket:", err);
-            const errorMsg = err.response?.data?.error || "Gagal menghapus paket";
-            message.error(errorMsg);
+            showNotif("error", "Gagal", "Terjadi kesalahan saat menghapus data.");
         } finally {
             setLoading(false);
         }
@@ -310,14 +316,14 @@ const VirtualOfficePackageTab = () => {
     const handleAdd = () => {
         setEditingPackage(null);
         setFormData({ status: "Active" });
-        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setValidationErrors({});
         setOpen(true);
     };
 
     const handleEdit = (pkg) => {
         setEditingPackage(pkg);
         setFormData({ ...pkg });
-        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setValidationErrors({});
         setOpen(true);
     };
 
@@ -325,11 +331,13 @@ const VirtualOfficePackageTab = () => {
         setOpen(false);
         setFormData({ status: "Active" });
         setEditingPackage(null);
-        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setValidationErrors({});
     };
 
     return (
         <div style={{ padding: "24px" }}>
+            {contextHolder}
+
             <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
                 <Col flex="auto">
                     <Search
@@ -337,7 +345,7 @@ const VirtualOfficePackageTab = () => {
                         allowClear
                         enterButton={<SearchOutlined />}
                         size="large"
-                        onSearch={setSearchText} // Gunakan onSearch agar konsisten
+                        onSearch={setSearchText}
                         onChange={(e) => setSearchText(e.target.value)}
                     />
                 </Col>
@@ -348,7 +356,7 @@ const VirtualOfficePackageTab = () => {
                 </Col>
             </Row>
 
-            <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
+            <Card style={{ borderRadius: "12px", overflowX: "auto" }}>
                 <Table
                     columns={columns}
                     dataSource={data.filter((item) =>
@@ -362,7 +370,7 @@ const VirtualOfficePackageTab = () => {
                     }}
                     loading={loading}
                     scroll={{ x: 1000 }}
-                    rowKey="key" // <-- PERBAIKAN: Gunakan key unik
+                    rowKey="key"
                 />
             </Card>
 
@@ -370,76 +378,62 @@ const VirtualOfficePackageTab = () => {
                 title={
                     <Space>
                         {editingPackage ? <EditOutlined /> : <PlusOutlined />}{" "}
-                        {editingPackage ? "Edit Paket Virtual Office" : "Add Paket Virtual Office"}
+                        {editingPackage ? "Edit Paket Virtual Office" : "Tambah Paket Virtual Office"}
                     </Space>
                 }
                 open={open}
                 onCancel={handleCancel}
                 onOk={handleSave}
                 confirmLoading={loading}
-                okText={editingPackage ? "Update" : "Add"}
-                destroyOnClose // Reset state internal AntD
+                okText={editingPackage ? "Update" : "Tambah"}
+                destroyOnClose
             >
                 <div style={{ marginTop: "24px" }}>
-                    <Text strong>
-                        Nama Paket <span style={{ color: "red" }}>*</span>
-                    </Text>
+                    <Text strong>Nama Paket <span style={{ color: "red" }}>*</span></Text>
                     <Input
                         placeholder="Contoh: Paket 6 Bulan"
                         value={formData.nama_paket || ""}
                         onChange={(e) => handleChange("nama_paket", e.target.value)}
                         style={{ marginTop: "8px" }}
-                        status={validationErrors.nama_paket ? 'error' : ''} // <-- PERBAIKAN
+                        status={validationErrors.nama_paket ? "error" : ""}
                     />
-                    {/* --- PESAN ERROR SPESIFIK --- */}
                     {validationErrors.nama_paket && (
-                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                            Nama paket wajib diisi.
-                        </Text>
+                        <Text type="danger" style={{ fontSize: 12 }}>Nama paket wajib diisi.</Text>
                     )}
                 </div>
+
                 <div style={{ marginTop: "16px" }}>
-                    <Text strong>
-                        Harga (Rp) <span style={{ color: "red" }}>*</span>
-                    </Text>
+                    <Text strong>Harga (Rp) <span style={{ color: "red" }}>*</span></Text>
                     <InputNumber
                         placeholder="Contoh: 1750000"
                         value={formData.harga}
                         onChange={(value) => handleChange("harga", value)}
                         style={{ marginTop: "8px", width: "100%" }}
-                        formatter={(value) =>
-                            `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                        }
+                        formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                         parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
-                        min={0} // <-- PERBAIKAN: Tambahkan min 0
-                        status={validationErrors.harga ? 'error' : ''} // <-- PERBAIKAN
+                        min={0}
+                        status={validationErrors.harga ? "error" : ""}
                     />
-                    {/* --- PESAN ERROR SPESIFIK --- */}
                     {validationErrors.harga && (
-                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                            Harga wajib diisi (minimal 0).
-                        </Text>
+                        <Text type="danger" style={{ fontSize: 12 }}>Harga wajib diisi (minimal 0).</Text>
                     )}
                 </div>
+
                 <div style={{ marginTop: "16px" }}>
-                    <Text strong>
-                        Durasi (Hari) <span style={{ color: "red" }}>*</span>
-                    </Text>
+                    <Text strong>Durasi (Hari) <span style={{ color: "red" }}>*</span></Text>
                     <InputNumber
                         placeholder="Contoh: 180"
                         value={formData.durasi}
                         onChange={(value) => handleChange("durasi", value)}
                         style={{ marginTop: "8px", width: "100%" }}
-                        min={1} // <-- PERBAIKAN: Tambahkan min 1
-                        status={validationErrors.durasi ? 'error' : ''} // <-- PERBAIKAN
+                        min={1}
+                        status={validationErrors.durasi ? "error" : ""}
                     />
-                    {/* --- PESAN ERROR SPESIFIK --- */}
                     {validationErrors.durasi && (
-                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                            Durasi wajib diisi (minimal 1 hari).
-                        </Text>
+                        <Text type="danger" style={{ fontSize: 12 }}>Durasi wajib diisi (minimal 1 hari).</Text>
                     )}
                 </div>
+
                 <div style={{ marginTop: "16px" }}>
                     <Text strong>Benefit Jam Meeting Room per Bulan</Text>
                     <InputNumber
@@ -449,9 +443,10 @@ const VirtualOfficePackageTab = () => {
                             handleChange("benefit_jam_meeting_room_per_bulan", value)
                         }
                         style={{ marginTop: "8px", width: "100%" }}
-                        min={0} // <-- PERBAIKAN: Tambahkan min 0
+                        min={0}
                     />
                 </div>
+
                 <div style={{ marginTop: "16px" }}>
                     <Text strong>Benefit Jam Working Space per Bulan</Text>
                     <InputNumber
@@ -461,9 +456,10 @@ const VirtualOfficePackageTab = () => {
                             handleChange("benefit_jam_working_space_per_bulan", value)
                         }
                         style={{ marginTop: "8px", width: "100%" }}
-                        min={0} // <-- PERBAIKAN: Tambahkan min 0
+                        min={0}
                     />
                 </div>
+
                 <div style={{ marginTop: "16px" }}>
                     <Text strong>Deskripsi Layanan</Text>
                     <TextArea
@@ -476,14 +472,8 @@ const VirtualOfficePackageTab = () => {
                         style={{ marginTop: "8px" }}
                     />
                 </div>
-                <div
-                    style={{
-                        marginTop: "16px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "16px",
-                    }}
-                >
+
+                <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "16px" }}>
                     <Text strong>Status Paket</Text>
                     <Switch
                         checkedChildren="Active"

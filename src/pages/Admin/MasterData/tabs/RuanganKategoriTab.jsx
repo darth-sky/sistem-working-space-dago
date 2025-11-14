@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import {
-    Table, Button, Modal, Input, Typography, Row, Col, Card, Space, message, Popconfirm, Tooltip,
-    Switch, Tag, Upload, Image
+    Table, Button, Modal, Input, Typography, Row, Col, Card, Space, Popconfirm, Tooltip,
+    Switch, Tag, Upload, Image, notification
 } from "antd";
 import {
     PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
-    UploadOutlined, AppstoreOutlined
+    UploadOutlined, AppstoreOutlined, CheckCircleOutlined, ExclamationCircleFilled, CloseCircleFilled
 } from "@ant-design/icons";
 import {
     getKategoriRuangan, createKategoriRuangan, updateKategoriRuangan, deleteKategoriRuangan
@@ -15,8 +15,7 @@ const { Text } = Typography;
 const { Search } = Input;
 const { TextArea } = Input;
 
-// --- PERBAIKAN: Gunakan import.meta.env.VITE_BASE_URL dinamis ---
-// Hapus /api/v1 jika ada, karena static file biasanya di root
+// --- Gunakan URL dinamis ---
 const UPLOAD_URL = `${import.meta.env.VITE_BASE_URL.replace('/api/v1', '')}/static/`;
 
 const RuanganKategoriTab = () => {
@@ -28,9 +27,26 @@ const RuanganKategoriTab = () => {
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
     const [fileList, setFileList] = useState([]);
-    
-    // --- TAMBAHAN: State untuk validasi ---
     const [validationError, setValidationError] = useState(null);
+
+    // 🔔 Notification system
+    const [api, contextHolder] = notification.useNotification();
+
+    const openNotification = (type, message, description) => {
+        const icons = {
+            success: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+            error: <CloseCircleFilled style={{ color: "#ff4d4f" }} />,
+            warning: <ExclamationCircleFilled style={{ color: "#faad14" }} />,
+        };
+
+        api.open({
+            message,
+            description,
+            icon: icons[type],
+            placement: "topRight",
+            duration: 3,
+        });
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -45,7 +61,7 @@ const RuanganKategoriTab = () => {
             }
         } catch (err) {
             console.error("Gagal fetch kategori ruangan:", err);
-            message.error("Gagal mengambil data kategori ruangan");
+            openNotification("error", "Gagal Memuat Data", "Gagal mengambil data kategori ruangan.");
         } finally {
             setLoading(false);
         }
@@ -55,14 +71,12 @@ const RuanganKategoriTab = () => {
         fetchData();
     }, []);
 
-    // 🔍 Filter global
     const filteredData = data.filter(
         (item) =>
             item.nama_kategori.toLowerCase().includes(searchText.toLowerCase()) ||
             (item.deskripsi && item.deskripsi.toLowerCase().includes(searchText.toLowerCase()))
     );
 
-    // 🔽 Membuat opsi filter unik untuk tiap kolom
     const uniqueFilters = (field) =>
         [...new Set(data.map((item) => item[field]).filter(Boolean))].map((value) => ({
             text: value,
@@ -77,11 +91,13 @@ const RuanganKategoriTab = () => {
             width: 120,
             render: (filename) =>
                 filename ? (
-                    <Image 
-                      width={80} 
-                      src={`${UPLOAD_URL}${filename}`} 
-                      // Fallback jika gambar error
-                      onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/80?text=Error" }}
+                    <Image
+                        width={80}
+                        src={`${UPLOAD_URL}${filename}`}
+                        onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://via.placeholder.com/80?text=Error";
+                        }}
                     />
                 ) : (
                     <Text type="secondary">No Image</Text>
@@ -113,10 +129,6 @@ const RuanganKategoriTab = () => {
             title: "Deskripsi",
             dataIndex: "deskripsi",
             key: "deskripsi",
-            // Hapus filter deskripsi karena terlalu banyak variasi
-            // filters: uniqueFilters("deskripsi"), 
-            // onFilter: (value, record) =>
-            //     record.deskripsi && record.deskripsi.indexOf(value) === 0,
             ellipsis: true,
         },
         {
@@ -125,13 +137,13 @@ const RuanganKategoriTab = () => {
             key: "status",
             width: 120,
             render: (status) => (
-                <Tag color={status === 'Active' ? 'green' : 'red'}>
+                <Tag color={status === "Active" ? "green" : "red"}>
                     {status?.toUpperCase()}
                 </Tag>
             ),
             filters: [
-                { text: 'Active', value: 'Active' },
-                { text: 'Inactive', value: 'Inactive' },
+                { text: "Active", value: "Active" },
+                { text: "Inactive", value: "Inactive" },
             ],
             onFilter: (value, record) => record.status.indexOf(value) === 0,
         },
@@ -152,7 +164,9 @@ const RuanganKategoriTab = () => {
                         <Popconfirm
                             title="Yakin ingin menghapus kategori ini?"
                             description="Menghapus kategori dapat mempengaruhi ruangan terkait."
-                            onConfirm={() => handleDelete(record.id_kategori_ruangan)}
+                            onConfirm={() =>
+                                handleDelete(record.id_kategori_ruangan)
+                            }
                         >
                             <Button type="link" danger icon={<DeleteOutlined />} />
                         </Popconfirm>
@@ -164,21 +178,19 @@ const RuanganKategoriTab = () => {
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
-        // --- PERBAIKAN: Hapus error saat user mulai mengetik ---
-        if (field === 'nama_kategori' && value.trim() !== "") {
+        if (field === "nama_kategori" && value.trim() !== "") {
             setValidationError(null);
         }
     };
 
     const handleSave = async () => {
-        // --- PERBAIKAN: Validasi Penuh ---
         if (!formData.nama_kategori || formData.nama_kategori.trim() === "") {
-            setValidationError("Nama Kategori wajib diisi."); // Set error
-            message.warning("Harap isi semua bidang yang wajib diisi.");
+            setValidationError("Nama Kategori wajib diisi.");
+            openNotification("warning", "Validasi Gagal", "Harap isi nama kategori terlebih dahulu.");
             return;
         }
-        
-        setValidationError(null); // Lolos validasi, bersihkan error
+
+        setValidationError(null);
         setLoading(true);
 
         const formDataToSend = new FormData();
@@ -189,10 +201,7 @@ const RuanganKategoriTab = () => {
         });
 
         if (fileList.length > 0 && fileList[0].originFileObj) {
-            formDataToSend.append(
-                "gambar_kategori_ruangan",
-                fileList[0].originFileObj
-            );
+            formDataToSend.append("gambar_kategori_ruangan", fileList[0].originFileObj);
         }
 
         try {
@@ -201,18 +210,21 @@ const RuanganKategoriTab = () => {
                     editingCategory.id_kategori_ruangan,
                     formDataToSend
                 );
-                if (res.status === 200) message.success("Kategori berhasil diperbarui!");
+                if (res.status === 200) {
+                    openNotification("success", "Kategori Diperbarui", "Data kategori berhasil diperbarui.");
+                }
             } else {
                 const res = await createKategoriRuangan(formDataToSend);
-                if (res.status === 201) message.success("Kategori baru berhasil ditambahkan!");
+                if (res.status === 201) {
+                    openNotification("success", "Kategori Ditambahkan", "Data kategori baru berhasil ditambahkan.");
+                }
             }
             await fetchData();
-            handleCancel();
+            handleCancel();``
         } catch (err) {
             console.error("Error save kategori ruangan:", err);
-            // Cek error dari response server
             const errorMsg = err.response?.data?.error || "Gagal menyimpan kategori";
-            message.error(errorMsg);
+            openNotification("error", "Gagal Menyimpan", errorMsg);
         } finally {
             setLoading(false);
         }
@@ -222,14 +234,13 @@ const RuanganKategoriTab = () => {
         try {
             const res = await deleteKategoriRuangan(id_kategori);
             if (res.status === 200) {
-                message.success("Kategori berhasil dihapus!");
+                openNotification("success", "Kategori Dihapus", "Data kategori berhasil dihapus.");
                 fetchData();
             }
         } catch (err) {
             console.error("Gagal menghapus kategori:", err);
-            // --- PERBAIKAN: Tampilkan pesan error dari server ---
             const errorMsg = err.response?.data?.error || "Gagal menghapus kategori";
-            message.error(errorMsg);
+            openNotification("error", "Gagal Menghapus", errorMsg);
         }
     };
 
@@ -237,7 +248,7 @@ const RuanganKategoriTab = () => {
         setEditingCategory(null);
         setFormData({ status: "Active" });
         setFileList([]);
-        setValidationError(null); // Bersihkan error
+        setValidationError(null);
         setOpen(true);
     };
 
@@ -256,7 +267,7 @@ const RuanganKategoriTab = () => {
         } else {
             setFileList([]);
         }
-        setValidationError(null); // Bersihkan error
+        setValidationError(null);
         setOpen(true);
     };
 
@@ -265,11 +276,12 @@ const RuanganKategoriTab = () => {
         setFormData({ status: "Active" });
         setEditingCategory(null);
         setFileList([]);
-        setValidationError(null); // Bersihkan error
+        setValidationError(null);
     };
 
     return (
         <div style={{ padding: "24px" }}>
+            {contextHolder}
             <Row
                 gutter={[16, 16]}
                 align="middle"
@@ -296,7 +308,7 @@ const RuanganKategoriTab = () => {
                 </Col>
             </Row>
 
-            <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
+            <Card style={{ borderRadius: "12px", overflowX: "auto" }}>
                 <Table
                     columns={columns}
                     dataSource={filteredData}
@@ -307,7 +319,7 @@ const RuanganKategoriTab = () => {
                         pageSizeOptions: ["5", "10", "20"],
                         onShowSizeChange: (c, size) => setPageSize(size),
                     }}
-                    scroll={{ x: 900 }} // Tambahkan scroll horizontal
+                    scroll={{ x: 900 }}
                 />
             </Card>
 
@@ -317,7 +329,7 @@ const RuanganKategoriTab = () => {
                 onCancel={handleCancel}
                 onOk={handleSave}
                 confirmLoading={loading}
-                destroyOnClose // Reset state internal AntD saat modal ditutup
+                destroyOnClose
             >
                 <div style={{ marginTop: 24 }}>
                     <Text strong>
@@ -327,11 +339,13 @@ const RuanganKategoriTab = () => {
                         value={formData.nama_kategori || ""}
                         onChange={(e) => handleChange("nama_kategori", e.target.value)}
                         style={{ marginTop: 8 }}
-                        status={validationError ? 'error' : ''} // <-- PERBAIKAN VALIDASI
+                        status={validationError ? "error" : ""}
                     />
-                    {/* --- PESAN ERROR SPESIFIK --- */}
                     {validationError && (
-                        <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                        <Text
+                            type="danger"
+                            style={{ fontSize: 12, marginTop: 2, display: "block" }}
+                        >
                             {validationError}
                         </Text>
                     )}
@@ -352,19 +366,22 @@ const RuanganKategoriTab = () => {
                         listType="picture-card"
                         fileList={fileList}
                         onChange={({ fileList: newFileList }) => setFileList(newFileList)}
-                        beforeUpload={() => false} // Selalu return false untuk handle manual
+                        beforeUpload={() => false}
                         maxCount={1}
                         style={{ marginTop: 8 }}
-                        accept="image/png, image/jpeg" // Batasi tipe file
+                        accept="image/png, image/jpeg"
                     >
-                        {fileList.length < 1 && ( // Hanya tampilkan jika belum ada file
+                        {fileList.length < 1 && (
                             <div>
                                 <PlusOutlined />
                                 <div style={{ marginTop: 8 }}>Upload</div>
                             </div>
                         )}
                     </Upload>
-                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                    <Text
+                        type="secondary"
+                        style={{ fontSize: 12, display: "block", marginTop: 4 }}
+                    >
                         (JPG/PNG, Max 2MB).
                     </Text>
                 </div>
@@ -393,3 +410,5 @@ const RuanganKategoriTab = () => {
 };
 
 export default RuanganKategoriTab;
+
+

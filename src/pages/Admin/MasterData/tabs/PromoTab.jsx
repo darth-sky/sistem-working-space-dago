@@ -1,12 +1,10 @@
-// PromoTab.js
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react"; 
 import {
-    Table, Button, Modal, Input, Typography, Row, Col, Card, Space, message,
+    Table, Button, Modal, Input, Typography, Row, Col, Card, Space, notification,
     Popconfirm, Tooltip, InputNumber, DatePicker, TimePicker, Tag, Switch
 } from "antd";
 import {
-    PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined
+    PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
@@ -22,17 +20,28 @@ const PromoTab = () => {
     const [open, setOpen] = useState(false);
     const [editingPromo, setEditingPromo] = useState(null);
     const [searchText, setSearchText] = useState("");
-    // --- PERBAIKAN: Inisialisasi formData dengan nilai default ---
     const [formData, setFormData] = useState({ status_aktif: "inaktif" });
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
     const [filteredInfo, setFilteredInfo] = useState({});
-
-    // --- TAMBAHAN: State untuk validasi ---
     const [validationErrors, setValidationErrors] = useState({});
+    const [api, contextHolder] = notification.useNotification();
 
-    // Fetch data dari API
+    // --- Fungsi Notifikasi ---
+    const showNotif = (type, title, desc) => {
+        let icon = null;
+        if (type === "success") icon = <CheckCircleOutlined style={{ color: "#52c41a" }} />;
+        api[type]({
+            message: title,
+            description: desc,
+            placement: "topRight",
+            duration: 3,
+            icon,
+        });
+    };
+
+    // === Fetch data ===
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -46,7 +55,7 @@ const PromoTab = () => {
             }
         } catch (err) {
             console.error("Gagal fetch promo:", err);
-            message.error("Gagal mengambil data promo");
+            showNotif("error", "Gagal", "Gagal mengambil data promo");
         } finally {
             setLoading(false);
         }
@@ -56,14 +65,14 @@ const PromoTab = () => {
         fetchData();
     }, []);
 
-    // === Search Global ===
+    // === Search ===
     const filteredData = data.filter(
         (item) =>
             item.kode_promo?.toLowerCase().includes(searchText.toLowerCase()) ||
             item.deskripsi_promo?.toLowerCase().includes(searchText.toLowerCase())
     );
 
-    // === Search Input di Kolom ===
+    // === Kolom ===
     const getColumnSearchProps = (dataIndex, placeholder = "Cari...") => ({
         filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
             <div style={{ padding: 8 }}>
@@ -104,7 +113,6 @@ const PromoTab = () => {
         ),
     });
 
-    // === Kolom Tabel ===
     const columns = [
         { title: "ID", dataIndex: "id_promo", key: "id_promo", width: 60, sorter: (a, b) => a.id_promo - b.id_promo },
         {
@@ -126,7 +134,7 @@ const PromoTab = () => {
             key: "nilai_diskon",
             sorter: (a, b) => a.nilai_diskon - b.nilai_diskon,
             render: (val) =>
-                Number(val).toLocaleString("id-ID", { // <-- PERBAIKAN: Konversi ke Number
+                Number(val).toLocaleString("id-ID", {
                     style: "currency",
                     currency: "IDR",
                     minimumFractionDigits: 0,
@@ -186,12 +194,10 @@ const PromoTab = () => {
         },
     ];
 
-    // === Handler Tabel (Filter/Sort) ===
     const handleTableChange = (pagination, filters) => {
         setFilteredInfo(filters);
     };
 
-    // --- PERBAIKAN: Modifikasi semua handler untuk membersihkan error ---
     const clearError = (field) => {
         if (validationErrors[field]) {
             setValidationErrors(prev => ({ ...prev, [field]: undefined }));
@@ -220,43 +226,34 @@ const PromoTab = () => {
         });
     };
 
-    // === CRUD Actions ===
+    // === CRUD ===
     const handleSave = async () => {
-        // --- PERBAIKAN: Validasi Penuh ---
         const errors = {};
         if (!formData.kode_promo || formData.kode_promo.trim() === "") errors.kode_promo = true;
-        if (formData.nilai_diskon === null || formData.nilai_diskon === undefined || formData.nilai_diskon <= 0) errors.nilai_diskon = true;
-        if (!formData.tanggal_mulai) errors.tanggal_mulai = true; // Cukup cek tanggal_mulai
+        if (!formData.nilai_diskon || formData.nilai_diskon <= 0) errors.nilai_diskon = true;
+        if (!formData.tanggal_mulai) errors.tanggal_mulai = true;
 
         if (Object.keys(errors).length > 0) {
             setValidationErrors(errors);
-            message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
+            showNotif("warning", "Validasi Gagal", "Harap isi semua bidang yang wajib diisi.");
             return;
         }
-        setValidationErrors({}); // Lolos validasi, bersihkan error
-        // --- AKHIR PERBAIKAN VALIDASI ---
 
         setLoading(true);
         try {
-            const payload = {
-                ...formData,
-                waktu_mulai: formData.waktu_mulai || null,
-                waktu_selesai: formData.waktu_selesai || null,
-            };
-
+            const payload = { ...formData };
             if (editingPromo) {
                 const res = await updatePromo(editingPromo.id_promo, payload);
-                if (res.status === 200) message.success("Promo berhasil diperbarui!");
+                if (res.status === 200) showNotif("success", "Promo Diperbarui", "Data promo berhasil diperbarui!");
             } else {
                 const res = await createPromo(payload);
-                if (res.status === 201) message.success("Promo baru berhasil ditambahkan!");
+                if (res.status === 201) showNotif("success", "Promo Ditambahkan", "Data promo baru berhasil ditambahkan!");
             }
             await fetchData();
             handleCancel();
         } catch (err) {
             console.error("Error save promo:", err);
-            const errorMsg = err.response?.data?.error || "Gagal menyimpan promo";
-            message.error(errorMsg);
+            showNotif("error", "Gagal", "Terjadi kesalahan saat menyimpan promo.");
         } finally {
             setLoading(false);
         }
@@ -267,42 +264,40 @@ const PromoTab = () => {
         try {
             const res = await deletePromo(id_promo);
             if (res.status === 200) {
-                message.success("Promo berhasil dihapus!");
+                showNotif("success", "Promo Dihapus", "Data promo berhasil dihapus!");
                 await fetchData();
             } else {
-                message.error(res.data?.error || "Gagal menghapus promo");
+                showNotif("error", "Gagal", res.data?.error || "Gagal menghapus promo");
             }
         } catch (err) {
             console.error("Error delete promo:", err);
-            message.error("Gagal menghapus promo");
+            showNotif("error", "Gagal", "Terjadi kesalahan saat menghapus promo.");
         } finally {
             setLoading(false);
         }
     };
 
-    // --- PERBAIKAN: Modifikasi handler untuk membersihkan error ---
     const handleEdit = (promo) => {
         setEditingPromo(promo);
         setFormData(promo);
-        setValidationErrors({}); // Bersihkan error
+        setValidationErrors({});
         setOpen(true);
     };
 
     const handleCancel = () => {
         setOpen(false);
-        setFormData({ status_aktif: "inaktif" }); // Reset ke default
+        setFormData({ status_aktif: "inaktif" });
         setEditingPromo(null);
-        setValidationErrors({}); // Bersihkan error
+        setValidationErrors({});
     };
-    
+
     const handleAddClick = () => {
         setEditingPromo(null);
-        setFormData({ status_aktif: "inaktif" }); // Reset ke default
-        setValidationErrors({}); // Bersihkan error
+        setFormData({ status_aktif: "inaktif" });
+        setValidationErrors({});
         setOpen(true);
     };
 
-    // Nilai default untuk Date/Time Picker
     const dateRangeValue =
         formData.tanggal_mulai && formData.tanggal_selesai
             ? [dayjs(formData.tanggal_mulai), dayjs(formData.tanggal_selesai)]
@@ -310,20 +305,13 @@ const PromoTab = () => {
 
     const timeRangeValue =
         formData.waktu_mulai && formData.waktu_selesai
-            ? [
-                dayjs(formData.waktu_mulai, "HH:mm:ss"),
-                dayjs(formData.waktu_selesai, "HH:mm:ss"),
-            ]
+            ? [dayjs(formData.waktu_mulai, "HH:mm:ss"), dayjs(formData.waktu_selesai, "HH:mm:ss")]
             : null;
 
     return (
         <div style={{ padding: "24px" }}>
-            <Row
-                gutter={[16, 16]}
-                align="middle"
-                justify="space-between"
-                style={{ marginBottom: 24 }}
-            >
+            {contextHolder}
+            <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
                 <Col flex="1">
                     <Search
                         placeholder="Cari promo..."
@@ -335,12 +323,7 @@ const PromoTab = () => {
                     />
                 </Col>
                 <Col flex="none">
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={handleAddClick} // <-- PERBAIKAN
-                        size="large"
-                    >
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAddClick} size="large">
                         Tambah Promo Baru
                     </Button>
                 </Col>
@@ -359,7 +342,7 @@ const PromoTab = () => {
                     loading={loading}
                     scroll={{ x: 1000 }}
                     onChange={handleTableChange}
-                    rowKey="key" // <-- PERBAIKAN
+                    rowKey="key"
                 />
             </Card>
 
@@ -377,7 +360,7 @@ const PromoTab = () => {
                 confirmLoading={loading}
                 okText={editingPromo ? "Update" : "Simpan"}
                 width={600}
-                destroyOnClose // Reset state internal AntD
+                destroyOnClose
             >
                 <div style={{ marginTop: "24px" }}>
                     <Row gutter={16}>
@@ -389,17 +372,12 @@ const PromoTab = () => {
                                 <Input
                                     placeholder="cth: SARAPANHEMAT"
                                     value={formData.kode_promo || ""}
-                                    onChange={(e) =>
-                                        handleChange("kode_promo", e.target.value.toUpperCase())
-                                    }
+                                    onChange={(e) => handleChange("kode_promo", e.target.value.toUpperCase())}
                                     style={{ marginTop: "8px" }}
-                                    status={validationErrors.kode_promo ? 'error' : ''} // <-- PERBAIKAN
+                                    status={validationErrors.kode_promo ? 'error' : ''}
                                 />
-                                {/* --- PESAN ERROR SPESIFIK --- */}
                                 {validationErrors.kode_promo && (
-                                    <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                                        Kode promo wajib diisi.
-                                    </Text>
+                                    <Text type="danger" style={{ fontSize: 12 }}>Kode promo wajib diisi.</Text>
                                 )}
                             </div>
                         </Col>
@@ -413,31 +391,24 @@ const PromoTab = () => {
                                     value={formData.nilai_diskon}
                                     onChange={(value) => handleChange("nilai_diskon", value)}
                                     style={{ marginTop: "8px", width: "100%" }}
-                                    formatter={(value) =>
-                                        `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                                    }
+                                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                                     parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
-                                    min={1} // <-- PERBAIKAN: Diskon minimal 1
-                                    status={validationErrors.nilai_diskon ? 'error' : ''} // <-- PERBAIKAN
+                                    min={1}
+                                    status={validationErrors.nilai_diskon ? 'error' : ''}
                                 />
-                                {/* --- PESAN ERROR SPESIFIK --- */}
                                 {validationErrors.nilai_diskon && (
-                                    <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                                        Nilai diskon wajib diisi (minimal 1).
-                                    </Text>
+                                    <Text type="danger" style={{ fontSize: 12 }}>Nilai diskon wajib diisi (minimal 1).</Text>
                                 )}
                             </div>
                         </Col>
                     </Row>
-                    <div style={{ marginTop: "0px" }}> {/* Margin 0 karena row sudah ada margin bottom */}
+                    <div style={{ marginTop: "0px" }}>
                         <Text strong>Deskripsi</Text>
                         <TextArea
                             rows={3}
                             placeholder="Masukkan deskripsi singkat promo"
                             value={formData.deskripsi_promo || ""}
-                            onChange={(e) =>
-                                handleChange("deskripsi_promo", e.target.value)
-                            }
+                            onChange={(e) => handleChange("deskripsi_promo", e.target.value)}
                             style={{ marginTop: "8px" }}
                         />
                     </div>
@@ -450,13 +421,10 @@ const PromoTab = () => {
                             onChange={handleDateChange}
                             value={dateRangeValue}
                             format="YYYY-MM-DD"
-                            status={validationErrors.tanggal_mulai ? 'error' : ''} // <-- PERBAIKAN
+                            status={validationErrors.tanggal_mulai ? 'error' : ''}
                         />
-                         {/* --- PESAN ERROR SPESIFIK --- */}
-                         {validationErrors.tanggal_mulai && (
-                            <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                                Tanggal berlaku wajib diisi.
-                            </Text>
+                        {validationErrors.tanggal_mulai && (
+                            <Text type="danger" style={{ fontSize: 12 }}>Tanggal berlaku wajib diisi.</Text>
                         )}
                     </div>
                     <div style={{ marginTop: "16px" }}>
@@ -469,17 +437,13 @@ const PromoTab = () => {
                         />
                     </div>
                     <div style={{ marginTop: "16px" }}>
-                        <Text strong>
-                            Status <span style={{ color: "red" }}>*</span>
-                        </Text>
+                        <Text strong>Status <span style={{ color: "red" }}>*</span></Text>
                         <Switch
                             checkedChildren="Aktif"
                             unCheckedChildren="Inaktif"
                             checked={formData.status_aktif === "aktif"}
-                            onChange={(checked) =>
-                                handleChange("status_aktif", checked ? "aktif" : "inaktif")
-                            }
-                            style={{ marginLeft: 16 }} // <-- PERBAIKAN: Beri jarak
+                            onChange={(checked) => handleChange("status_aktif", checked ? "aktif" : "inaktif")}
+                            style={{ marginLeft: 16 }}
                         />
                     </div>
                 </div>

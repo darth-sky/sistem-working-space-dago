@@ -1,3 +1,5 @@
+// src/pages/Kasir/TransaksiKasir/TransaksiKasir.jsx
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
     Button,
@@ -10,24 +12,30 @@ import {
     message,
     Spin, // Tambahkan Spin untuk loading
     Space, // Tambahkan Space untuk layout tombol
+    Card, // --- TAMBAHAN: Import Card ---
+    Descriptions, // --- TAMBAHAN: Import Descriptions ---
 } from "antd";
-import { PlusOutlined, UserOutlined, EditOutlined } from "@ant-design/icons"; // Tambahkan EditOutlined
-// Import service baru Anda dan updatePaymentStatus
+import { PlusOutlined, UserOutlined, EditOutlined } from "@ant-design/icons";
+
+// --- TAMBAHAN: Import Pie Chart ---
+import { Pie } from "@ant-design/charts";
+// --- AKHIR TAMBAHAN ---
+
 import {
     getDataTransaksiKasir,
     updatePaymentStatus,
     updateBatalStatus
-    // Pastikan service lain yang mungkin Anda butuhkan sudah diimpor
-} from "../../../services/service.js"; // Pastikan path ini benar
+} from "../../../services/service.js";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { formatRupiah } from "../../../utils/formatRupiah";
 import { useAuth } from "../../../providers/AuthProvider";
+import logoDago from "../../../assets/images/logo.png"
 
 
 const { Option } = Select;
 
-// Komponen OrderCard diperbarui untuk menampilkan status 'Disimpan'
+// Komponen OrderCard (Tidak perlu diubah, sudah generik)
 const OrderCard = ({ order, getStatusColor, getDisplayStatus, getPaymentStatusColor, onClick }) => (
     <div
         className="flex items-center justify-between bg-white rounded-xl px-5 py-4 shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer"
@@ -36,7 +44,7 @@ const OrderCard = ({ order, getStatusColor, getDisplayStatus, getPaymentStatusCo
         <div className="flex-1 min-w-0 mr-4"> {/* Tambahkan min-w-0 untuk handle overflow text */}
             <div className="flex justify-between items-center mb-1">
                 <div className="font-semibold text-base text-gray-800 tracking-wide truncate"> {/* Tambahkan truncate */}
-                    {order.name} {order.location && order.location !== '-' ? `(${order.location})` : ''} {/* Tampilkan lokasi jika ada */}
+                    {order.name} {order.location && order.location !== '-' ? `(${order.location})` : ''} {/* Tampilkan lokasi/ruangan */}
                 </div>
                 <div className="flex items-center space-x-2 flex-shrink-0"> {/* Cegah tag menyusut */}
                     {/* Tag Status Pesanan */}
@@ -55,8 +63,8 @@ const OrderCard = ({ order, getStatusColor, getDisplayStatus, getPaymentStatusCo
                     </Tag>
                     {/* Tag Tipe Order */}
                     <Tag
-                        color="cyan"
-                        className="font-medium rounded-md px-2 py-1 text-xs sm:text-sm bg-cyan-50 text-cyan-700 border-none"
+                        color={order.type === 'Booking' ? 'purple' : 'cyan'} // Warna berbeda untuk Booking
+                        className="font-medium rounded-md px-2 py-1 text-xs sm:text-sm border-none"
                     >
                         {order.type}
                     </Tag>
@@ -73,14 +81,9 @@ const TransaksiKasir = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalVisible, setIsModalVisible] = useState(false); // Modal detail order
-    // State untuk modal create order baru (jika masih diperlukan, tapi tombolnya sudah navigasi)
-    // const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
-    // const [orderType, setOrderType] = useState("Takeout");
-    // const [customerName, setCustomerName] = useState("");
-    // const [room, setRoom] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
     const [filterType, setFilterType] = useState("all");
-    const [filterPayment, setFilterPayment] = useState("all"); // <-- Filter Status Pembayaran BARU
+    const [filterPayment, setFilterPayment] = useState("all"); // <-- Filter Status Pembayaran
     const [searchText, setSearchText] = useState("");
     const [selectedOrder, setSelectedOrder] = useState(null);
     const navigate = useNavigate();
@@ -88,80 +91,110 @@ const TransaksiKasir = () => {
 
     const notificationSound = useRef(null);
     const knownTransactionIds = useRef(new Set());
-    
-    const { user } = useAuth();
+
+    // --- PERUBAHAN: Gunakan activeSession dan isSessionLoading ---
+    const { activeSession, isSessionLoading } = useAuth();
+    // -----------------------------------------------------------
+
     // Inisialisasi Audio
     useEffect(() => {
-        // Gunakan path absolut dari public folder
         notificationSound.current = new Audio("/sounds/notification.mp3");
     }, []);
 
-    // Fungsi Fetch Data dengan useCallback
+    // --- PERUBAHAN: Modifikasi fetchAndCheckOrders untuk memetakan lokasi booking ---
     const fetchAndCheckOrders = useCallback(async (isInitialLoad = false) => {
-        // Jangan set loading=true jika ini hanya polling, kecuali saat initial load
         if (isInitialLoad) setLoading(true);
         try {
-            // Panggil service untuk mendapatkan data (pastikan backend mengirim semua status)
-            const result = await getDataTransaksiKasir(/* Anda bisa tambahkan parameter filter ke backend jika perlu */);
+            const result = await getDataTransaksiKasir();
 
-            // Mapping data dari backend ke state 'orders'
-            const fetchedOrders = result.datas?.map((o) => ({
-                id: o.id, // Pastikan ini id_transaksi
-                name: o.customer || "Guest",
-                location: o.location || "-",
-                status: o.status_pesanan || 'N/A', // Status Order (Baru, Diproses, Selesai)
-                price: o.total || 0,
-                items: o.items || [],
-                time: o.time || new Date().toISOString(),
-                type: o.type || 'N/A', // Tipe Order (Dine In, Takeaway, Pick Up)
-                room: o.location, // Gunakan location sebagai room/meja jika dine-in
-                payment_status: o.payment_status || 'N/A', // Status Pembayaran (Lunas, Belum Lunas, Disimpan)
-                payment_method: o.payment_method || '-', // Metode Pembayaran
-            })) || []; // Fallback ke array kosong jika datas tidak ada
+            if (result.message !== "OK") {
+                throw new Error(result.error || "Gagal mengambil data transaksi");
+            }
 
-            // Cek order baru untuk notifikasi suara
+            const fetchedOrders = result.datas?.map((o) => {
+                const isBooking = o.type === 'Booking';
+                let orderLocation = o.location || "-"; // Default ke lokasi F&B
+
+                // Jika ini adalah booking, ambil nama ruangan dari array bookings
+                if (isBooking && o.bookings && o.bookings.length > 0) {
+                    orderLocation = o.bookings.map(b => b.room_name).join(', ');
+                }
+
+                return {
+                    id: o.id,
+                    name: o.customer || "Guest",
+                    location: orderLocation, // <-- LOKASI YANG SUDAH DIPERBARUI
+                    status: o.status_pesanan || 'N/A',
+                    price: o.total || 0,
+                    items: o.items || [], // Ambil F&B items
+                    bookings: o.bookings || [], // Ambil Booking items
+                    time: o.time || new Date().toISOString(),
+                    type: o.type || 'N/A',
+                    payment_status: o.payment_status || 'N/A',
+                    payment_method: o.payment_method || '-',
+                };
+            }) || [];
+
+            // ... (Logika notifikasi suara tetap sama) ...
             const currentIds = new Set(fetchedOrders.map(o => o.id));
             const hasNewOrder = fetchedOrders.some(
                 (order) => !knownTransactionIds.current.has(order.id)
             );
 
-            // Putar suara jika ada order baru dan bukan load pertama
             if (hasNewOrder && knownTransactionIds.current.size > 0 && notificationSound.current) {
                 notificationSound.current
                     .play()
                     .catch((e) => console.error("Audio play failed:", e));
             }
 
-            // Update state orders dan set ID yang diketahui
             setOrders(fetchedOrders);
-            knownTransactionIds.current = currentIds; // Update dengan ID terbaru
+            knownTransactionIds.current = currentIds;
 
         } catch (err) {
             console.error("Polling/Fetch error:", err);
-            if (isInitialLoad) { // Hanya tampilkan error saat load awal
+            if (isInitialLoad) {
                 message.error(`Gagal memuat data transaksi: ${err.message || 'Error tidak diketahui'}`);
             }
         } finally {
-            if (isInitialLoad) { // Matikan loading utama hanya saat initial load
+            if (isInitialLoad) {
                 setLoading(false);
             }
         }
-    }, []); // Dependency kosong agar useCallback tidak membuat ulang fungsi kecuali dipaksa
+    }, []);
+    // --------------------------------------------------------------------------
 
-    // useEffect untuk initial load dan polling
+    // --- PERUBAHAN: Gunakan useEffect yang "Session-Aware" ---
     useEffect(() => {
-        fetchAndCheckOrders(true); // Panggil sekali saat mount dengan flag initialLoad=true
+        let intervalId = null;
 
-        // Atur interval polling (setiap 15 detik)
-        const intervalId = setInterval(() => fetchAndCheckOrders(false), 15000); // Panggil tanpa flag
+        const startPolling = () => {
+            fetchAndCheckOrders(true); // Panggil sekali saat start
+            intervalId = setInterval(() => fetchAndCheckOrders(false), 15000); // Polling
+        };
 
-        // Hentikan interval saat komponen unmount
-        return () => clearInterval(intervalId);
-    }, [fetchAndCheckOrders]); // fetchAndCheckOrders stabil karena useCallback
+        if (isSessionLoading) {
+            setLoading(true);
+            return; // Tunggu
+        }
 
-    const cashierName = "Rossa"; // Bisa diambil dari context/auth nanti
+        if (activeSession) {
+            startPolling(); // Sesi aktif, mulai
+        } else {
+            setLoading(false); // Sesi tidak aktif
+            setOrders([]);
+            knownTransactionIds.current.clear();
+        }
 
-    // Fungsi helper warna status (order & payment)
+        // Cleanup
+        return () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [activeSession, isSessionLoading, fetchAndCheckOrders]);
+    // ---------------------------------------------------------
+
+    // ... (Fungsi helper getStatusColor & getPaymentStatusColor tetap sama) ...
     const getStatusColor = (status) => {
         switch (status) {
             case "Baru": return "blue";
@@ -176,108 +209,184 @@ const TransaksiKasir = () => {
         switch (paymentStatus) {
             case "Lunas": return "green";
             case "Belum Lunas": return "red";
-            case "Disimpan": return "geekblue"; // Warna biru untuk 'Disimpan'
+            case "Disimpan": return "geekblue";
             case "Dibatalkan": return "red";
             default: return "default";
         }
     };
-    // Fungsi display status (jika perlu terjemahan)
-    const getDisplayStatus = (status) => status || 'N/A'; // Langsung return saja
+    const getDisplayStatus = (status) => status || 'N/A';
 
-    // Filtering logic
-    const filteredOrders = useMemo(() => orders
-        .filter((o) => o.type !== "Booking") // Abaikan tipe 'Booking'
+    // --- PERUBAHAN: Buat DUA filtered list ---
+
+    // 1. Filter untuk F&B Orders
+    const filteredFnbOrders = useMemo(() => orders
+        .filter((o) => o.type !== "Booking") // HANYA F&B
         .filter((order) => {
-            // Filter Status Pesanan
+            // Filter Status Pesanan (F&B)
             if (filterStatus !== "all") {
-                if (filterStatus === "Diproses") { // 'In Progress' mencakup 'Diproses' & 'Sebagian Diproses'
+                if (filterStatus === "Diproses") {
                     if (order.status !== "Diproses" && order.status !== "Sebagian Diproses") return false;
                 } else if (order.status !== filterStatus) {
                     return false;
                 }
             }
-            // Filter Tipe Order
+            // Filter Tipe Order (F&B)
             if (filterType !== "all") {
                 const typeMap = { dinein: "Dine In", takeaway: "Takeaway", pickup: "Pick Up" };
-                if (order.type !== typeMap[filterType]) return false;
+                if (order.type.toLowerCase() !== typeMap[filterType].toLowerCase()) return false;
             }
-            // Filter Status Pembayaran (BARU)
+            // Filter Status Pembayaran (Umum)
             if (filterPayment !== "all") {
                 if (order.payment_status !== filterPayment) return false;
             }
-            // Filter Pencarian Teks
+            // Filter Pencarian Teks (Umum)
             if (searchText) {
                 const searchLower = searchText.toLowerCase();
                 const itemMatch = order.items?.some(item =>
-                    item.product?.toLowerCase().includes(searchLower) // Pastikan item.product ada
+                    item.product?.toLowerCase().includes(searchLower)
                 );
                 return (
                     order.name?.toLowerCase().includes(searchLower) ||
                     order.location?.toLowerCase().includes(searchLower) ||
-                    order.id?.toString().includes(searchLower) || // Cari berdasarkan ID juga
+                    order.id?.toString().includes(searchLower) ||
                     itemMatch
                 );
             }
-            return true; // Lolos semua filter
-        }), [orders, filterStatus, filterType, filterPayment, searchText]); // Tambahkan filterPayment
+            return true;
+        }), [orders, filterStatus, filterType, filterPayment, searchText]);
 
+    // 2. Filter untuk Booking Orders
+    const filteredBookingOrders = useMemo(() => orders
+        .filter((o) => o.type === "Booking") // HANYA Booking
+        .filter((order) => {
+            // Filter Status Pesanan (Booking punya status 'Baru', 'Selesai', 'Batal')
+            if (filterStatus !== "all") {
+                if (order.status !== filterStatus) return false;
+            }
+            // (Filter Tipe Order F&B dilewati)
 
-    // Kalkulasi total sales (tetap sama)
+            // Filter Status Pembayaran (Umum)
+            if (filterPayment !== "all") {
+                if (order.payment_status !== filterPayment) return false;
+            }
+            // Filter Pencarian Teks (Umum, tapi tanpa 'items')
+            if (searchText) {
+                const searchLower = searchText.toLowerCase();
+                return (
+                    order.name?.toLowerCase().includes(searchLower) ||
+                    order.location?.toLowerCase().includes(searchLower) || // Ini sekarang mencari nama ruangan
+                    order.id?.toString().includes(searchLower)
+                );
+            }
+            return true;
+        }), [orders, filterStatus, filterPayment, searchText]); // Perhatikan dependencies yang lebih sedikit
+    // ----------------------------------------------------
+
+    // --- PERUBAHAN: Kalkulasi summary berdasarkan F&B SAJA ---
     const totalSales = useMemo(() =>
-        filteredOrders
-            .filter(order => order.payment_status === 'Lunas') // Hanya hitung yang lunas
+        filteredFnbOrders // Ganti ke filteredFnbOrders
+            .filter(order => order.payment_status === 'Lunas')
             .reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
-        , [filteredOrders]);
+        , [filteredFnbOrders]);
 
-    // Summary produk (tetap sama)
-    const productSummary = useMemo(() => filteredOrders
-        .filter(order => order.payment_status === 'Lunas') // Hanya hitung dari yg lunas
+    const productSummary = useMemo(() => filteredFnbOrders // Ganti ke filteredFnbOrders
+        .filter(order => order.payment_status === 'Lunas')
         .reduce((acc, order) => {
-            order.items?.forEach((item) => { // Pastikan items ada
-                const productName = item.product || 'Unknown Product'; // Handle jika nama produk tidak ada
+            order.items?.forEach((item) => {
+                const productName = item.product || 'Unknown Product';
                 if (!acc[productName]) acc[productName] = { qty: 0, total: 0 };
                 acc[productName].qty += (item.qty || 0);
-                acc[productName].total += (item.price || 0) * (item.qty || 0); // Pastikan price & qty ada
+                acc[productName].total += (item.price || 0) * (item.qty || 0);
             });
             return acc;
         }, {})
-        , [filteredOrders]);
+        , [filteredFnbOrders]);
 
-    // Top produk (tetap sama)
     const topProducts = useMemo(() => Object.entries(productSummary)
         .map(([product, data], index) => ({
             key: index + 1,
             item: product,
             qty: data.qty,
-            total: formatRupiah(data.total), // Format di sini
+            total: formatRupiah(data.total),
         }))
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 10)
         , [productSummary]);
 
-    // Handler klik order card -> buka modal detail
-    const handleOrderClick = (order) => {
-        setSelectedOrder(order);
-        setIsModalVisible(true); // Buka modal detail
+    const tenantSummary = useMemo(() => {
+        const summary = filteredFnbOrders // Ganti ke filteredFnbOrders
+            .filter(order => order.payment_status === 'Lunas')
+            .reduce((acc, order) => {
+                order.items?.forEach((item) => {
+                    const tenantName = item.tenant_name || 'Lainnya';
+                    if (!acc[tenantName]) {
+                        acc[tenantName] = 0;
+                    }
+                    acc[tenantName] += (item.price || 0) * (item.qty || 0);
+                });
+                return acc;
+            }, {});
+
+        return Object.entries(summary).map(([tenantName, total]) => ({
+            type: tenantName,
+            value: total,
+        }));
+    }, [filteredFnbOrders]);
+    // ---------------------------------------------------------------
+
+    // ... (Konfigurasi Pie Chart tetap sama) ...
+    const pieConfig = {
+        data: tenantSummary,
+        angleField: 'value',
+        colorField: 'type',
+        radius: 0.85,
+        innerRadius: 0.6, // Membuatnya jadi Donut chart
+        label: {
+            type: 'inner',
+            offset: '-50%',
+            content: '{value}', // Tampilkan nilai
+            style: {
+                textAlign: 'center',
+                fontSize: 12,
+                fill: '#fff'
+            },
+        },
+        legend: {
+            position: 'bottom', // Pindahkan legenda ke bawah
+        },
+        interactions: [{ type: 'element-selected' }, { type: 'element-active' }],
+        animation: {
+            appear: {
+                animation: 'wave-in',
+                duration: 500,
+            },
+        },
+        tooltip: {
+            formatter: (datum) => {
+                return { name: datum.type, value: formatRupiah(datum.value) };
+            },
+        },
     };
 
-    // Handler tutup modal detail
+    // ... (Semua handler modal: handleOrderClick, handleCloseDetail, handleMarkAsPaid, handleMarkAsBatal, handleContinueOrder tetap sama) ...
+    const handleOrderClick = (order) => {
+        setSelectedOrder(order);
+        setIsModalVisible(true);
+    };
+
     const handleCloseDetail = () => {
         setIsModalVisible(false);
-        // Beri sedikit waktu sebelum state di-reset agar transisi modal mulus
         setTimeout(() => setSelectedOrder(null), 300);
     };
 
-    // Handler untuk tombol "Tandai Lunas" di modal
     const handleMarkAsPaid = async () => {
-        if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return; // Jangan proses jika sudah lunas atau disimpan
-
+        if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return;
         setIsUpdating(true);
         try {
             await updatePaymentStatus(selectedOrder.id);
             message.success(`Transaksi #${selectedOrder.id} telah ditandai Lunas.`);
-            handleCloseDetail(); // Tutup modal
-            await fetchAndCheckOrders(false); // Refresh data list (tanpa set loading utama)
+            handleCloseDetail();
+            await fetchAndCheckOrders(false);
         } catch (error) {
             console.error("Error updating payment status:", error);
             message.error(`Gagal memperbarui status: ${error.message || 'Error tidak diketahui'}`);
@@ -287,14 +396,13 @@ const TransaksiKasir = () => {
     };
 
     const handleMarkAsBatal = async () => {
-        if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return; // Jangan proses jika sudah lunas atau disimpan
-
+        if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return;
         setIsUpdating(true);
         try {
             await updateBatalStatus(selectedOrder.id);
             message.success(`Transaksi #${selectedOrder.id} telah ditandai Dibatalkan.`);
-            handleCloseDetail(); // Tutup modal
-            await fetchAndCheckOrders(false); // Refresh data list (tanpa set loading utama)
+            handleCloseDetail();
+            await fetchAndCheckOrders(false);
         } catch (error) {
             console.error("Error updating payment status:", error);
             message.error(`Gagal memperbarui status: ${error.message || 'Error tidak diketahui'}`);
@@ -303,57 +411,41 @@ const TransaksiKasir = () => {
         }
     };
 
-    // --- Handler BARU untuk tombol "Lanjutkan Order" ---
     const handleContinueOrder = () => {
         if (!selectedOrder || selectedOrder.payment_status !== 'Disimpan') return;
-
-        // Tutup modal dulu
         handleCloseDetail();
-
-        // Navigasi ke halaman OrderKasir, kirim ID via state
         navigate('/orderkasir', { state: { savedOrderId: selectedOrder.id } });
     };
 
+
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden"> {/* Tambah overflow-hidden */}
+        <div className="flex h-screen bg-gray-50 overflow-hidden">
             {/* LEFT PANEL */}
-            <div className="flex-1 bg-white p-5 overflow-y-auto rounded-r-3xl shadow-inner custom-scrollbar"> {/* Buat scrollable */}
-                {/* Header Welcome */}
+            <div className="flex-1 bg-white p-5 overflow-y-auto rounded-r-3xl shadow-inner custom-scrollbar">
+                {/* ... (Header Welcome, Search Bar, Filters, Tombol Order Baru tetap sama) ... */}
                 <div className="flex justify-between items-center mb-4">
                     <div>
                         <h2 className="text-lg font-bold text-gray-800">Welcome</h2>
                         <p className="text-sm text-gray-500">Dago Creative Hub & Coffee Lab</p>
                     </div>
-                    {/* Kasir Info (Opsional) */}
                     <div className="flex items-center space-x-2 text-gray-600 text-sm">
-                        <UserOutlined />
-                        <span>{cashierName}</span>
                     </div>
                 </div>
-
-                {/* Search Bar */}
                 <div className="pb-3">
                     <Input.Search
-                        placeholder="Cari ID, nama customer, lokasi, atau produk..."
+                        placeholder="Cari ID, nama customer, lokasi/ruangan, atau produk..."
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         className="rounded-lg"
-                        allowClear // Tambah tombol clear
+                        allowClear
                     />
                 </div>
-
-                {/* Filters and New Order Button */}
-                <div className="flex flex-wrap gap-3 justify-between items-center mb-5"> {/* flex-wrap dan gap */}
-                    <div className="flex flex-wrap gap-3 items-center"> {/* flex-wrap dan gap */}
-                        {/* Filter Status Pesanan */}
-                        {/* Pastikan div pembungkus ketiga Select ini menggunakan flex dan flex-wrap 
-  Contoh: <div className="flex flex-wrap gap-4"> 
-*/}
-
+                <div className="flex flex-wrap gap-3 justify-between items-center mb-5">
+                    <div className="flex flex-wrap gap-3 items-center">
                         <Select
                             value={filterStatus}
                             onChange={setFilterStatus}
-                            className="w-full md:w-auto md:min-w-[180px]" // 👈 PERUBAHAN
+                            className="w-full md:w-auto md:min-w-[180px]"
                         >
                             <Option value="all">Semua Status Order</Option>
                             <Option value="Baru">Baru</Option>
@@ -366,9 +458,9 @@ const TransaksiKasir = () => {
                         <Select
                             value={filterType}
                             onChange={setFilterType}
-                            className="w-full md:w-auto md:min-w-[180px]" // 👈 PERUBAHAN
+                            className="w-full md:w-auto md:min-w-[180px]"
                         >
-                            <Option value="all">Semua Tipe Order</Option>
+                            <Option value="all">Semua Tipe Order F&B</Option>
                             <Option value="dinein">Dine In</Option>
                             <Option value="takeaway">Takeaway</Option>
                             <Option value="pickup">Pick Up</Option>
@@ -377,7 +469,7 @@ const TransaksiKasir = () => {
                         <Select
                             value={filterPayment}
                             onChange={setFilterPayment}
-                            className="w-full md:w-auto md:min-w-[180px]" // 👈 PERUBAHAN
+                            className="w-full md:w-auto md:min-w-[180px]"
                         >
                             <Option value="all">Semua Status Bayar</Option>
                             <Option value="Lunas">Lunas</Option>
@@ -386,122 +478,156 @@ const TransaksiKasir = () => {
                             <Option value="Dibatalkan">Dibatalkan</Option>
                         </Select>
                     </div>
-                    {/* Tombol Order Baru */}
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
-                        // Arahkan ke halaman POS utama (OrderKasir)
-                        onClick={() => navigate('/buatorderkasir')} // Langsung navigasi
+                        onClick={() => navigate('/buatorderkasir')}
                         className="rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
                     >
                         Order Baru
                     </Button>
                 </div>
 
-                {/* Transaction List Header */}
+                {/* --- PERUBAHAN: Tampilkan Daftar F&B --- */}
                 <h3 className="font-semibold mb-2 text-gray-700">
-                    Transaksi F&B ({filteredOrders.length})
+                    Transaksi F&B ({filteredFnbOrders.length})
                 </h3>
-
-                {/* Transaction List Body */}
                 <div className="space-y-3">
                     {loading ? (
-                        // Tampilkan spinner di tengah saat loading awal
                         <div className="flex justify-center items-center py-16">
                             <Spin tip="Memuat transaksi..." size="large" />
                         </div>
-                    ) : filteredOrders.length === 0 ? (
+                    ) : orders.length === 0 && !loading ? (
+                        // Jika tidak ada data SAMA SEKALI (termasuk booking)
+                        <div className="text-center py-8 text-gray-400">
+                            {activeSession
+                                ? "Tidak ada transaksi pada sesi ini."
+                                : "Tidak ada sesi kasir yang aktif."
+                            }
+                        </div>
+                    ) : filteredFnbOrders.length === 0 ? (
+                        // Jika ada data, tapi F&B terfilter habis
                         <div className="text-center py-8 text-gray-400">
                             Tidak ada transaksi F&B yang cocok dengan filter.
                         </div>
                     ) : (
-                        // Render daftar order card
-                        filteredOrders.map((order) => (
+                        filteredFnbOrders.map((order) => (
                             <OrderCard
-                                key={order.id} // Gunakan ID transaksi sebagai key
+                                key={order.id}
                                 order={order}
                                 getStatusColor={getStatusColor}
                                 getDisplayStatus={getDisplayStatus}
-                                getPaymentStatusColor={getPaymentStatusColor} // Kirim fungsi warna payment
-                                onClick={handleOrderClick} // Handler untuk membuka modal detail
+                                getPaymentStatusColor={getPaymentStatusColor}
+                                onClick={handleOrderClick}
                             />
                         ))
                     )}
                 </div>
+
             </div>
 
             {/* RIGHT PANEL (Summary) */}
-            <div className="w-80 bg-gray-50 p-5 space-y-6 hidden lg:block"> {/* Sembunyikan di layar kecil */}
-                {/* Total Sales Card */}
-                <div className="flex justify-between bg-white rounded-xl p-4 shadow-sm">
-                    <h3 className="text-sm font-semibold text-gray-600">Total Penjualan (Lunas)</h3>
+            {/* Panel ini sekarang HANYA menampilkan summary F&B */}
+            <div className="w-80 bg-gray-50 p-5 flex flex-col gap-6 lg:block">
+                <div className="flex justify-between bg-white rounded-xl p-4 shadow-sm flex-shrink-0">
+                    <h3 className="text-sm font-semibold text-gray-600">Total Penjualan F&B (Lunas)</h3>
                     <p className="text-xl font-bold text-blue-600">
                         {formatRupiah(totalSales)}
                     </p>
                 </div>
 
-                {/* Logo */}
-                <div className="flex justify-center pt-4 pb-2">
-                    <img src="/img/logo_dago.png" alt="Logo Dago" className="h-16 opacity-80" />
-                </div>
+                <Card title="Sales F&B per Tenant (Lunas)" size="small" className="shadow-sm flex-shrink-0">
+                    {loading ? (
+                        <div className="flex justify-center items-center h-[280px]">
+                            <Spin />
+                        </div>
+                    ) : tenantSummary.length > 0 ? (
+                        // --- MULAI PERUBAHAN ---
+                        <div style={{ position: 'relative', height: 280 }}>
+                            <Pie {...pieConfig} height={280} />
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: '50%', // Pusat vertikal
+                                    left: '50%', // Pusat horizontal
+                                    transform: 'translate(-50%, -35%)', // Pastikan di tengah
+                                    width: '100px', // Ukuran logo diperbesar
+                                    height: '100px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <img
+                                    src="/img/logo_dago.png" // Cukup pakai path dari /public
+                                    alt="Logo"
+                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                />
+                            </div>
+                        </div>
 
-                {/* Top Products Table */}
-                <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Top 10 Produk (Lunas)</h3>
-                    <Table
-                        size="small"
-                        pagination={false}
-                        columns={[
-                            { title: "Produk", dataIndex: "item", key: "item", ellipsis: true }, // Tambah ellipsis
-                            { title: "Qty", dataIndex: "qty", key: "qty", width: 50, align: 'center' }, // Atur lebar & align
-                            {
-                                title: "Total", dataIndex: "total", key: "total", width: 100, align: 'right', // Atur lebar & align
-                                render: (text) => <span className="font-medium">{text}</span>
-                            },
-                        ]}
-                        dataSource={topProducts}
-                        scroll={{ y: 240 }} // Sesuaikan tinggi scroll jika perlu
-                    />
+                    ) : (
+
+                        <div className="flex justify-center items-center h-[280px] text-gray-400">
+                            Tidak ada data sales F&B.
+                        </div>
+                    )}
+                </Card>
+
+                <div className="bg-white rounded-xl p-4 shadow-sm flex-1 min-h-0 flex flex-col">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2 flex-shrink-0">Top 10 Produk F&B (Lunas)</h3>
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                        <Table
+                            size="small"
+                            pagination={false}
+                            columns={[
+                                { title: "Produk", dataIndex: "item", key: "item", ellipsis: true },
+                                { title: "Qty", dataIndex: "qty", key: "qty", width: 50, align: 'center' },
+                                {
+                                    title: "Total", dataIndex: "total", key: "total", width: 100, align: 'right',
+                                    render: (text) => <span className="font-medium">{text}</span>
+                                },
+                            ]}
+                            dataSource={topProducts}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* MODAL: Detail Order */}
+            {/* --- PERUBAHAN: Modal Cerdas (Menampilkan F&B atau Booking) --- */}
             <Modal
                 title={
                     <span className="text-lg font-semibold text-gray-800">
                         Detail Order #{selectedOrder?.id || ""} - {selectedOrder?.name || ""}
                     </span>
                 }
-                open={isModalVisible} // Gunakan state isModalVisible
+                open={isModalVisible}
                 onCancel={handleCloseDetail}
                 width={500}
                 className="rounded-xl"
-                destroyOnClose // Reset konten modal saat ditutup
-                footer={[ // Footer kustom untuk tombol aksi
+                destroyOnClose
+                footer={[
                     <Button key="back" onClick={handleCloseDetail}>
                         Tutup
                     </Button>,
-                    // Tombol "Lanjutkan Order" HANYA untuk status 'Disimpan'
                     selectedOrder?.payment_status === "Disimpan" && (
                         <Button
                             key="continue"
                             type="primary"
                             icon={<EditOutlined />}
-                            onClick={handleContinueOrder} // Handler baru
-                            loading={isUpdating} // Bisa gunakan state loading yang sama
+                            onClick={handleContinueOrder}
+                            loading={isUpdating}
                             disabled={isUpdating}
                         >
                             Lanjutkan Order
                         </Button>
                     ),
-                    // Tombol "Tandai Lunas" HANYA untuk status 'Belum Lunas'
                     selectedOrder?.payment_status === "Belum Lunas" && (
                         <Button
-                            key="submit"
+                            key="pay"
                             type="primary"
                             loading={isUpdating}
                             onClick={handleMarkAsPaid}
-                            // Styling hijau (opsional)
                             className="bg-green-600 hover:bg-green-700 border-green-600 text-white"
                         >
                             Tandai Lunas
@@ -509,82 +635,93 @@ const TransaksiKasir = () => {
                     ),
                     selectedOrder?.payment_status === "Belum Lunas" && (
                         <Button
-                            key="submit"
+                            key="cancel"
                             type="primary"
+                            danger
                             loading={isUpdating}
                             onClick={handleMarkAsBatal}
-                            // Styling hijau (opsional)
-                            className="bg-green-600 hover:bg-green-700 border-green-600 text-white"
                         >
                             Tandai Batal
                         </Button>
                     ),
                 ]}
-            >
-                {/* Konten Modal Detail */}
+        >
                 {selectedOrder && (
-                    <div className="space-y-3 text-gray-700 pt-4"> {/* Tambah padding top */}
-                        {/* Status Pesanan */}
+                    <div className="space-y-3 text-gray-700 pt-4">
+                        {/* Info Umum (Status, Bayar, Tipe, Lokasi) */}
                         <div className="flex justify-between items-center">
                             <span>Status Pesanan:</span>
                             <Tag color={getStatusColor(selectedOrder.status)}>
                                 {getDisplayStatus(selectedOrder.status).toUpperCase()}
                             </Tag>
                         </div>
-                        {/* Status Pembayaran */}
                         <div className="flex justify-between items-center">
                             <span>Status Bayar:</span>
                             <Tag color={getPaymentStatusColor(selectedOrder.payment_status)}>
                                 {selectedOrder.payment_status.toUpperCase()}
                             </Tag>
                         </div>
-                        {/* Metode Pembayaran (jika sudah lunas/disimpan) */}
                         {selectedOrder.payment_method && selectedOrder.payment_method !== '-' && (
                             <div className="flex justify-between">
                                 <span>Metode Bayar:</span>
                                 <span>{selectedOrder.payment_method}</span>
                             </div>
                         )}
-                        {/* Tipe Order */}
                         <div className="flex justify-between">
                             <span>Tipe:</span>
                             <span>{selectedOrder.type}</span>
                         </div>
-                        {/* Lokasi */}
                         <div className="flex justify-between">
-                            <span>Lokasi/Meja:</span>
+                            <span>Lokasi/Ruangan:</span> {/* Label diubah */}
                             <span>{selectedOrder.location}</span>
                         </div>
-                        {/* Waktu Order */}
                         <div className="flex justify-between">
                             <span>Waktu Order:</span>
                             <span>{dayjs(selectedOrder.time).format("DD/MM/YYYY HH:mm:ss")}</span>
                         </div>
 
-                        {/* Rincian Item */}
-                        <div className="mt-4 border-t pt-3">
-                            <h4 className="font-semibold mb-2 text-gray-800">Item Pesanan ({selectedOrder.items?.length || 0}):</h4>
-                            {/* Tambahkan area scroll jika item banyak */}
-                            <div className="max-h-40 overflow-y-auto custom-scrollbar pr-2 space-y-1">
-                                {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                                    selectedOrder.items.map((item, i) => (
-                                        <div key={item.id_detail || i} className="flex justify-between text-sm"> {/* Gunakan ID detail jika ada */}
+                        {/* Detail Item F&B (Hanya tampil jika ada) */}
+                        {selectedOrder.items && selectedOrder.items.length > 0 && (
+                            <div className="mt-4 border-t pt-3">
+                                <h4 className="font-semibold mb-2 text-gray-800">Item Pesanan F&B ({selectedOrder.items.length}):</h4>
+                                <div className="max-h-40 overflow-y-auto custom-scrollbar pr-2 space-y-1">
+                                    {selectedOrder.items.map((item, i) => (
+                                        <div key={item.id_detail || i} className="flex justify-between text-sm">
                                             <span className="flex-1 mr-2">
                                                 {item.product || 'Produk tidak diketahui'} x{item.qty || 0}
-                                                {item.note && <i className="text-gray-500 block text-xs"> ({item.note})</i>} {/* Tampilkan note jika ada */}
+                                                {item.note && <i className="text-gray-500 block text-xs"> ({item.note})</i>}
                                             </span>
                                             <span className="font-medium whitespace-nowrap">
                                                 {formatRupiah((item.price || 0) * (item.qty || 0))}
                                             </span>
                                         </div>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-gray-500 italic">Tidak ada item detail.</p>
-                                )}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Total Harga */}
+                        {/* Detail Booking (Hanya tampil jika ada) */}
+                        {selectedOrder.bookings && selectedOrder.bookings.length > 0 && (
+                            <div className="mt-4 border-t pt-3">
+                                <h4 className="font-semibold mb-2 text-gray-800">Detail Booking Ruangan ({selectedOrder.bookings.length}):</h4>
+                                <div className="max-h-40 overflow-y-auto custom-scrollbar pr-2 space-y-1">
+                                    {selectedOrder.bookings.map((booking, i) => (
+                                        <div key={booking.id_booking || i} className="text-sm mb-2">
+                                            <div className="flex justify-between font-medium">
+                                                <span className="flex-1 mr-2">{booking.room_name}</span>
+                                            </div>
+                                            <ul className="text-xs text-gray-600 pl-4" style={{ listStyleType: 'disc' }}>
+                                                <li>Kategori: {booking.room_category}</li>
+                                                <li>Mulai: {dayjs(booking.start_time).format("DD MMM YYYY, HH:mm")}</li>
+                                                <li>Selesai: {dayjs(booking.end_time).format("DD MMM YYYY, HH:mm")}</li>
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Total */}
                         <div className="flex justify-between font-bold mt-4 border-t pt-2 text-blue-700 text-lg">
                             <span>Total:</span>
                             <span>{formatRupiah(selectedOrder.price || 0)}</span>
@@ -592,10 +729,7 @@ const TransaksiKasir = () => {
                     </div>
                 )}
             </Modal>
-
-            {/* Modal Buat Order Baru (jika masih diperlukan, tapi tombolnya sudah navigasi) */}
-            {/* <Modal title="Buat Order Baru" open={isCreateModalVisible} onOk={handleCreateOrder} onCancel={() => setIsCreateModalVisible(false)}> ... </Modal> */}
-
+            {/* --- AKHIR PERUBAHAN MODAL --- */}
         </div>
     );
 };

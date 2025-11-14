@@ -10,10 +10,10 @@ import {
   Card,
   Space,
   Select,
-  message,
   Popconfirm,
   Tooltip,
   Form,
+  notification,
 } from "antd";
 import {
   PlusOutlined,
@@ -21,7 +21,7 @@ import {
   DeleteOutlined,
   AppstoreOutlined,
   ShopOutlined,
-  SearchOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import {
   getKategoriTenant,
@@ -34,25 +34,31 @@ import {
 const { Text } = Typography;
 const { Option } = Select;
 
-/**
- * ProductKategoriTab.jsx
- * - Nama Merchant & Nama Kategori filters behave exactly like ProductTab.jsx:
- * filters from uniqueValues(data, key)
- * onFilter uses includes(...) case-insensitive
- * filterSearch enabled on dropdown
- */
-
 const ProductKategoriTab = () => {
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
-  // const [formData, setFormData] = useState({}); // <--- HAPUS: State form akan dikelola oleh AntD
   const [loading, setLoading] = useState(false);
   const [tenantsForDropdown, setTenantsForDropdown] = useState([]);
   const [data, setData] = useState([]);
   const [pageSize, setPageSize] = useState(5);
-  const [form] = Form.useForm(); // <--- TAMBAH: Buat instance form AntD
+  const [form] = Form.useForm();
+  const [api, contextHolder] = notification.useNotification();
 
-  // Ambil nilai unik dari data untuk membuat options filter (text/value)
+  // 🔔 Fungsi untuk menampilkan notifikasi kanan atas
+  const showNotification = (type, title, description) => {
+    api[type]({
+      message: title,
+      description: description,
+      placement: "topRight",
+      duration: 3,
+      icon:
+        type === "success" ? (
+          <CheckCircleOutlined style={{ color: "#52c41a" }} />
+        ) : undefined,
+    });
+  };
+
+  // Ambil nilai unik dari data untuk filter tabel
   const uniqueValues = (arr, key) => {
     return [...new Set(arr.map((item) => item[key]).filter(Boolean))].map((val) => ({
       text: val,
@@ -60,7 +66,7 @@ const ProductKategoriTab = () => {
     }));
   };
 
-  // Fetch kategori + mapping
+  // Fetch data kategori
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -75,17 +81,16 @@ const ProductKategoriTab = () => {
         }));
         setData(kategori);
       } else {
-        message.error(res.data?.error || "Gagal mengambil data kategori");
+        showNotification("error", "Gagal Memuat", "Tidak dapat memuat data kategori.");
       }
     } catch (err) {
-      console.error("Gagal fetch kategori:", err);
-      message.error("Gagal mengambil data kategori: " + (err.message || "Error tidak diketahui"));
+      showNotification("error", "Kesalahan", err.message || "Terjadi kesalahan saat memuat data.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch tenants untuk modal dropdown
+  // Fetch tenant untuk dropdown
   const fetchTenants = async () => {
     try {
       const res = await getTenantsForDropdown();
@@ -93,7 +98,7 @@ const ProductKategoriTab = () => {
         setTenantsForDropdown(res.data.datas);
       }
     } catch (err) {
-      console.error("Gagal fetch tenants for dropdown:", err);
+      showNotification("error", "Kesalahan", "Gagal memuat data merchant.");
     }
   };
 
@@ -102,18 +107,14 @@ const ProductKategoriTab = () => {
     fetchTenants();
   }, []);
 
-  // Kolom tabel: (Tidak ada perubahan di sini)
+  // Kolom tabel
   const columns = [
     {
       title: "ID Kategori",
       dataIndex: "id_kategori",
       key: "id_kategori",
       width: 120,
-      sorter: (a, b) => {
-        const ai = Number(a.id_kategori) || 0;
-        const bi = Number(b.id_kategori) || 0;
-        return ai - bi;
-      },
+      sorter: (a, b) => (Number(a.id_kategori) || 0) - (Number(b.id_kategori) || 0),
       render: (text) => text ?? "-",
     },
     {
@@ -121,9 +122,9 @@ const ProductKategoriTab = () => {
       dataIndex: "nama_merchant",
       key: "nama_merchant",
       filters: uniqueValues(data, "nama_merchant"),
-      filterSearch: true, 
+      filterSearch: true,
       onFilter: (value, record) =>
-        record.nama_merchant ? record.nama_merchant.toLowerCase().includes(value.toLowerCase()) : false,
+        record.nama_merchant?.toLowerCase().includes(value.toLowerCase()) || false,
       render: (text) => (
         <Space>
           <ShopOutlined style={{ color: "#1890ff" }} />
@@ -138,7 +139,7 @@ const ProductKategoriTab = () => {
       filters: uniqueValues(data, "nama_kategori"),
       filterSearch: true,
       onFilter: (value, record) =>
-        record.nama_kategori ? record.nama_kategori.toLowerCase().includes(value.toLowerCase()) : false,
+        record.nama_kategori?.toLowerCase().includes(value.toLowerCase()) || false,
       render: (text) => (
         <Space>
           <AppstoreOutlined style={{ color: "#52c41a" }} />
@@ -163,7 +164,7 @@ const ProductKategoriTab = () => {
           </Tooltip>
           <Tooltip title="Delete Kategori">
             <Popconfirm
-              title="Delete Kategori"
+              title="Hapus Kategori"
               description="Yakin ingin menghapus kategori ini?"
               onConfirm={() => handleDelete(record.id_kategori)}
               okText="Ya"
@@ -178,24 +179,17 @@ const ProductKategoriTab = () => {
     },
   ];
 
-  // <--- HAPUS: Fungsi handleChange tidak diperlukan lagi
-  // const handleChange = (field, value) => {
-  //   setFormData({ ...formData, [field]: value });
-  // };
-
-  // Add / Update kategori
+  // CREATE / UPDATE kategori
   const handleAddCategory = async () => {
     try {
-      // <--- UBAH: Gunakan form.validateFields() untuk validasi
-      // Ini akan otomatis menampilkan pesan error di form jika gagal
       const values = await form.validateFields();
-
       setLoading(true);
+
       let res;
       if (editingCategory) {
         res = await updateKategori(editingCategory.id_kategori, {
           nama_kategori: values.nama_kategori,
-          id_tenant: values.merchantId, // 'merchantId' dari name Form.Item
+          id_tenant: values.merchantId,
         });
       } else {
         res = await createKategori({
@@ -205,38 +199,39 @@ const ProductKategoriTab = () => {
       }
 
       if (res.status === 200 || res.status === 201) {
-        message.success(res.data?.message || `Kategori berhasil ${editingCategory ? "diperbarui" : "ditambahkan"}!`);
+        showNotification(
+          "success",
+          editingCategory ? "Kategori Diperbarui" : "Kategori Ditambahkan",
+          `Data kategori berhasil ${editingCategory ? "diperbarui" : "ditambahkan"}.`
+        );
         await fetchData();
-        handleCancel(); // handleCancel akan menutup modal & reset form
+        handleCancel();
       } else {
-        message.error(res.data?.error || "Gagal menyimpan kategori.");
+        showNotification("error", "Operasi Gagal", res.data?.error || "Gagal menyimpan data kategori.");
       }
-    } catch (validationError) {
-      // <--- TAMBAH: Blok catch ini akan menangani jika validasi gagal
-      console.log("Validation Failed:", validationError);
-      message.warning("Harap isi semua bidang yang wajib diisi.");
+    } catch (err) {
+      showNotification("error", "Validasi Gagal", "Harap isi semua bidang yang wajib diisi.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete kategori (Tidak ada perubahan di sini)
+  // DELETE kategori
   const handleDelete = async (id_kategori) => {
     setLoading(true);
     try {
       const res = await deleteKategori(id_kategori);
       if (res.status === 200) {
-        message.success("Kategori berhasil dihapus!");
+        showNotification("success", "Kategori Dihapus", "Data kategori berhasil dihapus.");
         await fetchData();
       } else {
-        message.error(res.data?.error || "Gagal menghapus kategori");
+        showNotification("error", "Gagal Menghapus", res.data?.error || "Terjadi kesalahan saat menghapus kategori.");
       }
     } catch (err) {
-      console.error("Error delete kategori:", err);
-      if (err.response?.data?.error && err.response.data.error.includes("foreign key constraint fails")) {
-        message.error("Gagal menghapus: Kategori masih digunakan oleh produk.");
+      if (err.response?.data?.error?.includes("foreign key constraint fails")) {
+        showNotification("error", "Kategori Digunakan", "Kategori masih digunakan oleh produk.");
       } else {
-        message.error("Gagal menghapus kategori: " + (err.message || "Error tidak diketahui"));
+        showNotification("error", "Kesalahan", err.message || "Terjadi kesalahan saat menghapus kategori.");
       }
     } finally {
       setLoading(false);
@@ -245,7 +240,6 @@ const ProductKategoriTab = () => {
 
   const handleEdit = (category) => {
     setEditingCategory(category);
-    // <--- UBAH: Gunakan form.setFieldsValue untuk mengisi form
     form.setFieldsValue({
       merchantId: category.merchantId,
       nama_kategori: category.nama_kategori,
@@ -255,13 +249,14 @@ const ProductKategoriTab = () => {
 
   const handleCancel = () => {
     setOpen(false);
-    // setFormData({}); // <--- HAPUS
     setEditingCategory(null);
-    form.resetFields(); // <--- TAMBAH: Reset form & validasinya
+    form.resetFields();
   };
 
   return (
     <div style={{ padding: "24px" }}>
+      {contextHolder}
+
       <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
         <Col flex="1" />
         <Col flex="none">
@@ -269,9 +264,8 @@ const ProductKategoriTab = () => {
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => {
-              // <--- UBAH: Pastikan form di-reset saat menambah baru
-              setEditingCategory(null); // Pastikan mode edit mati
-              form.resetFields();      // Reset field
+              setEditingCategory(null);
+              form.resetFields();
               setOpen(true);
             }}
             size="large"
@@ -287,7 +281,7 @@ const ProductKategoriTab = () => {
           dataSource={data}
           rowKey={(record) => record.id_kategori ?? record.key}
           pagination={{
-            pageSize: pageSize,
+            pageSize,
             showSizeChanger: true,
             showQuickJumper: true,
             pageSizeOptions: ["5", "10", "50", "100"],
@@ -308,21 +302,19 @@ const ProductKategoriTab = () => {
         }
         open={open}
         onCancel={handleCancel}
-        onOk={handleAddCategory} // <--- onOk akan menjalankan handleAddCategory yg sdh divalidasi
+        onOk={handleAddCategory}
         confirmLoading={loading}
         okText={editingCategory ? "Update" : "Add"}
         width={600}
-        destroyOnClose // <--- TAMBAH: Pastikan form dihancurkan saat close
+        destroyOnClose
       >
-        <Form
-          form={form} // <--- TAMBAH: Hubungkan instance form ke komponen Form
-          layout="vertical"
-          // <--- HAPUS: Properti di bawah ini tidak diperlukan lagi
-          // initialValues={formData} 
-          // onValuesChange={(changedValues, allValues) => setFormData(allValues)}
-        >
+        <Form form={form} layout="vertical">
           <Form.Item
-            label={<Text strong>Merchant <span style={{ color: "red" }}>*</span></Text>}
+            label={
+              <Text strong>
+                Merchant <span style={{ color: "red" }}>*</span>
+              </Text>
+            }
             name="merchantId"
             rules={[{ required: true, message: "Silakan pilih merchant!" }]}
           >
@@ -331,10 +323,9 @@ const ProductKategoriTab = () => {
               style={{ width: "100%" }}
               showSearch
               optionFilterProp="children"
-              filterOption={(input, option) => (option?.children ?? "").toLowerCase().includes(input.toLowerCase())}
-              // <--- HAPUS: Properti value & onChange
-              // onChange={(val) => handleChange("merchantId", val)}
-              // value={formData.merchantId}
+              filterOption={(input, option) =>
+                (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
+              }
             >
               {tenantsForDropdown.map((tenant) => (
                 <Option key={tenant.id_tenant} value={tenant.id_tenant}>
@@ -345,16 +336,15 @@ const ProductKategoriTab = () => {
           </Form.Item>
 
           <Form.Item
-            label={<Text strong>Nama Kategori <span style={{ color: "red" }}>*</span></Text>}
+            label={
+              <Text strong>
+                Nama Kategori <span style={{ color: "red" }}>*</span>
+              </Text>
+            }
             name="nama_kategori"
             rules={[{ required: true, message: "Silakan masukkan nama kategori!" }]}
           >
-            <Input
-              placeholder="Masukkan nama kategori"
-              // <--- HAPUS: Properti value & onChange
-              // onChange={(e) => handleChange("nama_kategori", e.target.value)}
-              // value={formData.nama_kategori}
-            />
+            <Input placeholder="Masukkan nama kategori" />
           </Form.Item>
         </Form>
       </Modal>
@@ -363,3 +353,4 @@ const ProductKategoriTab = () => {
 };
 
 export default ProductKategoriTab;
+

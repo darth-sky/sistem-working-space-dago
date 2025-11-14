@@ -10,13 +10,13 @@ import {
   Card,
   Space,
   Select,
-  message,
   Popconfirm,
   Tooltip,
   Upload,
   InputNumber,
   Switch,
   Spin,
+  notification, // <-- Ditambahkan
 } from "antd";
 import {
   PlusOutlined,
@@ -26,6 +26,8 @@ import {
   ShoppingOutlined,
   FileImageOutlined,
   UploadOutlined,
+  CheckCircleOutlined, // <-- Ditambahkan
+  CloseCircleOutlined, // <-- Ditambahkan
 } from "@ant-design/icons";
 import {
   getProduk,
@@ -43,7 +45,7 @@ const { Search, TextArea } = Input;
 const getImageUrl = (filename) => {
   if (!filename) return "/static/kopi.jpg"; // Fallback default
   const baseUrlWithoutApi = import.meta.env.VITE_BASE_URL?.replace('/api/v1', '') || '';
-  return `${baseUrlWithoutApi}/static/${filename}`; 
+  return `${baseUrlWithoutApi}/static/${filename}`;
 };
 
 // Helper function di luar komponen
@@ -64,13 +66,31 @@ const ProductTab = () => {
   const [formData, setFormData] = useState({ status_ketersediaan: "Active", status_visibilitas: "Aktif" });
   const [fileFoto, setFileFoto] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
-  const [loading, setLoading] = useState(false); 
-  const [submitLoading, setSubmitLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const [data, setData] = useState([]);
   const [pageSize, setPageSize] = useState(10);
   const [kategoriList, setKategoriList] = useState([]);
   const [tenantList, setTenantList] = useState([]);
-  const [validationErrors, setValidationErrors] = useState({}); // State untuk validasi
+  const [validationErrors, setValidationErrors] = useState({});
+
+  // --- TAMBAHAN: Inisialisasi Notifikasi ---
+  const [api, contextHolder] = notification.useNotification();
+
+  // --- TAMBAHAN: Fungsi Helper Notifikasi (dibuat stabil dengan useCallback) ---
+  const openNotif = useCallback((type, title, desc) => {
+    api[type]({
+      message: title,
+      description: desc,
+      placement: "topRight",
+      duration: 3,
+      icon: type === "success" ? (
+        <CheckCircleOutlined style={{ color: "#52c41a" }} />
+      ) : type === "error" ? (
+        <CloseCircleOutlined style={{ color: "#ff4d4f" }} />
+      ) : null,
+    });
+  }, [api]); // Dependensi hanya 'api'
 
   // Memoize filtered category list
   const filteredKategoriList = useMemo(() => {
@@ -90,12 +110,12 @@ const ProductTab = () => {
 
       if (resProduk.status === 200 && resProduk.data.message === "OK") {
         const produk = resProduk.data.datas.map((item) => ({
-          key: item.id_produk, 
+          key: item.id_produk,
           ...item,
         }));
         setData(produk);
       } else {
-        message.error(resProduk.data?.error || "Gagal mengambil data produk");
+        openNotif("error", "Gagal Memuat Produk", resProduk.data?.error || "Gagal mengambil data produk");
       }
 
       if (resKategori.status === 200 && resKategori.data.message === "OK") {
@@ -115,25 +135,25 @@ const ProductTab = () => {
         }, []);
         setTenantList(uniqueTenants);
       } else {
-        message.error(resKategori.data?.error || "Gagal mengambil data kategori");
+        openNotif("error", "Gagal Memuat Kategori", resKategori.data?.error || "Gagal mengambil data kategori");
       }
     } catch (err) {
       console.error("Gagal fetch data:", err);
-      message.error("Terjadi kesalahan saat mengambil data");
+      openNotif("error", "Kesalahan", "Terjadi kesalahan saat mengambil data");
     } finally {
       setLoading(false);
     }
-  }, []); 
+  }, [openNotif]); // Dependensi ke openNotif
 
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]); 
+  }, [fetchData]);
 
 
   // 🔎 Memoize Filter pencarian global
   const filteredData = useMemo(() => {
-    if (!searchText) return data; 
+    if (!searchText) return data;
     const lowerSearchText = searchText.toLowerCase();
     return data.filter(
       (item) =>
@@ -141,7 +161,7 @@ const ProductTab = () => {
         item.nama_kategori?.toLowerCase().includes(lowerSearchText) ||
         item.nama_tenant?.toLowerCase().includes(lowerSearchText)
     );
-  }, [data, searchText]); 
+  }, [data, searchText]);
 
   // --- 🔽 Memoize FILTER OPTIONS untuk Kolom Table ---
   const uniqueNamaProdukFilters = useMemo(() => uniqueValues(data, "nama_produk"), [data]);
@@ -157,7 +177,7 @@ const ProductTab = () => {
   ], []);
 
   // ===================================================================
-  // PERBAIKAN: Pindahkan SEMUA handler ke SEBELUM 'columns'
+  // 		HANDLER FUNCTIONS
   // ===================================================================
 
   // --- Memoize Form Handler ---
@@ -165,7 +185,7 @@ const ProductTab = () => {
     setFormData(prevFormData => {
       const newFormData = { ...prevFormData, [field]: value };
       if (field === "id_tenant") {
-        delete newFormData.id_kategori; 
+        delete newFormData.id_kategori;
       }
       return newFormData;
     });
@@ -177,7 +197,7 @@ const ProductTab = () => {
         return newErrors;
       });
     }
-  }, [validationErrors]); 
+  }, [validationErrors]);
 
   // --- Memoize Cancel Handler ---
   const handleCancel = useCallback(() => {
@@ -186,17 +206,17 @@ const ProductTab = () => {
     setEditingProduct(null);
     setFileFoto(null);
     setPreviewImage(null);
-    setValidationErrors({}); // Bersihkan error validasi
+    setValidationErrors({});
   }, []);
 
   // --- Memoize Delete Handler ---
   const handleDelete = useCallback(async (id_produk) => {
-    setLoading(true); 
+    setLoading(true);
     try {
       console.log("Deleting product ID:", id_produk);
       const res = await deleteProduk(id_produk);
       if (res.status === 200) {
-        message.success("Produk berhasil dihapus!");
+        openNotif("success", "Produk Dihapus", "Data Produk berhasil dihapus!");
         setData(prevData => prevData.filter(item => item.id_produk !== id_produk));
       } else {
         const errorMsg = res.data?.error || res.data?.message || "Gagal menghapus produk";
@@ -204,11 +224,11 @@ const ProductTab = () => {
       }
     } catch (err) {
       console.error("Error delete produk:", err);
-      message.error(err.message || "Gagal menghapus produk");
+      openNotif("error", "Gagal Menghapus", err.message || "Gagal menghapus produk");
     } finally {
       setLoading(false);
     }
-  }, []); 
+  }, [openNotif]);
 
   // --- Memoize Edit Handler ---
   const handleEdit = useCallback((product) => {
@@ -218,20 +238,20 @@ const ProductTab = () => {
     console.log("Found tenant ID for edit:", tenantId);
 
     setEditingProduct(product);
-    setFormData({ 
+    setFormData({
       id_tenant: tenantId,
       id_kategori: product.id_kategori,
       nama_produk: product.nama_produk,
       deskripsi_produk: product.deskripsi_produk,
       harga: product.harga,
       status_ketersediaan: product.status_ketersediaan,
-      status_visibilitas: product.status_visibilitas, // PERBAIKAN DARI KODE SEBELUMNYA
+      status_visibilitas: product.status_visibilitas,
     });
     setFileFoto(null);
     setPreviewImage(product.foto_produk ? getImageUrl(product.foto_produk) : null);
-    setValidationErrors({}); // Bersihkan error saat buka modal
+    setValidationErrors({});
     setOpen(true);
-  }, [kategoriList]); 
+  }, [kategoriList]);
 
   // --- Memoize Submit Handler (Create/Update) ---
   const handleAddProduct = useCallback(async () => {
@@ -244,17 +264,17 @@ const ProductTab = () => {
 
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
-      return; 
+      openNotif("warning", "Data Tidak Lengkap", "Harap isi semua bidang yang wajib diisi (ditandai *).");
+      return;
     }
-    
+
     setValidationErrors({});
-    setSubmitLoading(true); 
+    setSubmitLoading(true);
     try {
       const formPayload = new FormData();
       for (const key in formData) {
-        if (formData[key] !== null && formData[key] !== undefined) { 
-          formPayload.append(key, formData[key] || ''); 
+        if (formData[key] !== null && formData[key] !== undefined) {
+          formPayload.append(key, formData[key] || '');
         }
       }
       formPayload.set("harga", formData.harga);
@@ -275,7 +295,7 @@ const ProductTab = () => {
         console.log("Updating product ID:", editingProduct.id_produk);
         res = await updateProduk(editingProduct.id_produk, formPayload);
         if (res.status === 200) {
-          message.success("Produk berhasil diperbarui!");
+          openNotif("success", "Update Berhasil", "Data Produk berhasil diperbarui!");
         } else {
           const errorMsg = res.data?.error || res.data?.message || "Gagal memperbarui produk";
           throw new Error(errorMsg);
@@ -284,22 +304,22 @@ const ProductTab = () => {
         console.log("Creating new product");
         res = await createProduk(formPayload);
         if (res.status === 201) {
-          message.success("Produk baru berhasil ditambahkan!");
+          openNotif("success", "Tambah Berhasil", "Data Produk baru berhasil ditambahkan!");
         } else {
           const errorMsg = res.data?.error || res.data?.message || "Gagal menambahkan produk baru";
           throw new Error(errorMsg);
         }
       }
 
-      await fetchData(); 
-      handleCancel(); 
+      await fetchData();
+      handleCancel();
     } catch (err) {
       console.error("Error save produk:", err);
-      message.error(err.message || "Gagal menyimpan produk");
+      openNotif("error", "Gagal Menyimpan", err.message || "Gagal menyimpan produk");
     } finally {
-      setSubmitLoading(false); 
+      setSubmitLoading(false);
     }
-  }, [formData, fileFoto, editingProduct, fetchData, handleCancel]); 
+  }, [formData, fileFoto, editingProduct, fetchData, handleCancel, openNotif]);
 
   // --- Memoize File Change Handler ---
   const handleFileChange = useCallback((info) => {
@@ -308,14 +328,14 @@ const ProductTab = () => {
       if (file) {
         const isJpgOrPng = file.type === 'image/jpeg' || file.type === 'image/png';
         if (!isJpgOrPng) {
-          message.error('Hanya bisa upload file JPG/PNG!');
+          openNotif("error", "File Tidak Valid", "Hanya bisa upload file JPG/PNG!");
           setFileFoto(null);
           setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
           return;
         }
         const isLt2M = file.size / 1024 / 1024 < 2;
         if (!isLt2M) {
-          message.error('Gambar harus lebih kecil dari 2MB!');
+          openNotif("error", "File Terlalu Besar", "Gambar harus lebih kecil dari 2MB!");
           setFileFoto(null);
           setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
           return;
@@ -329,11 +349,10 @@ const ProductTab = () => {
       setFileFoto(null);
       setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
     }
-  }, [editingProduct]); 
+  }, [editingProduct, openNotif]);
 
 
   // --- Memoize Definisi Kolom Tabel ---
-  // PINDAHKAN ke setelah semua handler didefinisikan
   const columns = useMemo(() => [
     {
       title: "Nama Produk",
@@ -368,7 +387,7 @@ const ProductTab = () => {
       title: "Kategori / Tenant",
       dataIndex: "nama_kategori",
       key: "kategori_info",
-      filters: uniqueKategoriFilters, 
+      filters: uniqueKategoriFilters,
       onFilter: (value, record) => record.nama_kategori === value,
       render: (_, record) => (
         <div>
@@ -391,7 +410,7 @@ const ProductTab = () => {
       title: "Status Ketersediaan",
       dataIndex: "status_ketersediaan",
       key: "status_ketersediaan",
-      filters: statusKetersediaanFilters, 
+      filters: statusKetersediaanFilters,
       onFilter: (value, record) => record.status_ketersediaan === value,
       render: (status) =>
         status === "Active" ? (
@@ -404,7 +423,7 @@ const ProductTab = () => {
       title: "Visibilitas Admin",
       dataIndex: "status_visibilitas",
       key: "status_visibilitas",
-      filters: statusVisibilitasFilters, 
+      filters: statusVisibilitasFilters,
       onFilter: (value, record) => record.status_visibilitas === value,
       render: (status) =>
         status === "Aktif" ? (
@@ -449,7 +468,7 @@ const ProductTab = () => {
             <Button
               type="text"
               icon={<EditOutlined />}
-              onClick={() => handleEdit(record)} // <--- SEKARANG AMAN
+              onClick={() => handleEdit(record)}
               style={{ color: "#1890ff" }}
             />
           </Tooltip>
@@ -457,10 +476,10 @@ const ProductTab = () => {
             <Popconfirm
               title="Hapus Produk"
               description={`Yakin ingin menghapus "${record.nama_produk}"?`}
-              onConfirm={() => handleDelete(record.id_produk)} // <--- SEKARANG AMAN
+              onConfirm={() => handleDelete(record.id_produk)}
               okText="Ya"
               cancelText="Tidak"
-              okButtonProps={{ danger: true, loading: loading }} 
+              okButtonProps={{ danger: true, loading: loading }}
             >
               <Button type="text" danger icon={<DeleteOutlined />} disabled={loading} />
             </Popconfirm>
@@ -468,15 +487,17 @@ const ProductTab = () => {
         </Space>
       ),
     },
-  ], 
-  // PERBAIKAN: Tambahkan handler ke dependency array
-  [uniqueNamaProdukFilters, uniqueTenantFilters, statusKetersediaanFilters, statusVisibilitasFilters, loading, handleEdit, handleDelete]);
+  ],
+    [uniqueKategoriFilters, statusKetersediaanFilters, statusVisibilitasFilters, loading, handleEdit, handleDelete]);
 
 
   // --- Render ---
   return (
-    <Spin spinning={loading} tip="Memuat data produk..."> 
+    <Spin spinning={loading} tip="Memuat data produk...">
       <div style={{ padding: "24px" }}>
+        {/* --- TAMBAHAN: Render Context Holder --- */}
+        {contextHolder}
+
         <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
           <Col xs={24} sm={12} md={10} lg={8}>
             <Search
@@ -494,8 +515,8 @@ const ProductTab = () => {
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
-                handleCancel(); 
-                setOpen(true); 
+                handleCancel();
+                setOpen(true);
               }}
               size="large"
               style={{
@@ -508,18 +529,18 @@ const ProductTab = () => {
             >
               Tambah Produk Baru
             </Button>
-          </Col>
+            _ </Col>
         </Row>
 
         <Card style={{ borderRadius: "12px", overflowX: 'auto' }}>
           <Table
-            columns={columns} 
-            dataSource={filteredData} 
+            columns={columns}
+            dataSource={filteredData}
             pagination={{
-              current: Math.floor(data.findIndex(item => item.key === filteredData[0]?.key) / pageSize) + 1 || 1, 
+              current: Math.floor(data.findIndex(item => item.key === filteredData[0]?.key) / pageSize) + 1 || 1,
               pageSize,
               showSizeChanger: true,
-              pageSizeOptions: ['10', '20', '50', '100'], 
+              pageSizeOptions: ['10', '20', '50', '100'],
               showQuickJumper: true,
               total: filteredData.length,
               showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} produk`,
@@ -530,9 +551,9 @@ const ProductTab = () => {
               },
               position: ["bottomRight"],
             }}
-            loading={loading} 
+            loading={loading}
             scroll={{ x: 1300 }}
-            rowKey="id_produk" 
+            rowKey="id_produk"
           />
         </Card>
 
@@ -545,13 +566,13 @@ const ProductTab = () => {
             </Space>
           }
           open={open}
-          onCancel={handleCancel} 
-          onOk={handleAddProduct} 
-          confirmLoading={submitLoading} 
+          onCancel={handleCancel}
+          onOk={handleAddProduct}
+          confirmLoading={submitLoading}
           okText={editingProduct ? "Update" : "Simpan"}
           cancelText="Batal"
           width={800}
-          destroyOnClose 
+          destroyOnClose
           maskClosable={false}
         >
           <Row gutter={[20, 20]} style={{ marginTop: 20 }}>
@@ -561,14 +582,14 @@ const ProductTab = () => {
                 <Select
                   placeholder="Pilih tenant"
                   value={formData.id_tenant}
-                  onChange={(val) => handleChange("id_tenant", val)} 
+                  onChange={(val) => handleChange("id_tenant", val)}
                   style={{ width: "100%" }}
                   showSearch
                   optionFilterProp="children"
                   filterOption={(input, option) =>
                     (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
                   }
-                  status={validationErrors.id_tenant ? 'error' : ''} 
+                  status={validationErrors.id_tenant ? 'error' : ''}
                 >
                   {tenantList.map((t) => (
                     <Option key={t.id_tenant} value={t.id_tenant}>
@@ -588,7 +609,7 @@ const ProductTab = () => {
                 <Select
                   placeholder="Pilih kategori (setelah pilih tenant)"
                   value={formData.id_kategori}
-                  onChange={(val) => handleChange("id_kategori", val)} 
+                  onChange={(val) => handleChange("id_kategori", val)}
                   style={{ width: "100%" }}
                   disabled={!formData.id_tenant || filteredKategoriList.length === 0}
                   showSearch
@@ -597,11 +618,11 @@ const ProductTab = () => {
                     (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
                   }
                   notFoundContent={!formData.id_tenant ? "Pilih tenant dulu" : "Tidak ada kategori untuk tenant ini"}
-                  status={validationErrors.id_kategori ? 'error' : ''} 
+                  status={validationErrors.id_kategori ? 'error' : ''}
                 >
                   {filteredKategoriList.map((k) => (
                     <Option key={k.id} value={k.id}>
-                      {k.nama}
+                      t     {k.nama}
                     </Option>
                   ))}
                 </Select>
@@ -617,8 +638,8 @@ const ProductTab = () => {
                 <Input
                   placeholder="Masukkan nama produk"
                   value={formData.nama_produk || ""}
-                  onChange={(e) => handleChange("nama_produk", e.target.value)} 
-                  status={validationErrors.nama_produk ? 'error' : ''} 
+                  onChange={(e) => handleChange("nama_produk", e.target.value)}
+                  status={validationErrors.nama_produk ? 'error' : ''}
                 />
                 {validationErrors.nama_produk && (
                   <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
@@ -633,12 +654,12 @@ const ProductTab = () => {
                   controls={false}
                   placeholder="Masukkan harga (angka saja)"
                   value={formData.harga === null || formData.harga === undefined ? null : formData.harga}
-                  onChange={(val) => handleChange("harga", val)} 
+                  onChange={(val) => handleChange("harga", val)}
                   style={{ width: "100%" }}
                   formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
                   min={0}
-                  status={validationErrors.harga ? 'error' : ''} 
+                  status={validationErrors.harga ? 'error' : ''}
                 />
                 {validationErrors.harga && (
                   <Text type="danger" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
@@ -652,7 +673,7 @@ const ProductTab = () => {
                 <Switch
                   checked={formData.status_ketersediaan === "Active"}
                   onChange={(checked) =>
-                    handleChange("status_ketersediaan", checked ? "Active" : "Inactive") 
+                    handleChange("status_ketersediaan", checked ? "Active" : "Inactive")
                   }
                   checkedChildren="Tersedia"
                   unCheckedChildren="Habis"
@@ -665,7 +686,7 @@ const ProductTab = () => {
                 <Switch
                   checked={formData.status_visibilitas === "Aktif"}
                   onChange={(checked) =>
-                    handleChange("status_visibilitas", checked ? "Aktif" : "Nonaktif") 
+                    handleChange("status_visibilitas", checked ? "Aktif" : "Nonaktif")
                   }
                   checkedChildren="Ditampilkan"
                   unCheckedChildren="Disembunyikan"
@@ -681,7 +702,7 @@ const ProductTab = () => {
                   rows={6}
                   placeholder="Masukkan deskripsi produk (opsional)"
                   value={formData.deskripsi_produk || ""}
-                  onChange={(e) => handleChange("deskripsi_produk", e.target.value)} 
+                  onChange={(e) => handleChange("deskripsi_produk", e.target.value)}
                 />
               </div>
 
@@ -691,7 +712,7 @@ const ProductTab = () => {
                   listType="picture-card"
                   className="product-uploader"
                   showUploadList={false}
-                  onChange={handleFileChange} 
+                  onChange={handleFileChange}
                   maxCount={1}
                   accept="image/png, image/jpeg"
                 >
@@ -719,7 +740,7 @@ const ProductTab = () => {
                   <Button
                     size="small"
                     danger
-                    onClick={() => { 
+                    onClick={() => {
                       setFileFoto(null);
                       setPreviewImage(editingProduct?.foto_produk ? getImageUrl(editingProduct.foto_produk) : null);
                     }}
@@ -739,19 +760,19 @@ const ProductTab = () => {
 
         {/* CSS untuk preview upload picture-card */}
         <style jsx global>{`
-              .product-uploader .ant-upload.ant-upload-select-picture-card {
-                width: 150px;
-                height: 150px;
-                margin-right: 8px; /* Tambah margin */
-                margin-bottom: 8px;
-              }
-              .product-uploader .ant-upload img {
-                 border-radius: 8px;
-                 object-fit: cover; /* Pastikan gambar ter-cover */
-              }
-            `}</style>
+        .product-uploader .ant-upload.ant-upload-select-picture-card {
+        width: 150px;
+        height: 150px;
+        margin-right: 8px;
+        margin-bottom: 8px;
+        }
+        .product-uploader .ant-upload img {
+        border-radius: 8px;
+        object-fit: cover;
+        }
+        `}</style>
       </div>
-    </Spin> // Tutup Spin indicator
+    </Spin>
   );
 };
 

@@ -5,27 +5,28 @@ import { useNavigate } from 'react-router-dom';
 import {
     apiGetAllOpenSessions,
     apiGetRecentClosedSessions,
-    // ❌ apiTakeoverSession TIDAK DIPERLUKAN LAGI
 } from '../../../services/service';
 import { formatRupiah } from '../../../utils/formatRupiah';
 import logoImage from '../../../assets/images/logo.png';
-import { Modal, message } from 'antd';
+import { Modal, message, Spin } from 'antd'; // <-- Tambahkan Spin
+import dayjs from 'dayjs';
 
 const BukaSesi = () => {
 
-    // --- PERBAIKAN 1: Ambil 'joinSession' dari useAuth ---
+    // --- (State AuthProvider sudah benar) ---
     const {
         openSession,
         getLastSaldo,
         activeSession, // Ini sekarang dari sessionStorage
         isSessionLoading,
-        checkActiveSession,
-        joinSession // <-- Ambil fungsi baru
+        checkActiveSession, // <-- Hapus jika tidak dipakai, tapi biarkan saja
+        joinSession // <-- Fungsi penting
     } = useAuth();
 
     const [namaSesi, setNamaSesi] = useState('');
     const [saldoAwal, setSaldoAwal] = useState('');
     const [isPageLoading, setIsPageLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false); // <-- Loading untuk modal
     const [error, setError] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -61,6 +62,7 @@ const BukaSesi = () => {
             setClosedSessions(closedSessionsData.sessions || []);
         } catch (err) {
             setError(err.message || 'Gagal memuat data sesi');
+            message.error(err.message || 'Gagal memuat data sesi'); // Tampilkan error
             setSaldoAwal('0');
         } finally {
             setIsPageLoading(false);
@@ -69,15 +71,22 @@ const BukaSesi = () => {
 
     // useEffect fetch data (Tidak berubah)
     useEffect(() => {
-        if (isSessionLoading) return;
+        // Jangan fetch data jika AuthProvider masih loading
+        if (isSessionLoading) return; 
+        
+        // Cek jika kita sudah "join" sesi, langsung redirect
+        if (activeSession) {
+             navigate('/transaksikasir', { replace: true });
+             return;
+        }
+
+        // Jika belum join, baru fetch daftar sesi
         setIsPageLoading(true);
         fetchAllSessions();
-    }, [isSessionLoading]);
+    }, [isSessionLoading, activeSession, navigate]); // Tambahkan activeSession & navigate
 
     // useMemo (allSessionsForDisplay) (Tidak berubah)
-    // Filter gabungan sesi terbuka dan tertutup
     const allSessionsForDisplay = useMemo(() => {
-        // Tambahkan status ke setiap sesi
         const openWithStatus = openSessions.map(s => ({ ...s, status: 'open' }));
         const closedWithStatus = closedSessions.map(s => ({ ...s, status: 'closed' }));
         const combined = [...openWithStatus, ...closedWithStatus];
@@ -90,38 +99,48 @@ const BukaSesi = () => {
             const matchYear = sessionDate.getFullYear() === selectedYear;
 
             return matchSearch && matchMonth && matchYear;
-        }).sort((a, b) => new Date(b.waktu_mulai) - new Date(a.waktu_mulai)); // Sort by newest first
+        }).sort((a, b) => new Date(b.waktu_mulai) - new Date(a.waktu_mulai));
     }, [openSessions, closedSessions, searchQuery, selectedMonth, selectedYear]);
 
-    // Handler untuk submit sesi baru (Tidak berubah)
-    // Fungsi openSession() dari AuthProvider sudah di-update
-    // untuk otomatis joinSession()
+    
+    // --- PERUBAHAN KUNCI: Logika handleSubmitNewSession ---
     const handleSubmitNewSession = async (e) => {
         e.preventDefault();
         setError('');
+        
         if (!saldoAwal || isNaN(parseFloat(saldoAwal)) || parseFloat(saldoAwal) < 0) {
             setError('Saldo awal tidak valid');
             return;
         }
+        
+        setIsSubmitting(true); // <-- Set loading modal
+        
         try {
+            // Panggil openSession (yang sudah diubah di AuthProvider)
+            // AuthProvider akan otomatis memanggil joinSession(response.session)
             await openSession(namaSesi, parseFloat(saldoAwal));
+            
+            // Jika berhasil, AuthProvider akan update 'activeSession'
+            // useEffect di atas akan menangkap perubahan itu dan menavigasi.
+            // Kita tidak perlu melakukan apa-apa lagi di sini.
             setShowModal(false);
-            // Refresh data sesi setelah membuat sesi baru
-            await checkActiveSession(); // Ini akan memuat sesi baru ke state
-            await fetchAllSessions(); // Ini akan memuat ulang daftar
+            message.success("Sesi baru berhasil dibuat!");
+            // Navigasi akan di-handle oleh useEffect [activeSession]
+            
         } catch (err) {
+            // Tampilkan error dari backend (cth: "Sesi sudah dibuka")
             setError(err.message || 'Gagal membuka sesi');
+            message.error(err.message || 'Gagal membuka sesi');
+        } finally {
+            setIsSubmitting(false); // <-- Matikan loading modal
         }
     };
+    // --- AKHIR PERUBAHAN KUNCI ---
 
 
-    // --- PERBAIKAN 2: Buat satu handler untuk "Masuk Sesi" ---
-    /**
-     * Handler untuk mengklik tombol "Masuk Sesi" pada sesi APAPUN yang terbuka.
-     * Ini akan memberitahu AuthProvider sesi mana yang harus "diikuti".
-     */
+    // Handler "Masuk Sesi" (Sudah benar)
     const handleJoinSession = (session) => {
-        if (session.status !== 'open') return; // Keamanan ganda
+        if (session.status !== 'open') return;
 
         // Panggil fungsi 'joinSession' dari AuthProvider
         joinSession(session);
@@ -129,12 +148,6 @@ const BukaSesi = () => {
         // Arahkan ke halaman transaksi utama
         navigate('/transaksikasir', { replace: true });
     };
-
-    // ❌ HAPUS FUNGSI-FUNGSI INI KARENA DIGANTIKAN 'handleJoinSession'
-    // const handleOpenSession = (session) => { ... };
-    // const handleContinueSession = () => { ... };
-    // const handleTakeoverSession = async (id_sesi) => { ... };
-
 
     // Clock component (Tidak berubah)
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -148,8 +161,7 @@ const BukaSesi = () => {
         return (
             <div className="flex items-center justify-center h-screen">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Memuat data sesi...</p>
+                    <Spin size="large" tip="Memuat data sesi..."/>
                 </div>
             </div>
         );
@@ -162,11 +174,18 @@ const BukaSesi = () => {
                 <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                     <h1 className="text-xl font-semibold text-gray-800">Cashier Session</h1>
                     <button
-                        onClick={() => setShowModal(true)}
+                        onClick={() => {
+                            // Cek jika sudah ada sesi terbuka, jangan biarkan buat baru
+                            if (openSessions.length > 0) {
+                                message.warn("Sesi sudah ada. Silakan gabung sesi yang sedang berjalan.");
+                            } else {
+                                setShowModal(true);
+                            }
+                        }}
                         className="flex items-center gap-2 text-green-600 font-medium hover:text-green-700 transition-colors"
                     >
                         <span className="text-2xl leading-none">+</span>
-                        <span>Add</span>
+                        <span>Buat Sesi Baru</span>
                     </button>
                 </div>
             </div>
@@ -180,7 +199,7 @@ const BukaSesi = () => {
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search..."
+                                    placeholder="Cari nama sesi atau nama kasir..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -222,8 +241,8 @@ const BukaSesi = () => {
                             ) : (
                                 allSessionsForDisplay.map(session => {
                                     const isOpen = session.status === 'open';
-
-                                    // Cek apakah sesi ini adalah sesi yang sedang "diikuti"
+                                    
+                                    // Pengecekan 'activeSession' dari AuthProvider
                                     const isMyJoinedSession = session.id_sesi === activeSession?.id_sesi;
 
                                     return (
@@ -254,9 +273,12 @@ const BukaSesi = () => {
                                                 <div className="flex-grow">
                                                     <p className="font-semibold text-gray-800">{session.nama_sesi}</p>
                                                     <p className="text-sm text-gray-500">Kasir: {session.nama_kasir}</p>
+                                                    <p className="text-xs text-gray-400">
+                                                        Mulai: {dayjs(session.waktu_mulai).format('DD MMM YYYY, HH:mm')}
+                                                    </p>
                                                 </div>
 
-                                                {/* --- PERBAIKAN 3: Logika Tombol Aksi --- */}
+                                                {/* --- (Logika Tombol Aksi sudah benar) --- */}
                                                 {isOpen ? (
                                                     <button
                                                         onClick={() => handleJoinSession(session)}
@@ -269,14 +291,12 @@ const BukaSesi = () => {
                                                         {isMyJoinedSession ? 'Lanjutkan Sesi' : 'Masuk Sesi'}
                                                     </button>
                                                 ) : (
-                                                    // Sesi yang sudah ditutup
                                                     <div className="px-4 py-2">
                                                         <span className="text-sm font-medium text-gray-400">
                                                             Selesai
                                                         </span>
                                                     </div>
                                                 )}
-                                                {/* --- AKHIR PERBAIKAN 3 --- */}
                                             </div>
                                         </div>
                                     );
@@ -287,7 +307,6 @@ const BukaSesi = () => {
 
                     {/* Right Column (Tidak berubah) */}
                     <div className="hidden lg:flex flex-col items-center justify-start h-screen pt-20">
-                        {/* Logo (Tidak berubah) */}
                         <div className="w-36 h-36 mb-6 flex items-center justify-center">
                             <img
                                 src={logoImage}
@@ -295,8 +314,6 @@ const BukaSesi = () => {
                                 className="w-full h-full object-contain"
                             />
                         </div>
-
-                        {/* Clock (Tidak berubah) */}
                         <div className="text-center">
                             <div className="text-5xl font-mono font-bold text-gray-800 tracking-wider">
                                 {currentTime.toLocaleTimeString('id-ID', {
@@ -314,7 +331,7 @@ const BukaSesi = () => {
                 </div>
             </div>
 
-            {/* Modal Add New Session (Tidak berubah) */}
+            {/* Modal Add New Session (Hampir tidak berubah) */}
             {showModal && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -333,6 +350,7 @@ const BukaSesi = () => {
                         <button
                             onClick={() => setShowModal(false)}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+                            disabled={isSubmitting} // <-- Tambahkan disabled
                         >
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -351,7 +369,7 @@ const BukaSesi = () => {
                             </div>
                         )}
 
-                        {/* Form (Tidak berubah) */}
+                        {/* Form */}
                         <form onSubmit={handleSubmitNewSession} className="space-y-5">
                             {/* Nama Field */}
                             <div>
@@ -363,6 +381,7 @@ const BukaSesi = () => {
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Cashier 29 Oktober 2025"
                                     required
+                                    disabled={isSubmitting} // <-- Tambahkan disabled
                                 />
                             </div>
 
@@ -379,18 +398,29 @@ const BukaSesi = () => {
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Rp. 0"
                                     required
+                                    disabled={isSubmitting} // <-- Tambahkan disabled
                                 />
                             </div>
 
                             {/* Confirm Button */}
                             <button
                                 type="submit"
-                                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:bg-gray-400"
+                                disabled={isSubmitting} // <-- Tambahkan disabled
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                                Confirm
+                                {isSubmitting ? (
+                                    <>
+                                        <Spin size="small" />
+                                        <span>Membuat Sesi...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Confirm
+                                    </>
+                                )}
                             </button>
                         </form>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   ConfigProvider,
   DatePicker,
@@ -15,6 +15,7 @@ import {
   Tooltip,
   Empty,
   Tag,
+  Button, // Import Button
 } from "antd";
 // pisahkan message biar aman dari parser bundler
 import { message } from "antd";
@@ -40,8 +41,13 @@ import {
   ShopOutlined,
   FieldTimeOutlined,
   UsergroupAddOutlined,
+  DownloadOutlined,
+  FileExcelOutlined,
 } from "@ant-design/icons";
 import { getOwnerFnB } from "../../../services/service";
+
+// --- MODIFIKASI: Import html2canvas ---
+import html2canvas from "html2canvas";
 
 dayjs.locale("id");
 
@@ -81,6 +87,9 @@ const buildDateRangeStrings = (start, end) => {
   return out;
 };
 
+// Fungsi loadImage tidak lagi diperlukan untuk html2canvas
+// const loadImage = (src) => ...
+
 const getTopNIndices = (arr, n = 3) =>
   arr
     .map((v, i) => ({ v: Number(v) || 0, i }))
@@ -101,6 +110,17 @@ const FnBDashboard = () => {
   ]);
   const [loading, setLoading] = useState(false);
 
+  // --- MODIFIKASI: Filter Tenant Global (Multi-Select) ---
+  const [selectedTenantIds, setSelectedTenantIds] = useState([]);
+
+  // --- MODIFIKASI: Tambahkan printRef ---
+  const printRef = useRef(null);
+
+  const lineChartRef = useRef(null);
+  const doughnutChartRef = useRef(null);
+  const trafficBarRef = useRef(null);
+  const peakBarRef = useRef(null);
+
   const [totals, setTotals] = useState({
     total_fnb: 0,
     total_ws: 0,
@@ -109,22 +129,67 @@ const FnBDashboard = () => {
     avg_daily: 0,
     total_days: 0,
   });
-  const [dailyTenant, setDailyTenant] = useState([]);
+
+  const [tenantInfo, setTenantInfo] = useState([]); // Daftar tenant {id, name, color}
+  const [dailyTenant, setDailyTenant] = useState({}); // Map harian { "2025-11-10": { "3": 123, "4": 456 } }
   const [visitorsByHour, setVisitorsByHour] = useState([]);
   const [peakByHour, setPeakByHour] = useState([]);
-  const [topDapoer, setTopDapoer] = useState([]);
-  const [topHome, setTopHome] = useState([]);
-
-  // NEW: unpopular dari backend (termasuk yang qty=0)
-  const [unpopDapoer, setUnpopDapoer] = useState([]);
-  const [unpopHome, setUnpopHome] = useState([]);
-
-  // filter tabel
-  const [tenantFilterTop, setTenantFilterTop] = useState("all");
-  const [tenantFilterUnpop, setTenantFilterUnpop] = useState("HomeBro");
+  const [topItems, setTopItems] = useState({}); // Map item { "3": [...], "4": [...] }
+  const [unpopItems, setUnpopItems] = useState({}); // Map item { "3": [...], "4": [...] }
 
   const [dailyTarget] = useState(1000000);
-  const handlePrint = () => window.print();
+
+  // --- MODIFIKASI: Fungsi Download diganti dengan html2canvas ---
+  const handleDownloadImage = async () => {
+    const element = printRef.current;
+    if (!element) {
+      message.error("Elemen dashboard tidak ditemukan untuk dicetak.");
+      return;
+    }
+
+    const hideLoading = message.loading("Membuat gambar laporan...", 0);
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2, // Resolusi 2x lebih tinggi
+        useCORS: true, // Untuk memastikan gambar eksternal (jika ada) ter-render
+        backgroundColor: "#ffffff", // Latar belakang putih
+        // Hapus elemen yang tidak ingin dicetak
+        ignoreElements: (el) => el.classList.contains("no-print"),
+      });
+
+      const dataUrl = canvas.toDataURL("image/png");
+
+      // Tentukan nama file berdasarkan filter
+      let filterName = "semua-tenant";
+      if (selectedTenantIds.length === 1) {
+        filterName =
+          tenantInfo.find((t) => t.id === selectedTenantIds[0])?.name ||
+          "filter";
+        filterName = filterName.toLowerCase().replace(/ /g, "-");
+      } else if (selectedTenantIds.length > 1) {
+        filterName = "filter-multi-tenant";
+      }
+      const dateStr = dateRange[0].format("YYYYMMDD") + "-" + dateRange[1].format("YYYYMMDD");
+      const filename = `laporan-fnb-${filterName}-${dateStr}.png`;
+
+
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = filename;
+      a.click();
+      a.remove();
+
+      hideLoading();
+      message.success("Gambar laporan berhasil diunduh!");
+    } catch (e) {
+      console.error("Gagal membuat gambar:", e);
+      hideLoading();
+      message.error("Terjadi kesalahan saat membuat gambar.");
+    }
+  };
+  // --- AKHIR MODIFIKASI ---
+
   const handleExportCSV = () => message.info("Proses ekspor CSV dimulai...");
 
   useEffect(() => {
@@ -146,25 +211,25 @@ const FnBDashboard = () => {
           total_days: Number(t.total_days || 0),
         });
 
-        setDailyTenant(
-          Array.isArray(d?.daily_selling_per_tenant)
-            ? d.daily_selling_per_tenant
-            : []
-        );
+        const tenants = Array.isArray(d?.tenant_info) ? d.tenant_info : [];
+        setTenantInfo(tenants);
+
+        setDailyTenant(d?.daily_selling_per_tenant || {});
         setVisitorsByHour(
           Array.isArray(d?.visitors_by_hour) ? d.visitors_by_hour : []
         );
         setPeakByHour(Array.isArray(d?.peak_by_hour) ? d.peak_by_hour : []);
-        setTopDapoer(Array.isArray(d?.top_fnb?.dapoer) ? d.top_fnb.dapoer : []);
-        setTopHome(Array.isArray(d?.top_fnb?.home) ? d.top_fnb.home : []);
+        setTopItems(d?.top_fnb || {});
+        setUnpopItems(d?.unpopular_fnb || {});
 
-        // NEW: ambil unpopular dari API
-        setUnpopDapoer(
-          Array.isArray(d?.unpopular_fnb?.dapoer) ? d.unpopular_fnb.dapoer : []
+        const tenantIds = new Set(tenants.map((t) => t.id));
+        const currentFilterIsValid = selectedTenantIds.every((id) =>
+          tenantIds.has(id)
         );
-        setUnpopHome(
-          Array.isArray(d?.unpopular_fnb?.home) ? d.unpopular_fnb.home : []
-        );
+
+        if (!currentFilterIsValid) {
+          setSelectedTenantIds([]);
+        }
       } catch (e) {
         console.error(e);
         message.error("Gagal memuat data FnB Dashboard");
@@ -176,68 +241,104 @@ const FnBDashboard = () => {
   }, [dateRange]);
 
   // ====== Derivatif ======
+
+  const displayTotals = useMemo(() => {
+    let base = { ...totals };
+    const totalDays = Math.max(1, base.total_days);
+
+    if (selectedTenantIds.length > 0) {
+      const selectedSet = new Set(selectedTenantIds);
+      let newTotalFnB = 0;
+
+      for (const dayData of Object.values(dailyTenant)) {
+        for (const tenantIdStr in dayData) {
+          const tenantId = Number(tenantIdStr);
+          if (selectedSet.has(tenantId)) {
+            newTotalFnB += dayData[tenantIdStr] || 0;
+          }
+        }
+      }
+
+      base.total_fnb = newTotalFnB;
+      base.total_sales = newTotalFnB;
+      base.avg_daily = Math.round(newTotalFnB / totalDays);
+    }
+
+    return base;
+  }, [totals, dailyTenant, selectedTenantIds]);
+
   const totalDays =
-    totals.total_days ||
+    displayTotals.total_days ||
     Math.max(1, dateRange[1].diff(dateRange[0], "day") + 1);
+
   const totalTarget = dailyTarget * totalDays;
   const pctAchieved = clamp(
-    (Number(totals.total_sales || 0) / Math.max(1, totalTarget)) * 100,
+    (Number(displayTotals.total_sales || 0) / Math.max(1, totalTarget)) * 100,
     0,
     999
   ).toFixed(1);
 
-  // Line chart padding tanggal
-  const { lineLabels, dapoerSeries, homeSeries } = useMemo(() => {
-    const idx = new Map(
-      (dailyTenant || []).map((d) => [dayjs(d.tanggal).format("YYYY-MM-DD"), d])
-    );
+  const lineData = useMemo(() => {
     const days = buildDateRangeStrings(dateRange[0], dateRange[1]);
-
     const labels = days.map((d) => dayjs(d).format("D"));
-    const dapoer = days.map((d) => Number(idx.get(d)?.dapoerms || 0));
-    const home = days.map((d) => Number(idx.get(d)?.homebro || 0));
-    return { lineLabels: labels, dapoerSeries: dapoer, homeSeries: home };
-  }, [dailyTenant, dateRange]);
 
-  const lineData = {
-    labels: lineLabels,
-    datasets: [
-      {
-        label: "DapoerMS",
-        data: dapoerSeries,
+    const tenantsToRender =
+      selectedTenantIds.length === 0
+        ? tenantInfo
+        : tenantInfo.filter((t) => selectedTenantIds.includes(t.id));
+
+    const datasets = tenantsToRender.map((tenant) => {
+      const data = days.map((dayKey) => {
+        return Number(dailyTenant[dayKey]?.[tenant.id] || 0);
+      });
+      return {
+        label: tenant.name,
+        data: data,
         fill: false,
-        borderColor: "#2563eb",
+        borderColor: tenant.color,
         tension: 0.2,
         pointRadius: 3,
         pointHoverRadius: 5,
-      },
-      {
-        label: "HomeBro",
-        data: homeSeries,
-        fill: false,
-        borderColor: "#10B981",
-        tension: 0.2,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-      },
-    ],
-  };
+      };
+    });
 
-  const totalDapoer = dapoerSeries.reduce((s, v) => s + v, 0);
-  const totalHome = homeSeries.reduce((s, v) => s + v, 0);
+    return { labels, datasets };
+  }, [dailyTenant, dateRange, tenantInfo, selectedTenantIds]);
 
-  const doughnutData = {
-    labels: ["DapoerMS", "HomeBro"],
-    datasets: [
-      {
-        data: [totalDapoer, totalHome],
-        backgroundColor: ["#2563eb", "#10B981"],
-        hoverOffset: 8,
-      },
-    ],
-  };
+  const { doughnutData, tenantTotals } = useMemo(() => {
+    if (!tenantInfo.length) {
+      return { doughnutData: { labels: [], datasets: [] }, tenantTotals: [] };
+    }
 
-  // Map jam
+    const labels = tenantInfo.map((t) => t.name);
+    const colors = tenantInfo.map((t) => t.color);
+
+    const totals = tenantInfo.map((tenant) => {
+      const total = Object.values(dailyTenant).reduce((sum, dayData) => {
+        return sum + (dayData[tenant.id] || 0);
+      }, 0);
+      return { ...tenant, total };
+    });
+
+    const data = totals.map((t) => t.total);
+    const allZero = data.every((d) => d === 0);
+
+    const doughnutData = {
+      labels: labels,
+      datasets: [
+        {
+          data: allZero ? data.map(() => 1) : data,
+          backgroundColor: allZero
+            ? data.map(() => "#E0E0E0")
+            : colors,
+          hoverOffset: 8,
+        },
+      ],
+    };
+
+    return { doughnutData, tenantTotals: totals };
+  }, [dailyTenant, tenantInfo]);
+
   const visitorsMap = new Map(
     visitorsByHour.map((r) => [Number(r.hour), Number(r.count)])
   );
@@ -245,7 +346,6 @@ const FnBDashboard = () => {
     peakByHour.map((r) => [Number(r.hour), Number(r.count)])
   );
 
-  // 08..22
   const visitorsDataRaw = HOUR_LABELS_15.map(
     (_, idx) => visitorsMap.get(8 + idx) || 0
   );
@@ -293,9 +393,8 @@ const FnBDashboard = () => {
         callbacks: {
           label: (ctx) => {
             const v = ctx.parsed?.y ?? ctx.parsed ?? 0;
-            return `${
-              ctx.dataset?.label ? ctx.dataset.label + ": " : ""
-            }${formatRupiah(v)}`;
+            return `${ctx.dataset?.label ? ctx.dataset.label + ": " : ""
+              }${formatRupiah(v)}`;
           },
         },
       },
@@ -311,7 +410,9 @@ const FnBDashboard = () => {
         font: { weight: "bold" },
         formatter: (value, ctx) => {
           const total = ctx.dataset.data.reduce((s, v) => s + (v || 0), 0);
-          if (!total) return "0%";
+          if (!total || total === 0) return "0%";
+          const isDummy = ctx.dataset.data.every((v) => v === 1);
+          if (isDummy) return "0%";
           return `${((value / total) * 100).toFixed(1)}%`;
         },
       },
@@ -368,42 +469,45 @@ const FnBDashboard = () => {
     },
   };
 
-  // ===== TOP / UNPOPULAR =====
-  const withTenant = (rows, tenantName) =>
+  const withTenant = (rows, tenant) =>
     (Array.isArray(rows) ? rows : []).map((r, i) => ({
       ...r,
-      tenant: tenantName,
-      key: `${tenantName}-${i}-${r.item}`,
+      tenant: tenant.name,
+      tenantId: tenant.id,
+      key: `${tenant.id}-${i}-${r.item}`,
       qty: Number(r.qty || 0),
       total: Number(r.total || 0),
     }));
 
   const allTopItems = useMemo(
-    () => [
-      ...withTenant(topDapoer, "DapoerMS"),
-      ...withTenant(topHome, "HomeBro"),
-    ],
-    [topDapoer, topHome]
+    () =>
+      tenantInfo.flatMap((tenant) => {
+        const items = topItems[tenant.id] || [];
+        return withTenant(items, tenant);
+      }),
+    [topItems, tenantInfo]
   );
 
-  // NEW: data unpopular dari backend (bukan hasil hitungan FE)
   const allUnpopularItems = useMemo(
-    () => [
-      ...withTenant(unpopDapoer, "DapoerMS"),
-      ...withTenant(unpopHome, "HomeBro"),
-    ],
-    [unpopDapoer, unpopHome]
+    () =>
+      tenantInfo.flatMap((tenant) => {
+        const items = unpopItems[tenant.id] || [];
+        return withTenant(items, tenant);
+      }),
+    [unpopItems, tenantInfo]
   );
 
   const filteredTopItems = useMemo(() => {
-    if (tenantFilterTop === "all") return allTopItems;
-    return allTopItems.filter((r) => r.tenant === tenantFilterTop);
-  }, [allTopItems, tenantFilterTop]);
+    if (selectedTenantIds.length === 0) return allTopItems;
+    const selectedSet = new Set(selectedTenantIds);
+    return allTopItems.filter((r) => selectedSet.has(r.tenantId));
+  }, [allTopItems, selectedTenantIds]);
 
   const filteredUnpopItems = useMemo(() => {
-    if (tenantFilterUnpop === "all") return allUnpopularItems;
-    return allUnpopularItems.filter((r) => r.tenant === tenantFilterUnpop);
-  }, [allUnpopularItems, tenantFilterUnpop]);
+    if (selectedTenantIds.length === 0) return allUnpopularItems;
+    const selectedSet = new Set(selectedTenantIds);
+    return allUnpopularItems.filter((r) => selectedSet.has(r.tenantId));
+  }, [allUnpopularItems, selectedTenantIds]);
 
   const top5 = useMemo(
     () =>
@@ -414,7 +518,6 @@ const FnBDashboard = () => {
     [filteredTopItems]
   );
 
-  // langsung pakai urutan dari backend (qty ASC, total ASC), jaga-jaga fallback sort FE
   const unpopular5 = useMemo(
     () =>
       [...filteredUnpopItems]
@@ -429,14 +532,18 @@ const FnBDashboard = () => {
       dataIndex: "tenant",
       key: "tenant",
       width: 120,
-      render: (v) => (
-        <Tag
-          color={v === "DapoerMS" ? "blue" : "green"}
-          style={{ marginRight: 0 }}
-        >
-          {v}
-        </Tag>
-      ),
+      hidden: selectedTenantIds.length > 0,
+      render: (tenantName) => {
+        const tenant = tenantInfo.find((t) => t.name === tenantName);
+        return (
+          <Tag
+            color={tenant ? tenant.color : "gray"}
+            style={{ marginRight: 0 }}
+          >
+            {tenantName}
+          </Tag>
+        );
+      },
     },
     { title: "Item", dataIndex: "item", key: "item" },
     {
@@ -455,12 +562,29 @@ const FnBDashboard = () => {
       width: 140,
       render: (t) => <b>Rp {formatRupiah(t)}</b>,
     },
-  ];
+  ].filter((col) => !col.hidden);
 
-  const totalSales = totals.total_sales || 0;
-  const avgDaily = totals.avg_daily || 0;
-  const totalVisitors = visitorsByHour.reduce((s, r) => s + (r.count || 0), 0);
+  const totalSales = displayTotals.total_sales || 0;
+  const avgDaily = displayTotals.avg_daily || 0;
+  const totalVisitors = totals.total_transactions || 0;
   const totalTransactions = totals.total_transactions || 0;
+
+  const getDynamicTitle = () => {
+    if (selectedTenantIds.length === 0)
+      return { kpi: "Total Penjualan", line: "Daily Selling (per tenant)" };
+    if (selectedTenantIds.length === 1) {
+      const tenantName =
+        tenantInfo.find((t) => t.id === selectedTenantIds[0])?.name || "";
+      return {
+        kpi: `Penjualan ${tenantName}`,
+        line: `Daily Selling (${tenantName})`,
+      };
+    }
+    return { kpi: "Penjualan (Filter)", line: "Daily Selling (Filter)" };
+  };
+  const dynamicTitle = getDynamicTitle();
+
+  const isAllTenantsView = selectedTenantIds.length === 0;
 
   return (
     <ConfigProvider locale={locale}>
@@ -471,6 +595,7 @@ const FnBDashboard = () => {
           justify="space-between"
           align="middle"
           style={{ marginBottom: 14 }}
+          className="no-print" // --- MODIFIKASI: Tambah class no-print
         >
           <Col>
             <Title level={4} style={{ margin: 0 }}>
@@ -481,7 +606,24 @@ const FnBDashboard = () => {
             </Text>
           </Col>
           <Col>
-            <Space align="center">
+            <Space align="center" wrap>
+              <Text type="secondary">Tenant:</Text>
+              <Select
+                mode="multiple"
+                allowClear
+                value={selectedTenantIds}
+                onChange={setSelectedTenantIds}
+                placeholder="Filter Tenant (Default: Semua)"
+                style={{ minWidth: 200, width: "auto" }}
+                loading={loading}
+              >
+                {tenantInfo.map((t) => (
+                  <Option key={t.id} value={t.id}>
+                    {t.name}
+                  </Option>
+                ))}
+              </Select>
+
               <Text type="secondary">Rentang:</Text>
               <RangePicker
                 value={dateRange}
@@ -514,7 +656,7 @@ const FnBDashboard = () => {
           </Col>
         </Row>
 
-        <div className="flex justify-start gap-3 mb-6">
+        <div className="flex justify-start gap-3 mb-6 no-print"> {/* --- MODIFIKASI: Tambah class no-print --- */}
           <a
             href="/laporan"
             className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
@@ -541,366 +683,326 @@ const FnBDashboard = () => {
           </a>
         </div>
 
-        {/* KPI Cards */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Card loading={loading}>
-                <Statistic
-                  title="Total Penjualan"
-                  value={`Rp ${formatRupiah(totalSales)}`}
-                  prefix={<ShopOutlined />}
-                />
-                <div style={{ marginTop: 12 }}>
-                  <Text type="secondary">
-                    Target ({totals.total_days} hari): Rp{" "}
-                    {formatRupiah(dailyTarget * totalDays)}
-                  </Text>
-                  <Progress
-                    percent={Number(pctAchieved)}
-                    status={pctAchieved >= 100 ? "success" : "active"}
-                  />
-                </div>
-              </Card>
-            </motion.div>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-            >
-              <Card loading={loading}>
-                <Statistic
-                  title="Total Pengunjung"
-                  value={formatRupiah(totalVisitors)}
-                  prefix={<UsergroupAddOutlined />}
-                />
-                <Text type="secondary">
-                  Rata-rata per hari:{" "}
-                  {Math.round(totalVisitors / Math.max(1, totalDays))}{" "}
-                  pengunjung
-                </Text>
-              </Card>
-            </motion.div>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card loading={loading}>
-                <Statistic
-                  title="Jumlah Transaksi"
-                  value={totalTransactions}
-                  prefix={<FieldTimeOutlined />}
-                />
-                <Text type="secondary">
-                  Rata-rata per hari:{" "}
-                  {Math.round(totalTransactions / Math.max(1, totalDays))}{" "}
-                  transaksi
-                </Text>
-              </Card>
-            </motion.div>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
-              <Card loading={loading}>
-                <Statistic
-                  title="Rata-rata Harian"
-                  value={`Rp ${formatRupiah(avgDaily)}`}
-                  prefix={<ArrowUpOutlined />}
-                />
-                <Text type="secondary">Performa harian rata-rata</Text>
-              </Card>
-            </motion.div>
-          </Col>
-        </Row>
-
-        {/* Charts */}
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={16}>
-            <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Row gutter={[12, 12]}>
-                <Col
-                  span={24}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Title level={5} style={{ margin: 0 }}>
-                    Daily Selling (per tenant)
-                  </Title>
-                  <Text type="secondary">
-                    {dateRange[0].format("D MMM")} -{" "}
-                    {dateRange[1].format("D MMM YYYY")}
-                  </Text>
-                </Col>
-                <Col span={24}>
-                  <div style={{ height: 300 }}>
-                    <Line
-                      data={lineData}
-                      options={{
-                        ...commonOptions,
-                        plugins: {
-                          ...commonOptions.plugins,
-                          legend: { display: true },
-                        },
-                        scales: {
-                          x: {
-                            ticks: { autoSkip: true },
-                            title: { display: true, text: "Tanggal" },
-                          },
-                          y: {
-                            beginAtZero: true,
-                            ticks: { callback: (v) => `Rp ${formatRupiah(v)}` },
-                          },
-                        },
-                      }}
-                    />
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-
-            <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Row gutter={[12, 12]}>
-                <Col span={24}>
-                  <Title level={5} style={{ marginTop: 0 }}>
-                    Trafik Pengunjung
-                  </Title>
-                  <Text type="secondary">
-                    Akumulasi pengunjung selama periode {totalDays} hari.
-                  </Text>
-                  <div style={{ height: 300, marginTop: 10 }}>
-                    <Bar data={trafficBarData} options={trafficBarOptions} />
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-
-            <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Row gutter={[12, 12]}>
-                <Col xs={24}>
-                  <Title level={5} style={{ marginTop: 0 }}>
-                    Peak Hours Menu
-                  </Title>
-                  <Text type="secondary">
-                    Akumulasi pemesanan selama periode {totalDays} hari.
-                  </Text>
-                  {!topPeakIdx.length && (
-                    <Text type="secondary">
-                      Belum ada jam dengan pesanan menu &gt; 0 pada rentang ini.
-                    </Text>
-                  )}
-                  <div style={{ height: 220 }}>
-                    <Bar data={peakBarData} options={peakBarOptions} />
-                  </div>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-
-          <Col xs={24} lg={8}>
-            <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Kontribusi Tenant</Title>
-              <div style={{ height: 220 }}>
-                <Doughnut data={doughnutData} options={doughnutOptions} />
-              </div>
-              <Divider />
-              <Space
-                direction="vertical"
-                size="small"
-                style={{ width: "100%" }}
+        {/* --- MODIFIKASI: Wrapper div untuk print --- */}
+        <div ref={printRef} style={{ backgroundColor: "#ffffff", padding: 1 }}>
+          {/* KPI Cards */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
               >
-                <div
-                  style={{ display: "flex", justifyContent: "space-between" }}
-                >
-                  <Text>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 10,
-                        height: 10,
-                        background: "#2563eb",
-                        borderRadius: 2,
-                        marginRight: 6,
-                      }}
+                <Card loading={loading}>
+                  <Statistic
+                    title={dynamicTitle.kpi}
+                    value={`Rp ${formatRupiah(totalSales)}`}
+                    prefix={<ShopOutlined />}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <Text type="secondary">
+                      Target ({totalDays} hari): Rp{" "}
+                      {formatRupiah(dailyTarget * totalDays)}
+                    </Text>
+                    <Progress
+                      percent={Number(pctAchieved)}
+                      status={pctAchieved >= 100 ? "success" : "active"}
                     />
-                    DapoerMS
+                  </div>
+                </Card>
+              </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
+                <Card loading={loading}>
+                  <Statistic
+                    title="Total Pengunjung (F&B)"
+                    value={formatRupiah(totalVisitors)}
+                    prefix={<UsergroupAddOutlined />}
+                  />
+                  <Text type="secondary">
+                    Rata-rata per hari: {Math.round(totalVisitors / totalDays)}{" "}
+                    pengunjung
                   </Text>
-                  <Text strong>Rp {formatRupiah(totalDapoer)}</Text>
-                </div>
-                <div
-                  style={{ display: "flex", justifyContent: "space-between" }}
-                >
-                  <Text>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: 10,
-                        height: 10,
-                        background: "#10B981",
-                        borderRadius: 2,
-                        marginRight: 6,
-                      }}
-                    />
-                    HomeBro
+                </Card>
+              </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <Card loading={loading}>
+                  <Statistic
+                    title="Jumlah Transaksi (F&B)"
+                    value={totalTransactions}
+                    prefix={<FieldTimeOutlined />}
+                  />
+                  <Text type="secondary">
+                    Rata-rata per hari:{" "}
+                    {Math.round(totalTransactions / totalDays)} transaksi
                   </Text>
-                  <Text strong>Rp {formatRupiah(totalHome)}</Text>
-                </div>
-              </Space>
-            </Card>
+                </Card>
+              </motion.div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <Card loading={loading}>
+                  <Statistic
+                    title={
+                      !isAllTenantsView
+                        ? "Rata-rata Harian (Filter)"
+                        : "Rata-rata Harian"
+                    }
+                    value={`Rp ${formatRupiah(avgDaily)}`}
+                    prefix={<ArrowUpOutlined />}
+                  />
+                  <Text type="secondary">Performa harian rata-rata</Text>
+                </Card>
+              </motion.div>
+            </Col>
+          </Row>
 
-            <Card>
-              <Title level={5}>Target Progress</Title>
-              <Text type="secondary">
-                Total target: Rp {formatRupiah(totalTarget)}
-              </Text>
-              <div style={{ marginTop: 12 }}>
-                <Progress
-                  percent={Number(pctAchieved)}
-                  status={pctAchieved >= 100 ? "success" : "active"}
-                />
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginTop: 8,
-                  }}
-                >
-                  <Text type="secondary">
-                    Tercapai: Rp {formatRupiah(totalSales)}
-                  </Text>
-                  <Text type="secondary">
-                    Sisa: Rp{" "}
-                    {formatRupiah(Math.max(0, totalTarget - totalSales))}
-                  </Text>
-                </div>
+          {/* Charts */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={!isAllTenantsView ? 24 : 16}>
+              <Card style={{ marginBottom: 16 }} loading={loading}>
+                <Row gutter={[12, 12]}>
+                  <Col
+                    span={24}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Title level={5} style={{ margin: 0 }}>
+                      {dynamicTitle.line}
+                    </Title>
+                    <Text type="secondary">
+                      {dateRange[0].format("D MMM")} -{" "}
+                      {dateRange[1].format("D MMM YYYY")}
+                    </Text>
+                  </Col>
+                  <Col span={24}>
+                    <div style={{ height: 300 }}>
+                      <Line
+                        ref={lineChartRef}
+                        data={lineData}
+                        options={{
+                          ...commonOptions,
+                          animation: false, // --- MODIFIKASI: Matikan animasi untuk print
+                          plugins: {
+                            ...commonOptions.plugins,
+                            legend: { display: lineData.datasets.length > 1 },
+                          },
+                          scales: {
+                            x: {
+                              ticks: { autoSkip: true },
+                              title: { display: true, text: "Tanggal" },
+                            },
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                callback: (v) => `Rp ${formatRupiah(v)}`,
+                              },
+                            },
+                          },
+                        }}
+                      />
+                    </div>
+                  </Col>
+                </Row>
+              </Card>
+
+              <div
+                style={{ display: isAllTenantsView ? "block" : "none" }}
+              >
+                <Card style={{ marginBottom: 16 }} loading={loading}>
+                  <Row gutter={[12, 12]}>
+                    <Col span={24}>
+                      <Title level={5} style={{ marginTop: 0 }}>
+                        Trafik Pengunjung (Total F&B)
+                      </Title>
+                      <Text type="secondary">
+                        Akumulasi pengunjung selama periode {totalDays} hari.
+                      </Text>
+                      <div style={{ height: 300, marginTop: 10 }}>
+                        <Bar
+                          ref={trafficBarRef}
+                          data={trafficBarData}
+                          options={{...trafficBarOptions, animation: false}} // Matikan animasi
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </Card>
+
+                <Card style={{ marginBottom: 16 }} loading={loading}>
+                  <Row gutter={[12, 12]}>
+                    <Col xs={24}>
+                      <Title level={5} style={{ marginTop: 0 }}>
+                        Peak Hours Menu (Total F&B)
+                      </Title>
+                      <Text type="secondary">
+                        Akumulasi pemesanan selama periode {totalDays} hari.
+                      </Text>
+                      {!topPeakIdx.length && (
+                        <Text type="secondary">
+                          Belum ada jam dengan pesanan menu &gt; 0 pada rentang
+                          ini.
+                        </Text>
+                      )}
+                      <div style={{ height: 220 }}>
+                        <Bar
+                          ref={peakBarRef}
+                          data={peakBarData}
+                          options={{...peakBarOptions, animation: false}} // Matikan animasi
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                </Card>
               </div>
-            </Card>
+            </Col>
 
-            <Card>
-              <Title level={5}>Quick Actions</Title>
-              <Space direction="vertical" style={{ width: "100%" }}>
-                <Tooltip title="Mencetak seluruh tampilan dashboard saat ini ke PDF/Gambar">
-                  <button
-                    onClick={handlePrint}
-                    style={{
-                      width: "100%",
-                      padding: 10,
-                      borderRadius: 8,
-                      border: "1px solid #e6e6e6",
-                      cursor: "pointer",
-                    }}
+            <Col xs={24} lg={8}>
+              <div
+                style={{ display: isAllTenantsView ? "block" : "none" }}
+              >
+                <Card style={{ marginBottom: 16 }} loading={loading}>
+                  <Title level={5}>Kontribusi Tenant</Title>
+                  <div style={{ height: 220 }}>
+                    <Doughnut
+                      ref={doughnutChartRef}
+                      data={doughnutData}
+                      options={{...doughnutOptions, animation: false}} // Matikan animasi
+                    />
+                  </div>
+                  <Divider />
+                  <Space
+                    direction="vertical"
+                    size="small"
+                    style={{ width: "100%" }}
                   >
-                    📄 Cetak Gambar
-                  </button>
-                </Tooltip>
-                <Tooltip title="Mengunduh data ringkasan dan transaksi harian ke format Excel/CSV">
-                  <button
+                    {tenantTotals.map((tenant) => (
+                      <div
+                        key={tenant.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Text>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              width: 10,
+                              height: 10,
+                              background: tenant.color,
+                              borderRadius: 2,
+                              marginRight: 6,
+                            }}
+                          />
+                          {tenant.name}
+                        </Text>
+                        <Text strong>Rp {formatRupiah(tenant.total)}</Text>
+                      </div>
+                    ))}
+                  </Space>
+                </Card>
+
+                <Card style={{ marginBottom: 16 }}>
+                  <Title level={5}>Target Progress</Title>
+                  <Text type="secondary">
+                    Total target: Rp {formatRupiah(totalTarget)}
+                  </Text>
+                  <div style={{ marginTop: 12 }}>
+                    <Progress
+                      percent={Number(pctAchieved)}
+                      status={pctAchieved >= 100 ? "success" : "active"}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: 8,
+                      }}
+                    >
+                      <Text type="secondary">
+                        Tercapai: Rp {formatRupiah(totalSales)}
+                      </Text>
+                      <Text type="secondary">
+                        Sisa: Rp{" "}
+                        {formatRupiah(Math.max(0, totalTarget - totalSales))}
+                      </Text>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* --- MODIFIKASI: Pindahkan Quick Actions ke sini --- */}
+              <Card className="no-print"> {/* Sembunyikan quick actions dari print */}
+                <Title level={5}>Quick Actions</Title>
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownloadImage} // Panggil fungsi baru
+                    style={{ width: "100%" }}
+                  >
+                    Cetak Gambar Laporan
+                  </Button>
+                  <Button
+                    icon={<FileExcelOutlined />}
                     onClick={handleExportCSV}
-                    style={{
-                      width: "100%",
-                      padding: 10,
-                      borderRadius: 8,
-                      border: "1px solid #e6e6e6",
-                      cursor: "pointer",
-                    }}
+                    style={{ width: "100%" }}
                   >
-                    ⬇ Cetak Laporan (CSV/Excel)
-                  </button>
-                </Tooltip>
-              </Space>
-            </Card>
-          </Col>
-        </Row>
+                    Cetak Laporan (CSV/Excel)
+                  </Button>
+                </Space>
+              </Card>
+            </Col>
+          </Row>
 
-        {/* TOP + UNPOPULAR tables */}
-        <Divider />
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={12}>
-            <Card
-              title={
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    width: "100%",
-                  }}
-                >
-                  <span>Top 5 Menu</span>
-                  <Select
-                    value={tenantFilterTop}
-                    onChange={setTenantFilterTop}
-                    style={{ width: 160 }}
-                    size="small"
-                  >
-                    <Option value="all">Semua tenant</Option>
-                    <Option value="DapoerMS">DapoerMS</Option>
-                    <Option value="HomeBro">HomeBro</Option>
-                  </Select>
-                </div>
-              }
-              loading={loading}
-            >
-              <Table
-                columns={topColumns}
-                dataSource={top5}
-                pagination={false}
-                size="small"
-                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
-              />
-            </Card>
-          </Col>
+          {/* TOP + UNPOPULAR tables */}
+          <Divider />
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={12}>
+              <Card title="Top 5 Menu" loading={loading}>
+                <Table
+                  columns={topColumns}
+                  dataSource={top5}
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                />
+              </Card>
+            </Col>
 
-          <Col xs={24} lg={12}>
-            <Card
-              title={
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    width: "100%",
-                  }}
-                >
-                  <span>Unpopular Menu (Paling Jarang Dibeli)</span>
-                  <Select
-                    value={tenantFilterUnpop}
-                    onChange={setTenantFilterUnpop}
-                    style={{ width: 160 }}
-                    size="small"
-                  >
-                    <Option value="all">Semua tenant</Option>
-                    <Option value="DapoerMS">DapoerMS</Option>
-                    <Option value="HomeBro">HomeBro</Option>
-                  </Select>
-                </div>
-              }
-              loading={loading}
-            >
-              <Table
-                columns={topColumns}
-                dataSource={unpopular5}
-                pagination={false}
-                size="small"
-                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
-              />
-            </Card>
-          </Col>
-        </Row>
+            <Col xs={24} lg={12}>
+              <Card
+                title="Unpopular Menu (Paling Jarang Dibeli)"
+                loading={loading}
+              >
+                <Table
+                  columns={topColumns}
+                  dataSource={unpopular5}
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                />
+              </Card>
+            </Col>
+          </Row>
+        </div> {/* --- AKHIR MODIFIKASI: Akhir dari div printRef --- */}
       </div>
     </ConfigProvider>
   );
@@ -914,12 +1016,12 @@ if (
 ) {
   console.assert(
     JSON.stringify(getTopNIndices([0, 5, 2, 9, 1], 3)) ===
-      JSON.stringify([3, 1, 2]),
+    JSON.stringify([3, 1, 2]),
     "getTopNIndices should pick top 3 indices"
   );
   console.assert(
     JSON.stringify(maskExceptIndices([10, 20, 30, 40], [1, 3])) ===
-      JSON.stringify([null, 20, null, 40]),
+    JSON.stringify([null, 20, null, 40]),
     "maskExceptIndices should null other indices"
   );
 }

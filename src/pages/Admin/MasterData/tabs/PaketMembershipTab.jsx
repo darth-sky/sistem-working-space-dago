@@ -16,12 +16,15 @@ import {
     Select,
     Tag,
     Switch,
+    notification,
 } from "antd";
 import {
     PlusOutlined,
     EditOutlined,
     DeleteOutlined,
     SearchOutlined,
+    CheckCircleOutlined,
+    ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import {
     getPaketMembership,
@@ -44,9 +47,40 @@ const PaketMembershipTab = () => {
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
     const [kategoriRuanganList, setKategoriRuanganList] = useState([]);
-
-    // --- TAMBAHAN: State untuk validasi ---
     const [validationErrors, setValidationErrors] = useState({});
+
+    // Notifikasi antd
+    const [api, contextHolder] = notification.useNotification();
+
+    const showNotif = (type, title, description) => {
+        let icon;
+        switch (type) {
+            case "success":
+                icon = <CheckCircleOutlined style={{ color: "#52c41a" }} />;
+                break;
+            case "error":
+                icon = <ExclamationCircleOutlined style={{ color: "#ff4d4f" }} />;
+                break;
+            case "warning":
+                icon = <ExclamationCircleOutlined style={{ color: "#faad14" }} />;
+                break;
+            default:
+                icon = null;
+        }
+
+        api.open({
+            message: title,
+            description,
+            icon,
+            placement: "topRight",
+            duration: 3,
+            style: {
+                borderRadius: 12,
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+                background: "#fff",
+            },
+        });
+    };
 
     const getKategoriName = (id) => {
         const kategori = kategoriRuanganList.find(
@@ -66,23 +100,14 @@ const PaketMembershipTab = () => {
             const resPaket = await getPaketMembership();
             if (resPaket.status === 200) {
                 const paket = resPaket.data.datas.map((item, index) => ({
-                    // --- PERBAIKAN: Gunakan ID asli untuk key ---
-                    key: item.id_paket_membership || index + 1, 
-                    id_paket_membership: item.id_paket_membership,
-                    id_kategori_ruangan: item.id_kategori_ruangan,
-                    nama_paket: item.nama_paket,
-                    harga: item.harga,
-                    durasi: item.durasi,
-                    kuota: item.kuota,
-                    deskripsi_benefit: item.deskripsi_benefit,
-                    fitur_membership: item.fitur_membership,
-                    status_paket: item.status_paket,
+                    key: item.id_paket_membership || index + 1,
+                    ...item,
                 }));
                 setData(paket);
             }
         } catch (err) {
             console.error("Gagal fetch data:", err);
-            message.error("Gagal mengambil data dari server.");
+            showNotif("error", "Gagal Mengambil Data", "Tidak dapat memuat data dari server.");
         } finally {
             setLoading(false);
         }
@@ -92,7 +117,6 @@ const PaketMembershipTab = () => {
         fetchData();
     }, []);
 
-    // Data hasil pencarian global
     const filteredData = data.filter(
         (item) =>
             item.nama_paket.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -102,7 +126,6 @@ const PaketMembershipTab = () => {
                     .includes(searchText.toLowerCase()))
     );
 
-    // Ambil filter unik dari data
     const kategoriFilters = kategoriRuanganList.map((k) => ({
         text: k.nama_kategori,
         value: k.id_kategori_ruangan,
@@ -111,12 +134,6 @@ const PaketMembershipTab = () => {
         { text: "Active", value: "Active" },
         { text: "Inactive", value: "Inactive" },
     ];
-    const durasiFilters = [
-        ...new Set(data.map((d) => d.durasi)),
-    ].map((d) => ({ text: `${d} Hari`, value: d }));
-    const kuotaFilters = [
-        ...new Set(data.map((d) => d.kuota)),
-    ].map((d) => ({ text: `${d}`, value: d }));
 
     const columns = [
         {
@@ -151,8 +168,7 @@ const PaketMembershipTab = () => {
             dataIndex: "id_kategori_ruangan",
             key: "id_kategori_ruangan",
             filters: kategoriFilters,
-            onFilter: (value, record) =>
-                record.id_kategori_ruangan === value,
+            onFilter: (value, record) => record.id_kategori_ruangan === value,
             render: (id) => getKategoriName(id),
         },
         {
@@ -161,16 +177,13 @@ const PaketMembershipTab = () => {
             key: "harga",
             align: "right",
             sorter: (a, b) => a.harga - b.harga,
-            render: (text) =>
-                new Intl.NumberFormat("id-ID").format(text),
+            render: (text) => new Intl.NumberFormat("id-ID").format(text),
         },
         {
             title: "Durasi (Hari)",
             dataIndex: "durasi",
             key: "durasi",
             align: "center",
-            filters: durasiFilters,
-            onFilter: (value, record) => record.durasi === value,
             sorter: (a, b) => a.durasi - b.durasi,
         },
         {
@@ -178,8 +191,6 @@ const PaketMembershipTab = () => {
             dataIndex: "kuota",
             key: "kuota",
             align: "center",
-            filters: kuotaFilters,
-            onFilter: (value, record) => record.kuota === value,
             sorter: (a, b) => a.kuota - b.kuota,
         },
         {
@@ -215,10 +226,9 @@ const PaketMembershipTab = () => {
 
     const handleChange = (field, value) => {
         setFormData({ ...formData, [field]: value });
-        // --- PERBAIKAN: Hapus error spesifik saat user mulai mengisi ---
         if (validationErrors[field]) {
-            setValidationErrors(prevErrors => {
-                const newErrors = { ...prevErrors };
+            setValidationErrors((prev) => {
+                const newErrors = { ...prev };
                 delete newErrors[field];
                 return newErrors;
             });
@@ -226,59 +236,41 @@ const PaketMembershipTab = () => {
     };
 
     const handleSave = async () => {
-        // --- PERBAIKAN: Validasi Penuh ---
         const errors = {};
-        if (!formData.nama_paket || formData.nama_paket.trim() === "") errors.nama_paket = true;
+        if (!formData.nama_paket?.trim()) errors.nama_paket = true;
         if (!formData.id_kategori_ruangan) errors.id_kategori_ruangan = true;
-        if (formData.durasi === null || formData.durasi === undefined || formData.durasi <= 0) errors.durasi = true;
-        if (formData.kuota === null || formData.kuota === undefined || formData.kuota < 0) errors.kuota = true;
-        if (formData.harga === null || formData.harga === undefined || formData.harga < 0) errors.harga = true;
-        // status_paket selalu memiliki nilai
+        if (!formData.durasi || formData.durasi <= 0) errors.durasi = true;
+        if (formData.kuota === undefined || formData.kuota < 0) errors.kuota = true;
+        if (formData.harga === undefined || formData.harga < 0) errors.harga = true;
 
         if (Object.keys(errors).length > 0) {
             setValidationErrors(errors);
-            message.warning("Harap isi semua bidang yang wajib diisi (ditandai *).");
+            showNotif("warning", "Validasi Gagal", "Harap isi semua bidang yang wajib diisi (ditandai *).");
             return;
         }
-        setValidationErrors({}); // Lolos validasi, bersihkan error
-        // --- AKHIR PERBAIKAN VALIDASI ---
 
+        setValidationErrors({});
         setLoading(true);
         try {
-            const payload = {
-                id_kategori_ruangan: formData.id_kategori_ruangan,
-                nama_paket: formData.nama_paket,
-                harga: formData.harga,
-                durasi: formData.durasi,
-                kuota: formData.kuota,
-                deskripsi_benefit: formData.deskripsi_benefit || null,
-                fitur_membership: formData.fitur_membership || null,
-                status_paket: formData.status_paket,
-            };
+            const payload = { ...formData };
 
             let res;
             if (editingPackage) {
-                res = await updatePaketMembership(
-                    editingPackage.id_paket_membership,
-                    payload
-                );
-                if (res.status === 200) message.success("Paket berhasil diperbarui!");
+                res = await updatePaketMembership(editingPackage.id_paket_membership, payload);
+                if (res.status === 200) showNotif("success", "Paket Diperbarui", "Data paket membership berhasil diperbarui.");
             } else {
                 res = await createPaketMembership(payload);
-                if (res.status === 201) message.success("Paket baru berhasil ditambahkan!");
+                if (res.status === 201) showNotif("success", "Paket Ditambahkan", "Data paket membership baru berhasil ditambahkan.");
             }
 
             if (res.status === 200 || res.status === 201) {
                 await fetchData();
                 handleCancel();
             } else {
-                // Tampilkan error dari server jika ada
-                message.error(res.data?.error || "Gagal menyimpan paket!");
+                showNotif("error", "Gagal Menyimpan", res.data?.error || "Terjadi kesalahan saat menyimpan data.");
             }
         } catch (err) {
-            console.error("Error save paket:", err);
-            const errorMsg = err.response?.data?.error || `Gagal menyimpan. Error: ${err.message}`;
-            message.error(errorMsg);
+            showNotif("error", "Error", err.response?.data?.error || "Terjadi kesalahan pada server.");
         } finally {
             setLoading(false);
         }
@@ -289,15 +281,13 @@ const PaketMembershipTab = () => {
         try {
             const res = await deletePaketMembership(id_paket);
             if (res.status === 200) {
-                message.success("Paket berhasil dihapus permanen!");
+                showNotif("success", "Paket Dihapus", "Data paket membership berhasil dihapus.");
                 await fetchData();
             } else {
-                message.error(res.data?.error || "Gagal menghapus paket");
+                showNotif("error", "Gagal Menghapus", res.data?.error || "Gagal menghapus paket.");
             }
-        } catch (err) {
-            console.error("Error delete paket:", err);
-            const errorMsg = err.response?.data?.error || "Gagal menghapus paket.";
-            message.error(errorMsg);
+        } catch {
+            showNotif("error", "Error", "Gagal menghapus paket dari server.");
         } finally {
             setLoading(false);
         }
@@ -305,17 +295,8 @@ const PaketMembershipTab = () => {
 
     const handleEdit = (membershipPackage) => {
         setEditingPackage(membershipPackage);
-        setFormData({
-            id_kategori_ruangan: membershipPackage.id_kategori_ruangan,
-            nama_paket: membershipPackage.nama_paket,
-            harga: membershipPackage.harga,
-            durasi: membershipPackage.durasi,
-            kuota: membershipPackage.kuota,
-            deskripsi_benefit: membershipPackage.deskripsi_benefit,
-            fitur_membership: membershipPackage.fitur_membership,
-            status_paket: membershipPackage.status_paket,
-        });
-        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setFormData({ ...membershipPackage });
+        setValidationErrors({});
         setOpen(true);
     };
 
@@ -323,14 +304,13 @@ const PaketMembershipTab = () => {
         setOpen(false);
         setEditingPackage(null);
         setFormData({ status_paket: "Active" });
-        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setValidationErrors({});
     };
 
-    // --- PERBAIKAN: Pisahkan handler untuk tombol "Tambah Paket Baru" ---
     const handleAddClick = () => {
         setEditingPackage(null);
         setFormData({ status_paket: "Active" });
-        setValidationErrors({}); // <-- PERBAIKAN: Bersihkan error
+        setValidationErrors({});
         setOpen(true);
     };
 
@@ -340,12 +320,9 @@ const PaketMembershipTab = () => {
 
     return (
         <div style={{ padding: "24px" }}>
-            <Row
-                gutter={[16, 16]}
-                align="middle"
-                justify="space-between"
-                style={{ marginBottom: 24 }}
-            >
+            {contextHolder}
+
+            <Row gutter={[16, 16]} align="middle" justify="space-between" style={{ marginBottom: 24 }}>
                 <Col xs={24} md={12}>
                     <Search
                         placeholder="Cari paket membership..."
@@ -353,15 +330,15 @@ const PaketMembershipTab = () => {
                         onSearch={setSearchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         prefix={<SearchOutlined />}
-                        size="large" // <-- PERBAIKAN: Buat search bar lebih besar
+                        size="large"
                     />
                 </Col>
                 <Col xs={24} md={12} style={{ textAlign: "right" }}>
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
-                        onClick={handleAddClick} // <-- PERBAIKAN: Gunakan handler baru
-                        size="large" // <-- PERBAIKAN: Buat tombol lebih besar
+                        onClick={handleAddClick}
+                        size="large"
                     >
                         Tambah Paket Baru
                     </Button>
@@ -373,14 +350,14 @@ const PaketMembershipTab = () => {
                     columns={columns}
                     dataSource={filteredData}
                     pagination={{
-                        pageSize: pageSize,
+                        pageSize,
                         showSizeChanger: true,
                         pageSizeOptions: ["5", "10", "50"],
-                        onShowSizeChange: (current, size) => setPageSize(size),
+                        onShowSizeChange: (_, size) => setPageSize(size),
                     }}
                     loading={loading}
                     scroll={{ x: "max-content" }}
-                    rowKey="key" // <-- PERBAIKAN: Gunakan key unik
+                    rowKey="key"
                 />
             </Card>
 
@@ -394,7 +371,7 @@ const PaketMembershipTab = () => {
                 okText={editingPackage ? "Update" : "Simpan"}
                 cancelText="Batal"
                 bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
-                destroyOnClose // Reset state internal AntD
+                destroyOnClose
             >
                 <Row justify="space-between" align="middle" style={{ margin: "20px 0 16px 0" }}>
                     <Col>
@@ -471,7 +448,7 @@ const PaketMembershipTab = () => {
                         </div>
                     </Col>
                     <Col xs={24} md={12}>
-                         <div style={{ marginBottom: 16 }}>
+                        <div style={{ marginBottom: 16 }}>
                             <Text strong>Kuota/Kredit <span style={{ color: "red" }}>*</span></Text>
                             <InputNumber
                                 style={{ width: "100%", marginTop: 8 }}
