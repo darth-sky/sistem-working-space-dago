@@ -12,12 +12,14 @@ import {
     History,
     LogOut,
     TriangleAlert, // --- TAMBAHAN: Ikon untuk modal ---
+    MessageCircleQuestion
 } from "lucide-react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import logo from "../../../assets/images/logo.png";
 import { AuthContext } from "../../../providers/AuthProvider";
 import { MdEvent, MdOutlineDiscount, MdOutlineMeetingRoom } from "react-icons/md";
 import { HiOutlineBuildingOffice2 } from "react-icons/hi2";
+import { IoInformationCircleOutline } from "react-icons/io5";
 
 const DashboardPengguna = ({ children }) => {
     const navigate = useNavigate();
@@ -107,6 +109,18 @@ const DashboardPengguna = ({ children }) => {
             label: "Riwayat Transaksi",
             icon: <History size={18} />,
             path: "/riwayat-transaksi",
+        },
+        {
+            key: "about-us",
+            label: "About Us",
+            icon: <IoInformationCircleOutline size={18} />,
+            path: "/about-us",
+        },
+        {
+            key: "faq",
+            label: "FAQ",
+            icon: <MessageCircleQuestion size={18} />,
+            path: "/faq",
         },
     ];
 

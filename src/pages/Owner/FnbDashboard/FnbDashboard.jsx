@@ -45,9 +45,12 @@ import {
   FileExcelOutlined,
 } from "@ant-design/icons";
 import { getOwnerFnB } from "../../../services/service";
+//import { getExpenses, getBagiHasilReport } from "../../../services/service";
 
 // --- MODIFIKASI: Import html2canvas ---
-import html2canvas from "html2canvas";
+import html2canvas from "html2canvas-pro";
+import ExcelJS from "exceljs/dist/exceljs.min.js";
+import { saveAs } from "file-saver";
 
 dayjs.locale("id");
 
@@ -109,6 +112,7 @@ const FnBDashboard = () => {
     dayjs(),
   ]);
   const [loading, setLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // --- MODIFIKASI: Filter Tenant Global (Multi-Select) ---
   const [selectedTenantIds, setSelectedTenantIds] = useState([]);
@@ -138,59 +142,180 @@ const FnBDashboard = () => {
   const [unpopItems, setUnpopItems] = useState({}); // Map item { "3": [...], "4": [...] }
 
   const [dailyTarget] = useState(1000000);
+  const [paymentBreakdown, setPaymentBreakdown] = useState([]);
+
+  // --- Capture to Image handler ---
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // --- MODIFIKASI: Fungsi Download diganti dengan html2canvas ---
-  const handleDownloadImage = async () => {
-    const element = printRef.current;
-    if (!element) {
-      message.error("Elemen dashboard tidak ditemukan untuk dicetak.");
-      return;
-    }
-
-    const hideLoading = message.loading("Membuat gambar laporan...", 0);
-
+  const handleDownloadReport = async () => {
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2, // Resolusi 2x lebih tinggi
-        useCORS: true, // Untuk memastikan gambar eksternal (jika ada) ter-render
-        backgroundColor: "#ffffff", // Latar belakang putih
-        // Hapus elemen yang tidak ingin dicetak
-        ignoreElements: (el) => el.classList.contains("no-print"),
+      const node = printRef.current;
+      if (!node) {
+        message.error("Area laporan tidak ditemukan.");
+        return;
+      }
+
+      await new Promise((r) => setTimeout(r, 600));
+      // langsung capture
+      const canvas = await html2canvas(node, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
       });
 
       const dataUrl = canvas.toDataURL("image/png");
 
-      // Tentukan nama file berdasarkan filter
-      let filterName = "semua-tenant";
-      if (selectedTenantIds.length === 1) {
-        filterName =
-          tenantInfo.find((t) => t.id === selectedTenantIds[0])?.name ||
-          "filter";
-        filterName = filterName.toLowerCase().replace(/ /g, "-");
-      } else if (selectedTenantIds.length > 1) {
-        filterName = "filter-multi-tenant";
-      }
-      const dateStr = dateRange[0].format("YYYYMMDD") + "-" + dateRange[1].format("YYYYMMDD");
-      const filename = `laporan-fnb-${filterName}-${dateStr}.png`;
+      // tampilkan preview
+      setPreviewSrc(dataUrl);
+      setPreviewOpen(true);
 
-
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename;
-      a.click();
-      a.remove();
-
-      hideLoading();
-      message.success("Gambar laporan berhasil diunduh!");
+      // auto download PNG
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `laporan-${dateRange[0].format(
+        "YYYYMMDD"
+      )}-${dateRange[1].format("YYYYMMDD")}.png`;
+      link.click();
     } catch (e) {
-      console.error("Gagal membuat gambar:", e);
-      hideLoading();
-      message.error("Terjadi kesalahan saat membuat gambar.");
+      console.error(e);
+      message.error("Gagal membuat gambar laporan.");
     }
   };
-  // --- AKHIR MODIFIKASI ---
 
-  const handleExportCSV = () => message.info("Proses ekspor CSV dimulai...");
+  // Cleaned & Formatted handleExportExcel
+  const handleExportExcel = async () => {
+    setExportLoading(true);
+    try {
+      const startDate = dateRange[0]?.format("YYYY-MM-DD");
+      const endDate = dateRange[1]?.format("YYYY-MM-DD");
+
+      const wb = new ExcelJS.Workbook();
+
+      const formatRP = (v) =>
+        "Rp " + new Intl.NumberFormat("id-ID").format(Number(v || 0));
+
+      const autoFit = (ws) => {
+        ws.columns.forEach((col) => {
+          let max = 10;
+          col.eachCell({ includeEmpty: true }, (cell) => {
+            const val = cell.value ? cell.value.toString() : "";
+            max = Math.max(max, val.length);
+          });
+          col.width = max + 2;
+        });
+      };
+
+      // Build fallback transaction from dailyTenant
+      const allData = [];
+      for (const [tanggal, tenants] of Object.entries(dailyTenant)) {
+        tenantInfo.forEach((t) => {
+          const total = tenants[t.id] || 0;
+          if (total > 0) {
+            allData.push({
+              tanggal,
+              tenant: t.name,
+              product: "(total harian)",
+              qty: "-",
+              harga: "-",
+              diskon: 0,
+              pajak: 0,
+              total,
+            });
+          }
+        });
+      }
+
+      const totalFnb = allData.reduce((acc, trx) => acc + Number(trx.total), 0);
+
+      // ========================= SUMMARY SHEET =========================
+      const ws = wb.addWorksheet("Summary");
+
+      ws.addRow(["SUMMARY FNB"]).font = { bold: true, size: 16 };
+      ws.addRow([`Periode: ${startDate} - ${endDate}`]).font = { bold: true };
+      ws.addRow([]);
+
+      ws.addRow(["Total Penjualan FNB", formatRP(totalFnb)]).font = {
+        bold: true,
+      };
+      ws.addRow(["Share Tenant 70%", formatRP(totalFnb * 0.7)]);
+      ws.addRow([]);
+
+      ws.addRow(["Tanggal", "Tenant", "Penjualan (Total Harian)"]).font = {
+        bold: true,
+      };
+
+      allData.forEach((d) => {
+        ws.addRow([d.tanggal, d.tenant, formatRP(d.total)]);
+      });
+
+      ws.addRow([]);
+      ws.addRow(["TOTAL FNB", "", formatRP(totalFnb)]).font = { bold: true };
+
+      autoFit(ws);
+
+      // ========================= TENANT SHEETS =========================
+      tenantInfo.forEach((t) => {
+        const sheet = wb.addWorksheet(t.name.substring(0, 30));
+
+        const trxTenant = allData.filter((d) => d.tenant === t.name);
+        const totalTenant = trxTenant.reduce(
+          (acc, trx) => acc + Number(trx.total),
+          0
+        );
+        const shareTenant = Math.round(totalTenant * 0.7);
+
+        sheet.addRow(["LAPORAN TENANT", t.name]).font = {
+          bold: true,
+          size: 14,
+        };
+        sheet.addRow([`Periode: ${startDate} - ${endDate}`]).font = {
+          bold: true,
+        };
+        sheet.addRow([]);
+
+        sheet.addRow(["Total Penjualan FNB", formatRP(totalFnb)]);
+        sheet.addRow([`Total Penjualan ${t.name}`, formatRP(totalTenant)]);
+        sheet.addRow(["Share 70%", formatRP(shareTenant)]);
+        sheet.addRow(["Hutang Tenant", ""]);
+        sheet.addRow(["Jumlah Transfer", ""]);
+        sheet.addRow([]);
+
+        sheet.addRow(["Tanggal", "Total Harian"]).font = { bold: true };
+
+        trxTenant.forEach((d) => {
+          sheet.addRow([d.tanggal, formatRP(d.total)]);
+        });
+
+        sheet.addRow([]);
+        sheet.addRow([`TOTAL ${t.name}`, formatRP(totalTenant)]).font = {
+          bold: true,
+        };
+
+        autoFit(sheet);
+      });
+
+      // ========================= SAVE FILE =========================
+      const buffer = await wb.xlsx.writeBuffer();
+      saveAs(
+        new Blob([buffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }),
+        `laporan_fnb_${startDate}_${endDate}.xlsx`
+      );
+
+      message.success("Export berhasil!");
+    } catch (err) {
+      console.error(err);
+      message.error("Export gagal.");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // --- AKHIR MODIFIKASI ---
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -221,6 +346,9 @@ const FnBDashboard = () => {
         setPeakByHour(Array.isArray(d?.peak_by_hour) ? d.peak_by_hour : []);
         setTopItems(d?.top_fnb || {});
         setUnpopItems(d?.unpopular_fnb || {});
+        setPaymentBreakdown(
+          Array.isArray(d?.payment_breakdown) ? d.payment_breakdown : []
+        );
 
         const tenantIds = new Set(tenants.map((t) => t.id));
         const currentFilterIsValid = selectedTenantIds.every((id) =>
@@ -328,9 +456,7 @@ const FnBDashboard = () => {
       datasets: [
         {
           data: allZero ? data.map(() => 1) : data,
-          backgroundColor: allZero
-            ? data.map(() => "#E0E0E0")
-            : colors,
+          backgroundColor: allZero ? data.map(() => "#E0E0E0") : colors,
           hoverOffset: 8,
         },
       ],
@@ -393,8 +519,9 @@ const FnBDashboard = () => {
         callbacks: {
           label: (ctx) => {
             const v = ctx.parsed?.y ?? ctx.parsed ?? 0;
-            return `${ctx.dataset?.label ? ctx.dataset.label + ": " : ""
-              }${formatRupiah(v)}`;
+            return `${
+              ctx.dataset?.label ? ctx.dataset.label + ": " : ""
+            }${formatRupiah(v)}`;
           },
         },
       },
@@ -585,6 +712,35 @@ const FnBDashboard = () => {
   const dynamicTitle = getDynamicTitle();
 
   const isAllTenantsView = selectedTenantIds.length === 0;
+  const paymentDoughnut = useMemo(() => {
+    if (!paymentBreakdown || paymentBreakdown.length === 0) {
+      return {
+        labels: [],
+        datasets: [
+          {
+            data: [],
+            backgroundColor: [],
+          },
+        ],
+      };
+    }
+
+    const labels = paymentBreakdown.map((x) => x.method);
+    const values = paymentBreakdown.map((x) => x.total);
+
+    const COLORS = ["#2563eb", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: COLORS.slice(0, values.length),
+          hoverOffset: 8,
+        },
+      ],
+    };
+  }, [paymentBreakdown]);
 
   return (
     <ConfigProvider locale={locale}>
@@ -655,8 +811,9 @@ const FnBDashboard = () => {
             </Space>
           </Col>
         </Row>
-
-        <div className="flex justify-start gap-3 mb-6 no-print"> {/* --- MODIFIKASI: Tambah class no-print --- */}
+        <div className="flex justify-start gap-3 mb-6 no-print">
+          {" "}
+          {/* --- MODIFIKASI: Tambah class no-print --- */}
           <a
             href="/laporan"
             className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
@@ -682,7 +839,6 @@ const FnBDashboard = () => {
             Pajak
           </a>
         </div>
-
         {/* --- MODIFIKASI: Wrapper div untuk print --- */}
         <div ref={printRef} style={{ backgroundColor: "#ffffff", padding: 1 }}>
           {/* KPI Cards */}
@@ -823,9 +979,7 @@ const FnBDashboard = () => {
                 </Row>
               </Card>
 
-              <div
-                style={{ display: isAllTenantsView ? "block" : "none" }}
-              >
+              <div style={{ display: isAllTenantsView ? "block" : "none" }}>
                 <Card style={{ marginBottom: 16 }} loading={loading}>
                   <Row gutter={[12, 12]}>
                     <Col span={24}>
@@ -839,7 +993,7 @@ const FnBDashboard = () => {
                         <Bar
                           ref={trafficBarRef}
                           data={trafficBarData}
-                          options={{...trafficBarOptions, animation: false}} // Matikan animasi
+                          options={{ ...trafficBarOptions, animation: false }} // Matikan animasi
                         />
                       </div>
                     </Col>
@@ -865,7 +1019,7 @@ const FnBDashboard = () => {
                         <Bar
                           ref={peakBarRef}
                           data={peakBarData}
-                          options={{...peakBarOptions, animation: false}} // Matikan animasi
+                          options={{ ...peakBarOptions, animation: false }} // Matikan animasi
                         />
                       </div>
                     </Col>
@@ -875,16 +1029,66 @@ const FnBDashboard = () => {
             </Col>
 
             <Col xs={24} lg={8}>
-              <div
-                style={{ display: isAllTenantsView ? "block" : "none" }}
-              >
+              <div style={{ display: isAllTenantsView ? "block" : "none" }}>
+                <Card style={{ marginBottom: 16 }} loading={loading}>
+                  <Title level={5}>Metode Pembayaran (F&B)</Title>
+                  <Text type="secondary">
+                    Distribusi metode pembayaran transaksi lunas.
+                  </Text>
+
+                  <div style={{ height: 240, marginTop: 12 }}>
+                    {paymentBreakdown.length === 0 ? (
+                      <Empty description="Tidak ada transaksi lunas" />
+                    ) : (
+                      <Doughnut
+                        data={paymentDoughnut}
+                        options={{
+                          maintainAspectRatio: false,
+                          animation: false,
+                          plugins: {
+                            legend: { position: "bottom" },
+                            datalabels: {
+                              color: "#fff",
+                              font: { weight: "bold" },
+                              formatter: (value, ctx) => {
+                                const total = ctx.dataset.data.reduce(
+                                  (s, v) => s + v,
+                                  0
+                                );
+                                if (!total) return "0%";
+                                return ((value / total) * 100).toFixed(1) + "%";
+                              },
+                            },
+                          },
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  <Divider />
+
+                  {paymentBreakdown.map((p, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text>{p.method}</Text>
+                      <Text strong>Rp {formatRupiah(p.total)}</Text>
+                    </div>
+                  ))}
+                </Card>
+
                 <Card style={{ marginBottom: 16 }} loading={loading}>
                   <Title level={5}>Kontribusi Tenant</Title>
                   <div style={{ height: 220 }}>
                     <Doughnut
                       ref={doughnutChartRef}
                       data={doughnutData}
-                      options={{...doughnutOptions, animation: false}} // Matikan animasi
+                      options={{ ...doughnutOptions, animation: false }} // Matikan animasi
                     />
                   </div>
                   <Divider />
@@ -950,22 +1154,25 @@ const FnBDashboard = () => {
               </div>
 
               {/* --- MODIFIKASI: Pindahkan Quick Actions ke sini --- */}
-              <Card className="no-print"> {/* Sembunyikan quick actions dari print */}
+              <Card className="no-print">
+                {" "}
+                {/* Sembunyikan quick actions dari print */}
                 <Title level={5}>Quick Actions</Title>
                 <Space direction="vertical" style={{ width: "100%" }}>
                   <Button
                     icon={<DownloadOutlined />}
-                    onClick={handleDownloadImage} // Panggil fungsi baru
+                    onClick={handleDownloadReport}
                     style={{ width: "100%" }}
                   >
-                    Cetak Gambar Laporan
+                    Cetak Gambar
                   </Button>
                   <Button
                     icon={<FileExcelOutlined />}
-                    onClick={handleExportCSV}
+                    loading={exportLoading}
+                    onClick={handleExportExcel}
                     style={{ width: "100%" }}
                   >
-                    Cetak Laporan (CSV/Excel)
+                    Cetak Laporan (Excel)
                   </Button>
                 </Space>
               </Card>
@@ -1002,8 +1209,75 @@ const FnBDashboard = () => {
               </Card>
             </Col>
           </Row>
-        </div> {/* --- AKHIR MODIFIKASI: Akhir dari div printRef --- */}
+        </div>{" "}
+        {/* --- AKHIR MODIFIKASI: Akhir dari div printRef --- */}
       </div>
+
+      {/* Preview modal sederhana */}
+      {previewSrc && (
+        <div>
+          <div
+            onClick={() => setPreviewOpen(false)}
+            style={{
+              display: previewOpen ? "block" : "none",
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              zIndex: 9999,
+            }}
+          />
+          <div
+            style={{
+              display: previewOpen ? "block" : "none",
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              background: "#fff",
+              padding: 16,
+              borderRadius: 8,
+              zIndex: 10000,
+              maxWidth: "90vw",
+              maxHeight: "85vh",
+              overflow: "auto",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div
+              style={{
+                marginBottom: 8,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <strong>Preview Gambar</strong>
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                style={{
+                  padding: "4px 10px",
+                  border: "1px solid #ddd",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                }}
+              >
+                Tutup
+              </button>
+            </div>
+            <img src={previewSrc} alt="preview" style={{ maxWidth: "100%" }} />
+            <div style={{ marginTop: 12, textAlign: "right" }}>
+              <a
+                href={previewSrc}
+                download={`laporan-${dateRange[0].format(
+                  "YYYYMMDD"
+                )}-${dateRange[1].format("YYYYMMDD")}.png`}
+                style={{ textDecoration: "none" }}
+              ></a>
+            </div>
+          </div>
+        </div>
+      )}
     </ConfigProvider>
   );
 };
@@ -1016,12 +1290,12 @@ if (
 ) {
   console.assert(
     JSON.stringify(getTopNIndices([0, 5, 2, 9, 1], 3)) ===
-    JSON.stringify([3, 1, 2]),
+      JSON.stringify([3, 1, 2]),
     "getTopNIndices should pick top 3 indices"
   );
   console.assert(
     JSON.stringify(maskExceptIndices([10, 20, 30, 40], [1, 3])) ===
-    JSON.stringify([null, 20, null, 40]),
+      JSON.stringify([null, 20, null, 40]),
     "maskExceptIndices should null other indices"
   );
 }

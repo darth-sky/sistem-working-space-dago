@@ -1,3 +1,5 @@
+// src/pages/Kasir/OrderKasir/OrderKasir.jsx
+
 import React, { useState, useEffect, useMemo } from "react";
 import {
     Button,
@@ -28,10 +30,11 @@ import {
     CheckCircleOutlined,
     PercentageOutlined,
     SaveOutlined,
+    PrinterOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../providers/AuthProvider";
+import { useAuth } from "../../../providers/AuthProvider"; //
 import {
     getPosInitData,
     createOrderKasir, // Akan menangani F&B dan Ruangan
@@ -40,7 +43,7 @@ import {
     saveOrderKasir, // Akan menangani F&B dan Ruangan
     getSavedOrderDetails,
     paySavedOrder // Akan menangani F&B dan Ruangan
-} from "../../../services/service";
+} from "../../../services/service"; //
 import { MdOutlineShoppingCart } from "react-icons/md";
 import { FaRegIdCard } from "react-icons/fa";
 
@@ -63,7 +66,7 @@ const OrderKasir = () => {
     const navigate = useNavigate();
     const initialState = location.state || {};
 
-    const { activeSession, userProfile } = useAuth();
+    const { activeSession, userProfile } = useAuth(); //
 
     // --- States ---
     const [searchProductQuery, setSearchProductQuery] = useState("");
@@ -107,6 +110,7 @@ const OrderKasir = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isBookingProcessing, setIsBookingProcessing] = useState(false); // State untuk loading di modal booking
     const [editingOrderId, setEditingOrderId] = useState(null);
+    const [isPrinting, setIsPrinting] = useState(false);
 
     
     const resetOrderState = () => {
@@ -156,7 +160,7 @@ const OrderKasir = () => {
             setIsLoadingInitData(true);
             setLoadingError(null);
             try {
-                const data = await getPosInitData();
+                const data = await getPosInitData(); //
                 if (isMounted) {
                     setProducts(data.products || []);
                     setMerchantCategories(data.merchantCategories || []);
@@ -191,7 +195,7 @@ const OrderKasir = () => {
             setIsLoadingSavedOrder(true);
             console.log(`Attempting to load saved order ID: ${orderId}`);
             try {
-                const savedOrderData = await getSavedOrderDetails(orderId);
+                const savedOrderData = await getSavedOrderDetails(orderId); //
                 console.log("Saved order data received:", savedOrderData);
 
                 if (isMounted) {
@@ -241,8 +245,6 @@ const OrderKasir = () => {
         isLoadingInitData,
         editingOrderId,
         newOrderForm
-        // 'resetOrderState' tidak perlu di sini, bisa menyebabkan loop. 
-        // Dipanggil di 'catch' sudah cukup.
     ]);
 
     // useEffect for loading room data
@@ -250,7 +252,7 @@ const OrderKasir = () => {
         const loadRoomData = async () => {
             try {
                 setIsLoadingRooms(true);
-                const roomData = await getRoomsToday();
+                const roomData = await getRoomsToday(); //
                 setRooms(roomData || []);
             } catch (error) {
                 message.error("Gagal memuat data ruangan.");
@@ -479,13 +481,21 @@ const OrderKasir = () => {
     };
 
     // --- Fungsi Helper untuk Membangun Data Order ---
+    // --- PERBAIKAN BUG ---
     const buildMixedOrderData = () => {
+        const isCash = selectedPaymentMethod === 'cash';
         return {
             id_sesi: activeSession.id_sesi,
             customerName: customerName,
             orderType: currentOrderType,
             room: currentOrderType === 'dinein' ? room : null,
             paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : selectedPaymentMethod === 'qris' ? 'QRIS' : 'DEBIT',
+            
+            uang_diterima: isCash ? parseFloat(cashInput) : null,
+            // --- INI PERBAIKANNYA ---
+            kembalian: isCash ? parseFloat(changeAmount) : null, // Menggunakan changeAmount, bukan cashInput
+            // --- AKHIR PERBAIKAN ---
+
             items: selectedItems.map(item => ({
                 id: item.id,
                 type: item.type,
@@ -507,6 +517,7 @@ const OrderKasir = () => {
             totalAmount: totalAmount,
         };
     };
+    // --- AKHIR PERBAIKAN BUG ---
 
     // --- Handler untuk Simpan & Bayar (Keranjang Campuran) ---
     const handleSaveOrder = async () => {
@@ -524,7 +535,7 @@ const OrderKasir = () => {
 
         try {
             console.log("Menyimpan Order Data (Kasir):", orderData);
-            const result = await saveOrderKasir(orderData);
+            const result = await saveOrderKasir(orderData); //
             message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
             navigate('/transaksikasir');
             resetOrderState();
@@ -538,6 +549,7 @@ const OrderKasir = () => {
 
     const handleStrukConfirmPayment = async () => {
         setIsProcessing(true);
+        handlePrintReceipt()
 
         if (!activeSession || !activeSession.id_sesi) {
             message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
@@ -551,11 +563,11 @@ const OrderKasir = () => {
             let result;
             if (editingOrderId) {
                 console.log(`Membayar Order Tersimpan (ID: ${editingOrderId}):`, orderData);
-                result = await paySavedOrder(editingOrderId, orderData);
+                result = await paySavedOrder(editingOrderId, orderData); //
                 message.success(result.info || `Order #${editingOrderId} berhasil diselesaikan!`);
             } else {
                 console.log("Mengirim Order Data Baru (Kasir):", orderData);
-                result = await createOrderKasir(orderData);
+                result = await createOrderKasir(orderData); //
                 message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
             }
 
@@ -667,6 +679,71 @@ const OrderKasir = () => {
         return matchesMerchant && matchesProductType && matchesSearch;
     });
 
+    // --- FITUR CETAK STRUK (Order Baru) ---
+    const handlePrintReceipt = () => {
+        console.log("Mencetak struk order baru...");
+        setIsPrinting(true);
+
+        // 1. Format Item F&B
+        const formattedFnbItems = selectedItems
+            .filter(item => item.type === 'fnb')
+            .map(item => ({
+                name: item.name,
+                qty: item.qty,
+                price: item.price,
+                note: item.note
+            }));
+
+        // 2. Format Item Booking
+        const formattedBookingItems = selectedItems
+            .filter(item => item.type === 'room')
+            .map(item => ({
+                name: item.name,
+                price: item.price, // Harga total paket
+                bookingData: {
+                    durasi_jam: item.bookingData.durasi_jam,
+                    waktu_mulai_jam: item.bookingData.waktu_mulai_jam,
+                }
+            }));
+            
+        // 3. Mapping Payment Method
+        let printerPaymentMethod = selectedPaymentMethod === 'cash' ? 'CASH' 
+                                 : selectedPaymentMethod === 'qris' ? 'QRIS' 
+                                 : 'DEBIT';
+
+        // 4. Susun Data
+        const dataToPrint = {
+            id: currentOrderNumber, // Gunakan nomor order sementara/baru
+            time: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+            cashier: cashierName,
+            customer: customerName,
+            location: room || "-",
+            
+            items: formattedFnbItems,
+            bookings: formattedBookingItems,
+            
+            subtotal: subtotal,
+            tax: totalTaxNominal,
+            discount: totalDiscountNominal,
+            total: totalAmount,
+            
+            paymentMethod: printerPaymentMethod,
+            tunai: parseFloat(cashInput) || 0,
+            kembali: parseFloat(changeAmount) || 0
+        };
+
+        // 5. Kirim ke Flutter
+        if (window.flutter_inappwebview) {
+            window.flutter_inappwebview.callHandler('flutterPrintHandler', dataToPrint);
+            message.info("Mencetak struk...");
+        } else {
+            message.error("Printer tidak ditemukan (Mode Web).");
+            console.log("Data Print:", dataToPrint);
+        }
+
+        setTimeout(() => setIsPrinting(false), 2000);
+    };
+
     // --- JSX (RENDER) ---
     return (
         <Spin spinning={isLoadingInitData || isLoading || isProcessing} tip={isProcessing ? "Menyimpan..." : "Memuat..."} size="large">
@@ -689,7 +766,7 @@ const OrderKasir = () => {
                                 </div>
                             </Radio.Button>
                         </Radio.Group>
-                        <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" />
+                        <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" /> {/* */}
                         <div className="flex items-center space-x-2 text-gray-600"><UserOutlined /><span>{cashierName}</span></div>
                     </div>
 
@@ -945,7 +1022,6 @@ const OrderKasir = () => {
             </Modal>
 
             {/* --- Modal Booking Ruangan (Dengan Perbaikan) --- */}
-            {/* --- PERBAIKAN: Modal Booking Ruangan --- */}
             <Modal
                 title={<div className="font-bold text-lg">Booking Ruangan: {selectedRoomForBooking?.nama_ruangan}</div>}
                 open={isBookingConfirmModalVisible}
@@ -966,7 +1042,6 @@ const OrderKasir = () => {
                 width={600}
                 centered
             >
-                {/* --- PERBAIKAN: <Form> diganti <div> --- */}
                 <div className="mt-4">
                     <p className="mb-4 text-gray-600">Pilih jam mulai dan durasi untuk booking hari ini.</p>
                     <Divider>Pilih Jam Mulai</Divider>
@@ -1034,6 +1109,7 @@ const OrderKasir = () => {
                     {selectedDuration && <div className="text-right font-bold text-lg text-blue-600">Total: {formatRupiah(selectedDuration.harga_paket)}</div>}
                 </div>
             </Modal>
+            
             {/* New Order Modal */}
             <Modal title={<div className="text-xl font-bold text-gray-800"><PlusOutlined className="mr-2" /> Buat Order Baru</div>} open={isNewOrderModalVisible} onOk={handleNewOrderOk} onCancel={handleNewOrderCancel} okText="Buat Order" cancelText="Batal" width={400} centered className="new-order-modal">
                 <Form form={newOrderForm} layout="vertical" initialValues={{ orderType: currentOrderType, customerName: customerName, room: room }} className="mt-4">
@@ -1353,8 +1429,6 @@ const OrderKasir = () => {
                     </div>
                 </div>
             </Modal>
-
-            {/* Modal Pembayaran Tunai Ruangan Dihapus */}
 
         </Spin>
     );

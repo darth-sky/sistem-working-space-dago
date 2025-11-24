@@ -5,6 +5,227 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 
+// --- FAQ ADMIN ENDPOINTS ---
+
+export const getAdminFAQ = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/faq/admin`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const createFAQ = async (data) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/faq/admin/post`, {
+      method: "POST", // Menggunakan endpoint sama dengan user, tapi admin bisa langsung set status
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify(data),
+    });
+    return { status: response.status, data: await response.json() };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateFAQ = async (id, data) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/faq/update/${id}`, {
+      method: "PUT",
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify(data),
+    });
+    return { status: response.status, data: await response.json() };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateFAQStatus = async (id, status) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/faq/update/${id}/status`, {
+      method: "PUT",
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({ status }),
+    });
+    return { status: response.status, data: await response.json() };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const deleteFAQ = async (id) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/faq/delete/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return { status: response.status, data: await response.json() };
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+// src/services/service.js
+// Pastikan baseUrl sudah didefinisikan (misal: http://localhost:5000)
+
+export const getFAQList = async () => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/faq/read`, { // Sesuaikan route API Anda
+      method: "GET",
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Gagal mengambil FAQ:", error);
+    throw error;
+  }
+};
+
+export const postUserQuestion = async (question) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/faq/post`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Gagal mengirim pertanyaan:", error);
+    throw error;
+  }
+};
+
+
+export const apiExportDatabase = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/export-database`, { // Sesuaikan endpoint
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    // Gunakan helper handleResponse dan downloadFile yang sudah ada di kode Anda sebelumnya
+    // Jika handleResponse melempar error jika status != 200
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Gagal download database");
+    }
+
+    // Gunakan helper downloadFile yang sudah ada di service.js Anda
+    // Atau gunakan logika manual di bawah ini jika helper tidak bisa diakses:
+    const contentDisposition = response.headers.get("content-disposition");
+    let filename = `backup_db_${new Date().toISOString().slice(0,10)}.sql`;
+    
+    if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch && filenameMatch[1]) filename = filenameMatch[1];
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    return { message: "Success" };
+
+  } catch (error) {
+    console.error("Error exporting database:", error);
+    throw error;
+  }
+};
+
+
+
+// ✅ Get semua akun COA
+export const getCoaAdmin = async () => {
+  try {
+    // Endpoint dari API Python yang kita buat
+    const response = await fetch(`${baseUrl}/api/v1/coaadmin/readCoa`);
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// ✅ Create akun COA
+export const createCoaAdmin = async (formData) => {
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/coaadmin/createCoa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// ✅ Update akun COA
+export const updateCoaAdmin = async (id_coa, formData) => {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/coaadmin/updateCoa/${id_coa}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      }
+    );
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+// ✅ Delete akun COA
+export const deleteCoaAdmin = async (id_coa) => {
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/v1/coaadmin/deleteCoa/${id_coa}`,
+      {
+        method: "DELETE",
+      }
+    );
+    const result = await response.json();
+    return { status: response.status, data: result };
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+
+
 
 // (Hapus getTransactionHistory lama)
 
@@ -1069,6 +1290,8 @@ export const paySavedOrder = async (id_transaksi, updatedOrderData) => {
   }
 };
 
+
+
 export const updatePaymentStatus = async (trx_id) => {
   try {
     const token = await jwtStorage.retrieveToken();
@@ -1950,9 +2173,10 @@ export const updateProductAvailability = async (id_produk, isAvailable) => {
 
 
 
-export const getOrdersByTenant = async (tenantId) => {
+export const getOrdersByTenant = async (tenantId, sesiId) => { 
   try {
-    const response = await fetch(`${baseUrl}/api/v1/tenant/orders/tenant/${tenantId}`, {
+    // Tambahkan 'sesiId' sebagai query parameter
+    const response = await fetch(`${baseUrl}/api/v1/tenant/orders/tenant/${tenantId}?sesi_id=${sesiId}`, { 
       method: "GET",
     });
     const result = await response.json();
@@ -2498,6 +2722,7 @@ export const addPaketHarga = async (paketData) => {
     return { status: response.status, data: result };
   } catch (error) { throw error; }
 };
+
 
 export const updatePaketHarga = async (id_paket, paketData) => {
   try {

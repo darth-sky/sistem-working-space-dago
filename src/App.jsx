@@ -69,6 +69,9 @@ import SesiKasirGuard from "./components/SesiKasirGuard";
 import LaporanPajak from "./pages/Owner/LaporanPajak/LaporanPajak";
 import InformasiAcaraLogin from "./pages/Pelanggan/InformasiAcaraLogin/InformasiAcaraLogin";
 import GantiPasswordKasir from "./pages/Kasir/GantiPasswordKasir/GantiPasswordKasir";
+import SesiAktifGuard from "./components/SesiAktifGuard";
+import AboutUs from "./pages/Pelanggan/AboutUs/AboutUs";
+import FAQPage from "./pages/Pelanggan/FAQPage/FAQPage";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -229,26 +232,39 @@ const App = () => {
           </Route>
         </Route>
 
+
+
+
+
         {/* ======================= */}
         {/* === RUTE ADMIN TENANT === */}
         {/* ======================= */}
-        <Route element={<PrivateRoute allowedRoles={['admin_tenant']} />}> {/* 1. Cek Login & Role 'admin_tenant' */}
-          <Route element={<SidebarTenant />}> {/* 2. Tampilkan Layout Sidebar Tenant */}
+        <Route element={<PrivateRoute allowedRoles={['admin_tenant']} />}>
 
-            {/* 3. Halaman-halaman Tenant di dalam Outlet SidebarTenant */}
-            <Route path="/ordertenant" element={<DashboardTenant />} />
-            <Route path="/stoktenant" element={<KelolaStok />} />
-            <Route path="/settingstenant" element={<SettingTenant />} />
+          {/* Halaman ini TIDAK perlu sesi aktif */}
+          <Route path="/tenant/buka-sesi" element={<BukaSesi />} />
 
-            {/* Tambahkan rute tenant lain di sini */}
-
+          {/* Halaman-halaman ini PERLU sesi aktif */}
+          {/* GANTI SesiKasirGuard dengan SesiAktifGuard */}
+          <Route element={<SesiAktifGuard />}>
+            <Route element={<SidebarTenant />}>
+              <Route path="/ordertenant" element={<DashboardTenant />} />
+              <Route path="/stoktenant" element={<KelolaStok />} />
+              <Route path="/settingstenant" element={<SettingTenant />} />
+              {/* Tambahkan rute tenant lain di sini */}
+            </Route>
           </Route>
+
         </Route>
+
+
+
+
+
         {/* Kasir */}
         {/* ======================= */}
         {/* === RUTE KASIR BARU === */}
         {/* ======================= */}
-
         {/* RUTE 1: HALAMAN BUKA SESI
             Ini adalah rute untuk /kasir/buka-sesi.
             - Dibungkus PrivateRoute (cek login)
@@ -260,8 +276,8 @@ const App = () => {
           <Route path="/kasir/buka-sesi" element={<BukaSesi />} />
 
           {/* --- PERUBAHAN YANG DITAMBAHKAN ---
-    HALAMAN GANTI PASSWORD (UNTUK LOGIN PERTAMA KALI)
-  */}
+            HALAMAN GANTI PASSWORD (UNTUK LOGIN PERTAMA KALI)
+          */}
           <Route
             path="/kasir/ganti-password"
             element={<GantiPasswordKasir />}
@@ -269,14 +285,12 @@ const App = () => {
           {/* --- AKHIR PERUBAHAN --- */}
 
         </Route>
-
-
         {/* RUTE 2: SEMUA HALAMAN KASIR LAINNYA
-    Rute-rute ini memerlukan:
-    1. Login & Role yang benar (PrivateRoute)
-    2. Sesi kasir yang aktif (SesiKasirGuard)
-    3. Tampilan Sidebar (SidebarKasir)
-*/}
+            Rute-rute ini memerlukan:
+            1. Login & Role yang benar (PrivateRoute)
+            2. Sesi kasir yang aktif (SesiKasirGuard)
+            3. Tampilan Sidebar (SidebarKasir)
+          */}
         <Route element={<PrivateRoute allowedRoles={['kasir']} />}>  {/* 1. Cek Login, Role, & FirstLogin */}
           <Route element={<SesiKasirGuard />}> {/* 2. Cek Sesi Aktif */}
             <Route element={<SidebarKasir />}> {/* 3. Tampilkan Layout Sidebar */}
@@ -436,6 +450,8 @@ const App = () => {
             <Route path="/private-office" element={<PrivateOffice />} />
             <Route path="/riwayat-transaksi" element={<RiwayatTransaksi />} />
             <Route path="/informasi-acara-pelanggan" element={<InformasiAcaraLogin />} />
+            <Route path="/about-us" element={<AboutUs />} />
+            <Route path="/faq" element={<FAQPage />} />
 
 
             {/* Perhatikan path event-spaces: sebelumnya ada '/event-spaces' & '/event-spaces-pelanggan'.

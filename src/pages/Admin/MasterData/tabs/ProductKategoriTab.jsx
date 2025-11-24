@@ -22,6 +22,7 @@ import {
   AppstoreOutlined,
   ShopOutlined,
   CheckCircleOutlined,
+  BookOutlined, // <-- Ikon baru untuk COA
 } from "@ant-design/icons";
 import {
   getKategoriTenant,
@@ -29,6 +30,7 @@ import {
   updateKategori,
   deleteKategori,
   getTenantsForDropdown,
+  getCoaAdmin, // <-- IMPORT BARU: Untuk mengambil daftar COA
 } from "../../../../services/service";
 
 const { Text } = Typography;
@@ -39,6 +41,7 @@ const ProductKategoriTab = () => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tenantsForDropdown, setTenantsForDropdown] = useState([]);
+  const [coaList, setCoaList] = useState([]); // <-- STATE BARU: Untuk dropdown COA
   const [data, setData] = useState([]);
   const [pageSize, setPageSize] = useState(5);
   const [form] = Form.useForm();
@@ -78,6 +81,9 @@ const ProductKategoriTab = () => {
           merchantId: item.id_tenant,
           nama_merchant: item.nama_tenant,
           nama_kategori: item.nama_kategori,
+          id_coa: item.id_coa, // <-- AMBIL DATA BARU
+          kode_akun: item.kode_akun, // <-- AMBIL DATA BARU
+          nama_akun: item.nama_akun, // <-- AMBIL DATA BARU
         }));
         setData(kategori);
       } else {
@@ -102,9 +108,24 @@ const ProductKategoriTab = () => {
     }
   };
 
+  // --- FUNGSI BARU: Fetch COA untuk dropdown ---
+  const fetchCoa = async () => {
+    try {
+      const res = await getCoaAdmin();
+      if (res.status === 200 && res.data?.datas) {
+        // Anda bisa filter di sini jika perlu, misal hanya 'Pendapatan'
+        // const filteredCoa = res.data.datas.filter(akun => akun.tipe_akun === 'Pendapatan');
+        setCoaList(res.data.datas);
+      }
+    } catch (err) {
+      showNotification("error", "Kesalahan", "Gagal memuat data Chart of Accounts.");
+    }
+  };
+
   useEffect(() => {
     fetchData();
     fetchTenants();
+    fetchCoa(); // <-- PANGGIL FUNGSI BARU
   }, []);
 
   // Kolom tabel
@@ -147,6 +168,27 @@ const ProductKategoriTab = () => {
         </Space>
       ),
     },
+    // --- KOLOM BARU: AKUN COA ---
+    {
+      title: "Akun COA",
+      dataIndex: "kode_akun",
+      key: "coa",
+      width: 250,
+      render: (text, record) => (
+        record.kode_akun ? (
+          <Space>
+            <BookOutlined style={{ color: "#faad14" }} />
+            <Text>({record.kode_akun}) {record.nama_akun}</Text>
+          </Space>
+        ) : (
+          <Text type="secondary">-</Text>
+        )
+      ),
+      filters: uniqueValues(data, "nama_akun"),
+      filterSearch: true,
+      onFilter: (value, record) =>
+        record.nama_akun?.toLowerCase().includes(value.toLowerCase()) || false,
+    },
     {
       title: "Actions",
       key: "actions",
@@ -180,22 +222,35 @@ const ProductKategoriTab = () => {
   ];
 
   // CREATE / UPDATE kategori
+// (File: src/pages/Admin/MasterData/tabs/ProductKategoriTab.jsx)
+// ... (semua import dan kode lain tetap sama) ...
+
+  // CREATE / UPDATE kategori
   const handleAddCategory = async () => {
     try {
       const values = await form.validateFields();
       setLoading(true);
 
+      // --- PERBAIKAN DI SINI ---
+      // 1. Buat object payload-nya terlebih dahulu
+      const payload = {
+        nama_kategori: values.nama_kategori,
+        id_tenant: values.merchantId,
+        
+        // 2. Gunakan "|| null"
+        // Ini akan mengirim 'null' jika values.id_coa adalah 'undefined' (dari allowClear)
+        // Jika ada nilainya (misal: 12), ia akan mengirim 12.
+        id_coa: values.id_coa || null 
+      };
+      // --- SELESAI PERBAIKAN ---
+
       let res;
       if (editingCategory) {
-        res = await updateKategori(editingCategory.id_kategori, {
-          nama_kategori: values.nama_kategori,
-          id_tenant: values.merchantId,
-        });
+        // 3. Kirim payload yang sudah diperbaiki
+        res = await updateKategori(editingCategory.id_kategori, payload);
       } else {
-        res = await createKategori({
-          id_tenant: values.merchantId,
-          nama_kategori: values.nama_kategori,
-        });
+        // 4. Kirim payload yang sudah diperbaiki
+        res = await createKategori(payload);
       }
 
       if (res.status === 200 || res.status === 201) {
@@ -216,6 +271,7 @@ const ProductKategoriTab = () => {
     }
   };
 
+// ... (sisa file Anda tetap sama) ...
   // DELETE kategori
   const handleDelete = async (id_kategori) => {
     setLoading(true);
@@ -243,6 +299,7 @@ const ProductKategoriTab = () => {
     form.setFieldsValue({
       merchantId: category.merchantId,
       nama_kategori: category.nama_kategori,
+      id_coa: category.id_coa, // <-- SET NILAI id_coa SAAT EDIT
     });
     setOpen(true);
   };
@@ -289,7 +346,7 @@ const ProductKategoriTab = () => {
             showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} item`,
           }}
           loading={loading}
-          scroll={{ x: 900 }}
+          scroll={{ x: 1200 }} // <-- Perbesar scroll x karena ada kolom baru
         />
       </Card>
 
@@ -346,6 +403,34 @@ const ProductKategoriTab = () => {
           >
             <Input placeholder="Masukkan nama kategori" />
           </Form.Item>
+
+          {/* --- FORM ITEM BARU: DROPDOWN COA --- */}
+          <Form.Item
+            label={
+              <Text strong>
+                Akun COA (Opsional)
+              </Text>
+            }
+            name="id_coa"
+          >
+            <Select
+              placeholder="Pilih akun COA"
+              style={{ width: "100%" }}
+              showSearch
+              allowClear // <-- Izinkan untuk dikosongkan
+              optionFilterProp="children"
+              filterOption={(input, option) =>
+                (option?.children ?? "").toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {coaList.map((akun) => (
+                <Option key={akun.id_coa} value={akun.id_coa}>
+                  ({akun.kode_akun}) {akun.nama_akun}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
         </Form>
       </Modal>
     </div>
@@ -353,4 +438,3 @@ const ProductKategoriTab = () => {
 };
 
 export default ProductKategoriTab;
-

@@ -127,13 +127,13 @@ const AuthProvider = ({ children }) => {
             const storedSession = sessionStorage.getItem('activeKasirSession');
             if (storedSession) {
                 const sessionData = JSON.parse(storedSession);
-                
+
                 // TODO Opsional (Best Practice): 
                 // Tambahkan API call di sini untuk memvalidasi
                 // apakah sessionData.id_sesi masih 'Dibuka' di database.
                 // Jika tidak, panggil leaveSession() dan redirect ke /bukasesi.
                 // Untuk saat ini, kita percaya sessionStorage.
-                
+
                 setActiveSession(sessionData);
             } else {
                 setActiveSession(null);
@@ -254,10 +254,16 @@ const AuthProvider = ({ children }) => {
                         break;
                     case "kasir":
                         // SELALU arahkan ke halaman pemilihan sesi
-                        navigate("/kasir/buka-sesi", { replace: true });
+                        navigate("/kasir/buka-sesi", {
+                            replace: true,
+                            state: { fromLogin: true } // <-- TAMBAHKAN INI
+                        });
                         break;
                     case "admin_tenant":
-                        navigate("/ordertenant", { replace: true });
+                        navigate("/tenant/buka-sesi", {
+                            replace: true,
+                            state: { fromLogin: true } // <-- TAMBAHKAN INI
+                        });
                         break;
                     case "owner":
                         navigate("/laporan", { replace: true });

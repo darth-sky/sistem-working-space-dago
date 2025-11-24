@@ -18,8 +18,9 @@ import {
 import locale from "antd/locale/id_ID";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
-import html2canvas from "html2canvas";
-import * as XLSX from "xlsx";
+import html2canvas from "html2canvas-pro";
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 import {
   ShopOutlined,
   FieldTimeOutlined,
@@ -75,7 +76,10 @@ const maskExceptIndices = (arr, indices) => {
 };
 
 const Laporan = () => {
-  const [dateRange, setDateRange] = useState([dayjs().startOf("month"), dayjs()]);
+  const [dateRange, setDateRange] = useState([
+    dayjs().startOf("month"),
+    dayjs(),
+  ]);
   const [loading, setLoading] = useState(false);
   const reportRef = useRef(null);
 
@@ -93,6 +97,7 @@ const Laporan = () => {
   const [visitorsByHour, setVisitorsByHour] = useState([]);
   const [topFnb, setTopFnb] = useState([]);
   const [topWs, setTopWs] = useState([]);
+  const [paymentBreakdown, setPaymentBreakdown] = useState([]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -123,6 +128,9 @@ const Laporan = () => {
                 (a, b) => Number(b.qty || 0) - Number(a.qty || 0)
               )
             : []
+        );
+        setPaymentBreakdown(
+          Array.isArray(d?.payment_breakdown) ? d.payment_breakdown : []
         );
       } catch (e) {
         console.error(e);
@@ -192,7 +200,10 @@ const Laporan = () => {
   const visitorsData = hours.map((H) => visitorsMap.get(H) || 0);
 
   // Peak hours visiting (Top 3 dari visitorsData)
-  const topPeakIdx = useMemo(() => getTopNIndices(visitorsData, 3), [visitorsData]);
+  const topPeakIdx = useMemo(
+    () => getTopNIndices(visitorsData, 3),
+    [visitorsData]
+  );
   const peakOnly = useMemo(
     () => maskExceptIndices(visitorsData, topPeakIdx),
     [visitorsData, topPeakIdx]
@@ -209,7 +220,8 @@ const Laporan = () => {
           label: (ctx) => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
-            if (ctx.parsed?.y != null) label += `Rp ${formatRupiah(ctx.parsed.y)}`;
+            if (ctx.parsed?.y != null)
+              label += `Rp ${formatRupiah(ctx.parsed.y)}`;
             return label;
           },
         },
@@ -235,7 +247,8 @@ const Laporan = () => {
           label: (ctx) => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
-            if (ctx.parsed?.y != null) label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
+            if (ctx.parsed?.y != null)
+              label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
             return label;
           },
         },
@@ -262,7 +275,8 @@ const Laporan = () => {
           label: (ctx) => {
             let label = ctx.dataset.label || "";
             if (label) label += ": ";
-            if (ctx.parsed?.y != null) label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
+            if (ctx.parsed?.y != null)
+              label += `${formatRupiah(ctx.parsed.y)} kunjungan`;
             return label;
           },
         },
@@ -293,200 +307,301 @@ const Laporan = () => {
         message.error("Area laporan tidak ditemukan.");
         return;
       }
-      await new Promise((r) => requestAnimationFrame(r));
 
-      // Clone offscreen
-      const clone = node.cloneNode(true);
-      const w = Math.max(node.scrollWidth, node.clientWidth);
-      const h = Math.max(node.scrollHeight, node.clientHeight);
+      await new Promise((r) => setTimeout(r, 600));
 
-      Object.assign(clone.style, {
-        position: "absolute",
-        left: "0",
-        top: "-100000px",
-        width: `${w}px`,
-        minWidth: `${w}px`,
-        maxWidth: `${w}px`,
-        background: "#ffffff",
-        zIndex: "-1",
-      });
-
-      clone
-        .querySelectorAll(
-          ".ant-card, .ant-card-body, .ant-statistic, .ant-space, .ant-row, .ant-col"
-        )
-        .forEach((el) => {
-          el.style.background = "#ffffff";
-        });
-
-      // Salin <canvas> di CLONE jadi <img>
-      const originalCanvases = node.querySelectorAll("canvas");
-      const clonedCanvases = clone.querySelectorAll("canvas");
-
-      originalCanvases.forEach((orig, idx) => {
-        try {
-          const dataUrl = orig.toDataURL("image/png");
-          const img = document.createElement("img");
-          img.src = dataUrl;
-          img.style.width = orig.style.width || `${orig.width}px`;
-          img.style.height = orig.style.height || `${orig.height}px`;
-          const cloned = clonedCanvases[idx];
-          if (cloned?.parentNode) cloned.parentNode.replaceChild(img, cloned);
-        } catch (_) {}
-      });
-
-      document.body.appendChild(clone);
-
-      const canvas = await html2canvas(clone, {
-        scale: Math.max(2, window.devicePixelRatio || 1),
-        useCORS: true,
-        allowTaint: true,
+      // langsung capture
+      const canvas = await html2canvas(node, {
         backgroundColor: "#ffffff",
-        width: w,
-        height: h,
-        windowWidth: w,
-        windowHeight: h,
+        scale: 2,
+        useCORS: true,
         logging: false,
       });
 
-      document.body.removeChild(clone);
+      const dataUrl = canvas.toDataURL("image/png");
 
-      if (!canvas) {
-        message.error("Gagal menangkap canvas.");
-        return;
-      }
-
-      const dataUrlPreview = canvas.toDataURL("image/png");
-      setPreviewSrc(dataUrlPreview);
+      // tampilkan preview
+      setPreviewSrc(dataUrl);
       setPreviewOpen(true);
 
-      const blob = await new Promise((resolve) =>
-        canvas.toBlob(resolve, "image/png", 1.0)
-      );
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `laporan-${dateRange[0].format(
-          "YYYYMMDD"
-        )}-${dateRange[1].format("YYYYMMDD")}.png`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          URL.revokeObjectURL(url);
-          a.remove();
-        }, 0);
-        return;
-      }
-
-      const a2 = document.createElement("a");
-      a2.href = dataUrlPreview;
-      a2.download = `laporan-${dateRange[0].format(
+      // auto download PNG
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `Laporan-${dateRange[0].format(
         "YYYYMMDD"
       )}-${dateRange[1].format("YYYYMMDD")}.png`;
-      document.body.appendChild(a2);
-      a2.click();
-      a2.remove();
+      link.click();
     } catch (e) {
       console.error(e);
-      message.error("Gagal membuat gambar laporan. Cek console untuk detail.");
-      try {
-        const node = reportRef.current;
-        if (!node) return;
-        const canvas = await html2canvas(node);
-        const dataUrl = canvas.toDataURL("image/png");
-        const newWin = window.open();
-        if (newWin) {
-          newWin.document.write(
-            `<img src="${dataUrl}" style="max-width:100%"/>`
-          );
-        }
-      } catch (_) {}
+      message.error("Gagal membuat gambar laporan.");
     }
   };
 
-  const handleExportExcel = () => {
+  // === Export to Excel Handler ===
+  const handleExportExcel = async () => {
     try {
-      const startStr = dateRange[0].format("YYYY-MM-DD");
-      const endStr = dateRange[1].format("YYYY-MM-DD");
+      const workbook = new ExcelJS.Workbook();
 
-      // --- build sheets
-      const wsSummary = XLSX.utils.json_to_sheet([
-        {
-          "Total FNB": totals.total_fnb,
-          "Total WS": totals.total_ws,
-          "Total Sales": totals.total_sales,
-          "Jumlah Transaksi (FNB + Booking WS)": totals.total_transactions,
-          "Total Pengunjung (FNB + WS)": totals.total_visitors,
-          "Rata-rata Harian": totals.avg_daily,
-          "Total Hari": totals.total_days,
-          Periode: `${startStr} s.d. ${endStr}`,
-        },
+      const defaultFont = { name: "Times New Roman", size: 12 };
+      const boldFont = { name: "Times New Roman", size: 12, bold: true };
+
+      const setBorder = (cell) => {
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      };
+
+      const formatRp = (val) =>
+        `Rp ${new Intl.NumberFormat("id-ID").format(Number(val || 0))}`;
+
+      const addTitle = (sheet, row, text, width = 5) => {
+        // merge sampai kolom E
+        sheet.mergeCells(row, 1, row, width);
+        const cell = sheet.getCell(row, 1);
+        cell.value = text;
+        cell.font = { name: "Times New Roman", size: 14, bold: true };
+        cell.alignment = { horizontal: "center" };
+        cell.border = { bottom: { style: "medium" } };
+        return row + 2;
+      };
+
+      const addPeriod = (sheet, row) => {
+        sheet.getCell(row, 1).value = `Periode: ${dateRange[0].format(
+          "D MMM YYYY"
+        )} – ${dateRange[1].format("D MMM YYYY")}`;
+        sheet.getCell(row, 1).font = defaultFont;
+        return row + 2;
+      };
+
+      const addTable = (sheet, row, title, headers, rows) => {
+        // Judul tabel tidak di border
+        sheet.getCell(row, 1).value = title;
+        sheet.getCell(row, 1).font = boldFont;
+        row++;
+
+        // Header tabel (border)
+        headers.forEach((h, i) => {
+          const cell = sheet.getCell(row, i + 1);
+          cell.value = h;
+          cell.font = boldFont;
+          setBorder(cell);
+          cell.alignment = { horizontal: "center", vertical: "middle" };
+        });
+
+        // Isi tabel (border)
+        rows.forEach((r, ridx) => {
+          r.forEach((v, cidx) => {
+            const cell = sheet.getCell(row + 1 + ridx, cidx + 1);
+            cell.value = v;
+            cell.font = defaultFont;
+            cell.alignment = {
+              vertical: "middle",
+              wrapText: true,
+              horizontal: "center",
+            };
+            setBorder(cell);
+          });
+        });
+
+        return row + 1 + rows.length + 2;
+      };
+
+      // ========== SHEET 1 ===========
+      const sheet1 = workbook.addWorksheet("Laporan", {
+        views: [{ state: "frozen", ySplit: 6 }],
+      });
+
+      let r = 1;
+      r = addTitle(sheet1, r, "LAPORAN DAGO CREATIVE HUB & COFFEE LAB");
+      r = addPeriod(sheet1, r);
+
+      // DAILY SELLING
+      const dailyRows = dailySales.map((d) => [
+        dayjs(d.tanggal).format("D-MMM"),
+        formatRp(d.fnb),
+        formatRp(d.ws),
+        formatRp(d.all),
       ]);
 
-      const wsDaily = XLSX.utils.json_to_sheet(
-        (dailySales || []).map((d) => ({
-          Tanggal: dayjs(d.tanggal).format("YYYY-MM-DD"),
-          FNB: Number(d.fnb || 0),
-          "Working Space": Number(d.ws || 0),
-          Total: Number(d.all || 0),
-        }))
+      const totalFnb = dailySales.reduce((s, x) => s + Number(x.fnb || 0), 0);
+      const totalWs = dailySales.reduce((s, x) => s + Number(x.ws || 0), 0);
+      const totalAll = dailySales.reduce((s, x) => s + Number(x.all || 0), 0);
+
+      dailyRows.push([
+        "TOTAL",
+        formatRp(totalFnb),
+        formatRp(totalWs),
+        formatRp(totalAll),
+      ]);
+
+      r = addTable(
+        sheet1,
+        r,
+        "DAILY SELLING",
+        ["Tanggal", "FNB", "WS", "Total"],
+        dailyRows
       );
 
-      // Visitors per jam
-      const wsVisitors = XLSX.utils.json_to_sheet(
-        hourLabels.map((label, i) => ({
-          Jam: label,
-          Kunjungan: Number(visitorsData[i] || 0),
-        }))
+      // PAYMENT
+      const paymentRows = paymentBreakdown.map((p) => [
+        p.method,
+        formatRp(p.total),
+      ]);
+      r = addTable(sheet1, r, "PAYMENT", ["Metode", "Total"], paymentRows);
+
+      // VISITOR PER JAM
+      const visitRows = visitorsData
+        .map((v, i) => [hourLabels[i], v])
+        .filter((v) => v[1] > 0);
+
+      r = addTable(
+        sheet1,
+        r,
+        "VISITOR PER JAM",
+        ["Jam", "Kunjungan"],
+        visitRows
       );
 
-      // Peak (top3 jam)
-      const wsPeak = XLSX.utils.json_to_sheet(
-        hourLabels
-          .map((label, i) => ({
-            Jam: label,
-            Kunjungan: peakOnly[i] == null ? "" : Number(peakOnly[i]),
-          }))
-          .filter((r) => r.Kunjungan !== "")
+      // HIGHLIGHT peak hours
+      const peaksIndex = [...topPeakIdx];
+      visitRows.forEach((rowVal, idx) => {
+        const hIndex = hourLabels.indexOf(rowVal[0]);
+        if (peaksIndex.includes(hIndex)) {
+          const cell = sheet1.getCell(r - visitRows.length - 1 + idx, 2);
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFF000" },
+          };
+        }
+      });
+
+      // SUMMARY
+      const summaryRows = [
+        ["Total FNB", formatRp(totals.total_fnb)],
+        ["Total WS", formatRp(totals.total_ws)],
+        ["Total Sales", formatRp(totals.total_sales)],
+        ["Total Transaksi", totals.total_transactions],
+        ["Total Pengunjung", totals.total_visitors],
+        ["Total Hari", totals.total_days],
+        [
+          "Periode",
+          `${dateRange[0].format("D MMM YYYY")} - ${dateRange[1].format(
+            "D MMM YYYY"
+          )}`,
+        ],
+      ];
+
+      r = addTable(sheet1, r, "SUMMARY", ["Deskripsi", "Nilai"], summaryRows);
+
+      // SET WIDTH COLUMN SHEET 1
+      sheet1.columns.forEach((col, i) => {
+        let maxLength = 10;
+        col.eachCell({ includeEmpty: true }, (cell) => {
+          const len = cell.value ? cell.value.toString().length : 0;
+          if (len > maxLength) maxLength = Math.min(len, 20);
+        });
+        col.width = maxLength + 2;
+      });
+
+      // ========== SHEET 2 ===========
+      const sheet2 = workbook.addWorksheet("Top Selling");
+      let r2 = 1;
+      r2 = addTitle(sheet2, r2, "TOP SELLING DAGO CREATIVE HUB & COFFEE LAB");
+      r2 = addPeriod(sheet2, r2);
+
+      // TOP FNB
+      const topFnbRows = topFnb.map((x) => [
+        x.item,
+        x.tenant,
+        x.qty,
+        formatRp(x.total),
+      ]);
+      r2 = addTable(
+        sheet2,
+        r2,
+        "TOP FNB",
+        ["Menu", "Tenant", "Qty", "Total"],
+        topFnbRows
       );
 
-      const wsTopFnb = XLSX.utils.json_to_sheet(
-        (topFnb || []).map((r) => ({
-          Menu: r.item || "-",
-          Tenant: r.tenant || "-",
-          "Jumlah Terjual": Number(r.qty || 0),
-          "Total Penjualan (Gross)": Number(r.gross ?? r.total ?? 0),
-          "Total Discount": Number(r.discount ?? 0),
-          "Total Penjualan (Nett)": Number(
-            r.nett ?? Number(r.gross ?? r.total ?? 0) - Number(r.discount ?? 0)
-          ),
-        }))
+      // TOP WORKING SPACE
+      const topWsRows = topWs.map((x) => [x.item, x.qty, formatRp(x.total)]);
+      r2 = addTable(
+        sheet2,
+        r2,
+        "TOP WORKING SPACE",
+        ["Kategori", "Qty", "Total"],
+        topWsRows
       );
 
-      const wsTopWs = XLSX.utils.json_to_sheet(
-        (topWs || []).map((r) => ({
-          "Space (Kategori - Durasi)": r.item || "-",
-          "Jumlah Terjual": Number(r.qty || 0),
-          "Total Penjualan (Rp)": Number(r.total || 0),
-        }))
+      // Auto width Sheet 2
+      sheet2.columns.forEach((col) => {
+        let maxLength = 10;
+        col.eachCell({ includeEmpty: true }, (cell) => {
+          const len = cell.value ? cell.value.toString().length : 0;
+          if (len > maxLength) maxLength = Math.min(len, 20);
+        });
+        col.width = maxLength + 2;
+      });
+
+      // CENTER semua tabel di Sheet 2
+      sheet2.eachRow({ includeEmpty: true }, (row) => {
+        row.eachCell((cell) => {
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+        });
+      });
+
+      // SAVE
+      const buffer = await workbook.xlsx.writeBuffer();
+      saveAs(
+        new Blob([buffer]),
+        `laporan-${dateRange[0].format("YYYYMMDD")}_to_${dateRange[1].format(
+          "YYYYMMDD"
+        )}.xlsx`
       );
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
-      XLSX.utils.book_append_sheet(wb, wsDaily, "Daily Selling");
-      XLSX.utils.book_append_sheet(wb, wsVisitors, "Visitors per Jam");
-      XLSX.utils.book_append_sheet(wb, wsPeak, "Peak Hours (Top3)");
-      XLSX.utils.book_append_sheet(wb, wsTopFnb, "Top 10 FNB");
-      XLSX.utils.book_append_sheet(wb, wsTopWs, "Top 5 WS");
-
-      XLSX.writeFile(wb, `laporan-${startStr}_to_${endStr}.xlsx`);
-      message.success("✅ Laporan berhasil diekspor ke Excel!");
     } catch (e) {
       console.error(e);
-      message.error("Gagal mengekspor Excel.");
+      message.error("Gagal membuat Excel.");
     }
   };
+
+  const paymentDoughnut = useMemo(() => {
+    if (!paymentBreakdown || paymentBreakdown.length === 0) {
+      return {
+        labels: [],
+        datasets: [
+          {
+            data: [],
+            backgroundColor: [],
+          },
+        ],
+      };
+    }
+
+    const labels = paymentBreakdown.map((x) => x.method);
+    const values = paymentBreakdown.map((x) => x.total);
+
+    const COLORS = ["#2563eb", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: COLORS.slice(0, values.length),
+          hoverOffset: 8,
+        },
+      ],
+    };
+  }, [paymentBreakdown]);
 
   return (
     <ConfigProvider locale={locale}>
@@ -511,7 +626,10 @@ const Laporan = () => {
                 value={dateRange}
                 onChange={(vals) => {
                   if (vals && vals[0] && vals[1]) {
-                    setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]);
+                    setDateRange([
+                      vals[0].startOf("day"),
+                      vals[1].endOf("day"),
+                    ]);
                   }
                 }}
                 format="DD-MM-YYYY"
@@ -618,7 +736,8 @@ const Laporan = () => {
                     Daily Selling
                   </Title>
                   <Text type="secondary">
-                    {dateRange[0].format("D MMM")} - {dateRange[1].format("D MMM YYYY")}
+                    {dateRange[0].format("D MMM")} -{" "}
+                    {dateRange[1].format("D MMM YYYY")}
                   </Text>
                 </Col>
                 <Col span={24}>
@@ -676,7 +795,59 @@ const Laporan = () => {
 
           <Col xs={24} lg={8}>
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Kontribusi Space</Title>
+              <Title level={5}>Metode Pembayaran </Title>
+              <Text type="secondary">
+                Distribusi metode pembayaran semua transaksi lunas.
+              </Text>
+
+              <div style={{ height: 240, marginTop: 12 }}>
+                {paymentBreakdown.length === 0 ? (
+                  <Empty description="Tidak ada transaksi lunas" />
+                ) : (
+                  <Doughnut
+                    data={paymentDoughnut}
+                    options={{
+                      maintainAspectRatio: false,
+                      animation: false,
+                      plugins: {
+                        legend: { position: "bottom" },
+                        datalabels: {
+                          color: "#fff",
+                          font: { weight: "bold" },
+                          formatter: (value, ctx) => {
+                            const total = ctx.dataset.data.reduce(
+                              (s, v) => s + v,
+                              0
+                            );
+                            if (!total) return "0%";
+                            return ((value / total) * 100).toFixed(1) + "%";
+                          },
+                        },
+                      },
+                    }}
+                  />
+                )}
+              </div>
+
+              <Divider />
+
+              {paymentBreakdown.map((p, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text>{p.method}</Text>
+                  <Text strong>Rp {formatRupiah(p.total)}</Text>
+                </div>
+              ))}
+            </Card>
+
+            <Card style={{ marginBottom: 16 }} loading={loading}>
+              <Title level={5}>Kontribusi Kategori</Title>
               <div style={{ height: 220 }}>
                 <Doughnut
                   data={doughnutData}
@@ -702,9 +873,16 @@ const Laporan = () => {
                         callbacks: {
                           label: (ctx) => {
                             const value = ctx.parsed || 0;
-                            const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
-                            const pct = total ? ((value / total) * 100).toFixed(1) : 0;
-                            return `${ctx.label}: Rp ${formatRupiah(value)} (${pct}%)`;
+                            const total = ctx.dataset.data.reduce(
+                              (s, v) => s + v,
+                              0
+                            );
+                            const pct = total
+                              ? ((value / total) * 100).toFixed(1)
+                              : 0;
+                            return `${ctx.label}: Rp ${formatRupiah(
+                              value
+                            )} (${pct}%)`;
                           },
                         },
                       },
@@ -742,7 +920,7 @@ const Laporan = () => {
                       cursor: "pointer",
                     }}
                   >
-                    ⬇ Cetak Laporan (CSV/Excel)
+                    ⬇ Cetak Laporan (Excel)
                   </button>
                 </Tooltip>
               </Space>
@@ -881,21 +1059,7 @@ const Laporan = () => {
                   "YYYYMMDD"
                 )}-${dateRange[1].format("YYYYMMDD")}.png`}
                 style={{ textDecoration: "none" }}
-              >
-                <button
-                  type="button"
-                  style={{
-                    padding: "6px 12px",
-                    border: "1px solid #1677ff",
-                    background: "#1677ff",
-                    color: "#fff",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                  }}
-                >
-                  Download dari Preview
-                </button>
-              </a>
+              ></a>
             </div>
           </div>
         </div>

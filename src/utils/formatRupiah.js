@@ -14,9 +14,9 @@ export function formatRupiahPerJam(value) {
     .replace("Rp", "Rp.") + "/jam";
 }
 
-// Contoh penggunaan:
-console.log(formatRupiahPerJam(10000)); // Output: Rp.10.000/jam
-console.log(formatRupiahPerJam(250000)); // Output: Rp.250.000/jam
+// // Contoh penggunaan:
+// console.log(formatRupiahPerJam(10000)); // Output: Rp.10.000/jam
+// console.log(formatRupiahPerJam(250000)); // Output: Rp.250.000/jam
 
 // utils/formatRupiah.js
 

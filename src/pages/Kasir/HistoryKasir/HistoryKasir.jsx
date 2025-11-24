@@ -15,7 +15,6 @@ import { formatRupiah } from '../../../utils/formatRupiah';
 const { Title, Text } = Typography;
 
 const HistoryKasir = () => {
-    // ... (Semua state Anda: data, loading, modal, dll. tetap sama) ...
     const { activeSession, isSessionLoading } = useAuth(); 
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -37,7 +36,6 @@ const HistoryKasir = () => {
     };
 
     useEffect(() => {
-        // ... (Fungsi useEffect Anda tetap sama) ...
         if (isSessionLoading) {
             setLoading(true); 
             return;
@@ -74,17 +72,25 @@ const HistoryKasir = () => {
         fetchDataForSession();
     }, [activeSession, isSessionLoading]); 
 
+    // Logic Search Text
     const filteredData = data.filter(item => {
-        // ... (Fungsi filter Anda tetap sama) ...
         const customer = item.nama_pelanggan?.toLowerCase() || '';
-        // --- PERUBAHAN FILTER: Gabungkan room_items dan lokasi_pemesanan ---
         const table = (item.room_items || item.lokasi_pemesanan || '').toLowerCase(); 
         const search = searchText.toLowerCase();
         return customer.includes(search) || table.includes(search);
     });
     
+    // --- LOGIC UNTUK FILTER PAYMENT ---
+    // Mengambil data unik dari metode pembayaran yang tersedia di table saat ini
+    const paymentFilters = [
+        ...new Set(data.map(item => item.metode_pembayaran).filter(Boolean))
+    ].map(method => ({
+        text: method,
+        value: method,
+    }));
+    // ----------------------------------
+
     const columns = [
-        // ... (Kolom Datetime, Name, Payment tetap sama) ...
         {
             title: 'Datetime',
             dataIndex: 'tanggal_transaksi',
@@ -105,22 +111,22 @@ const HistoryKasir = () => {
             key: 'metode_pembayaran',
             render: (text) => text || 'N/A', 
             width: 120,
+            // --- MENAMBAHKAN FILTER DROPDOWN ---
+            filters: paymentFilters,
+            onFilter: (value, record) => record.metode_pembayaran === value,
+            // -----------------------------------
         },
         {
             title: 'Table', 
             dataIndex: 'room_items', 
             key: 'room_items',
-            // --- PERUBAHAN 1 DI SINI ---
-            // Tampilkan room_items (untuk booking), JIKA TIDAK ADA, tampilkan lokasi_pemesanan (untuk F&B)
             render: (text, record) => {
                 const room = text && text !== '-' ? text : null;
                 const location = record.lokasi_pemesanan;
-                return room || location || '-'; // Prioritaskan room, lalu location
+                return room || location || '-'; 
             },
-            // --- AKHIR PERUBAHAN 1 ---
             width: 140,
         },
-        // ... (Kolom Subtotal, Tax, Total, Detail tetap sama) ...
         {
             title: 'Subtotal', 
             dataIndex: 'subtotal', 
@@ -162,7 +168,6 @@ const HistoryKasir = () => {
     return (
         <div className="p-4 md:p-6 lg:p-8">
             <Card className="shadow-lg rounded-lg">
-                {/* ... (Header Card: Row, Col, Statistic, Input tetap sama) ... */}
                 <Row justify="space-between" align="top" gutter={[16, 24]} style={{ marginBottom: 24 }}>
                     <Col xs={24} lg={14}>
                         <Title level={4}>Riwayat Transaksi Sesi Ini</Title>
@@ -239,7 +244,6 @@ const HistoryKasir = () => {
                     width={600}
                 >
                     <Descriptions bordered column={1} size="small" className="mt-4">
-                        {/* ... (Item Waktu, Pelanggan, Metode Bayar, Status Order tetap sama) ... */}
                         <Descriptions.Item label="Waktu Transaksi">
                             {dayjs(selectedRecord.tanggal_transaksi).format('DD MMMM YYYY, HH:mm:ss')}
                         </Descriptions.Item>
@@ -255,17 +259,14 @@ const HistoryKasir = () => {
                             <Tag>{selectedRecord.status_order || 'N/A'}</Tag>
                         </Descriptions.Item>
                         
-                        {/* --- PERUBAHAN 2 DI SINI --- */}
                         <Descriptions.Item label="Meja/Ruangan">
                             {(selectedRecord.room_items && selectedRecord.room_items !== '-') 
                                 ? selectedRecord.room_items 
-                                : (selectedRecord.lokasi_pemesanan || '-') // Fallback ke lokasi_pemesanan
+                                : (selectedRecord.lokasi_pemesanan || '-')
                             }
                         </Descriptions.Item>
-                        {/* --- AKHIR PERUBAHAN 2 --- */}
 
                         <Descriptions.Item label="Item F&B">
-                            {/* ... (Logika Item F&B tetap sama) ... */}
                             {selectedRecord.fnb_items && selectedRecord.fnb_items !== '-' ? (
                                 <ul style={{ paddingLeft: 20, margin: 0, listStyleType: 'disc' }}>
                                     {selectedRecord.fnb_items.split(',').map((item, index) => (
@@ -275,7 +276,6 @@ const HistoryKasir = () => {
                             ) : '-'}
                         </Descriptions.Item>
                         
-                        {/* ... (Item Subtotal, Pajak, Total Final tetap sama) ... */}
                         <Descriptions.Item label="Subtotal">
                             {(selectedRecord.subtotal && selectedRecord.subtotal > 0) 
                                 ? formatRupiah(selectedRecord.subtotal) 

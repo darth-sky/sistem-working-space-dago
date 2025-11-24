@@ -18,6 +18,8 @@ import { AiOutlineProduct } from "react-icons/ai";
 import { MdOutlineProductionQuantityLimits, MdChair, MdCardMembership, MdDiscount, MdEvent, MdEventAvailable } from "react-icons/md";
 import { GiPostOffice } from "react-icons/gi";
 import AcaraTab from "./tabs/AcaraTab";
+import CoaadminTab from "./tabs/CoaadminTab";
+import FAQTab from "./tabs/FAQtab";
 
 
 
@@ -100,6 +102,20 @@ export const tabsConfig = [
         label: "Acara",
         icon: MdEvent,
         component: <AcaraTab />,
+    },
+    {
+        key: "COA",
+        path: "COA",
+        label: "COA",
+        icon: MdEvent,
+        component: <CoaadminTab />,
+    },
+    {
+        key: "FAQtab",
+        path: "FAQtab",
+        label: "FAQ",
+        icon: MdEvent,
+        component: <FAQTab />,
     },
 ];
 

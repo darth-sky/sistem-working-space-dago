@@ -76,26 +76,26 @@ const HutangAdmin = () => {
   const [rekapData, setRekapData] = useState([]);
   const [tenantList, setTenantList] = useState([]);
   const [dateRange, setDateRange] = useState([
-    dayjs().startOf('month'), 
+    dayjs().startOf('month'),
     dayjs().endOf('month')
   ]);
-  
+
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false); // <-- STATE LOADING EXPORT BARU
-  
+
   const [utangForm] = Form.useForm();
   const [utangModalVisible, setUtangModalVisible] = useState(false);
 
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logLoading, setLogLoading] = useState(false);
   const [logData, setLogData] = useState([]);
-  const [selectedTenantForLog, setSelectedTenantForLog] = useState(null); 
-  
+  const [selectedTenantForLog, setSelectedTenantForLog] = useState(null);
+
   const [editUtangModalVisible, setEditUtangModalVisible] = useState(false);
   const [editUtangForm] = Form.useForm();
   const [editingUtangEntry, setEditingUtangEntry] = useState(null);
-  
+
   // --- FUNGSI PENGAMBILAN DATA ---
   const fetchData = useCallback(async () => {
     // ... (Fungsi fetchData Anda tetap sama)
@@ -107,22 +107,22 @@ const HutangAdmin = () => {
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      
+
       const [rekapResult, tenantsResult] = await Promise.all([
-          getRekapLive(startDate, endDate),
-          getActiveTenants()
+        getRekapLive(startDate, endDate),
+        getActiveTenants()
       ]);
 
       const processedRekap = rekapResult.map(item => ({
-          ...item,
-          id: item.id_tenant,
-          name: item.nama_tenant,
-          totalSales: Number(item.totalSales) || 0,
-          debt: Number(item.totalUtang) || 0,
-          utangAwal: Number(item.utangAwal) || 0,
-          utangMasukPeriode: Number(item.utangMasukPeriode) || 0,
+        ...item,
+        id: item.id_tenant,
+        name: item.nama_tenant,
+        totalSales: Number(item.totalSales) || 0,
+        debt: Number(item.totalUtang) || 0,
+        utangAwal: Number(item.utangAwal) || 0,
+        utangMasukPeriode: Number(item.utangMasukPeriode) || 0,
       }));
-      
+
       setRekapData(processedRekap);
       setTenantList(tenantsResult);
     } catch (error) {
@@ -141,7 +141,7 @@ const HutangAdmin = () => {
     const total = Number(tenantRekap.totalSales) || 0;
     const ownerShare = Math.round(total * 0.3); // Asumsi 30%
     const rawTenantShare = total - ownerShare;
-    const debt = Number(tenantRekap.debt) || 0; 
+    const debt = Number(tenantRekap.debt) || 0;
     const netTenantShare = Math.max(0, rawTenantShare - debt);
     const remainingDebt = Math.max(0, debt - rawTenantShare);
     return { total, rawTenantShare, ownerShare, debt, netTenantShare, remainingDebt };
@@ -156,28 +156,28 @@ const HutangAdmin = () => {
 
 
   // --- HANDLER AKSI ---
-  
+
   // (handleAddUtang, handleOpenLog, handleOpenEditUtang, handleUpdateUtang, handleDeleteUtang tetap sama)
   const handleAddUtang = async (values) => {
     setSubmitLoading(true);
     try {
       const tanggal_utang = values.tanggal_utang.format('YYYY-MM-DD');
       await addUtangTenant(
-        values.id_tenant, 
-        values.jumlah, 
+        values.id_tenant,
+        values.jumlah,
         values.deskripsi || "Utang manual dari admin",
         tanggal_utang
       );
-      
+
       const tenantName = tenantList.find(t => t.id_tenant === values.id_tenant)?.nama_tenant || '';
       message.success(`Utang untuk ${tenantName} pada ${tanggal_utang} berhasil ditambahkan.`);
       utangForm.resetFields();
       setUtangModalVisible(false);
       await fetchData(); // Refresh tabel utama
     } catch (error) {
-        message.error(`Gagal menambah utang: ${error.message}`);
+      message.error(`Gagal menambah utang: ${error.message}`);
     } finally {
-        setSubmitLoading(false);
+      setSubmitLoading(false);
     }
   };
 
@@ -190,72 +190,71 @@ const HutangAdmin = () => {
       const logResult = await getUtangLog(tenant.id_tenant, null, null);
       setLogData(logResult);
     } catch (error) {
-        message.error(`Gagal mengambil log utang: ${error.message}`);
+      message.error(`Gagal mengambil log utang: ${error.message}`);
     } finally {
-        setLogLoading(false);
+      setLogLoading(false);
     }
   };
 
   const handleOpenEditUtang = (utangEntry) => {
     setEditingUtangEntry(utangEntry);
     editUtangForm.setFieldsValue({
-        ...utangEntry,
-        tanggal_utang: dayjs(utangEntry.tanggal_utang), 
-        status_lunas: utangEntry.status_lunas === 1, 
+      ...utangEntry,
+      tanggal_utang: dayjs(utangEntry.tanggal_utang),
+      status_lunas: utangEntry.status_lunas === 1,
     });
     setEditUtangModalVisible(true);
   };
-  
+
   const handleUpdateUtang = async (values) => {
-      setSubmitLoading(true);
-      try {
-        const updatedData = {
-          ...values,
-          tanggal_utang: values.tanggal_utang.format('YYYY-MM-DD'),
-          status_lunas: values.status_lunas, 
-        };
-        await updateUtangLog(editingUtangEntry.id_utang, updatedData);
-        message.success("Entri utang berhasil diperbarui.");
-        setEditUtangModalVisible(false);
-        setEditingUtangEntry(null);
-        
-        await handleOpenLog(selectedTenantForLog); 
-        await fetchData(); 
-      } catch (error) {
-         message.error(`Gagal update utang: ${error.message}`);
-      } finally {
-         setSubmitLoading(false);
-      }
+    setSubmitLoading(true);
+    try {
+      const updatedData = {
+        ...values,
+        tanggal_utang: values.tanggal_utang.format('YYYY-MM-DD'),
+        status_lunas: values.status_lunas,
+      };
+      await updateUtangLog(editingUtangEntry.id_utang, updatedData);
+      message.success("Entri utang berhasil diperbarui.");
+      setEditUtangModalVisible(false);
+      setEditingUtangEntry(null);
+
+      await handleOpenLog(selectedTenantForLog);
+      await fetchData();
+    } catch (error) {
+      message.error(`Gagal update utang: ${error.message}`);
+    } finally {
+      setSubmitLoading(false);
+    }
   };
 
   const handleDeleteUtang = async (id_utang) => {
-      setLogLoading(true); 
-      try {
-         await deleteUtangLog(id_utang);
-         message.success("Entri utang berhasil dihapus.");
-         await handleOpenLog(selectedTenantForLog); 
-         await fetchData(); 
-      } catch (error) {
-         message.error(`Gagal hapus utang: ${error.message}`);
-      } finally {
-         setLogLoading(false);
-      }
+    setLogLoading(true);
+    try {
+      await deleteUtangLog(id_utang);
+      message.success("Entri utang berhasil dihapus.");
+      await handleOpenLog(selectedTenantForLog);
+      await fetchData();
+    } catch (error) {
+      message.error(`Gagal hapus utang: ${error.message}`);
+    } finally {
+      setLogLoading(false);
+    }
   };
-   
+
   // (Fungsi exportTenant (txt) tetap sama)
   const exportTenant = (t) => {
     // ... (fungsi .txt Anda tetap di sini)
     const s = computeShares(t);
     const periodLabel = `${dateRange[0].format("DD MMM YYYY")} - ${dateRange[1].format("DD MMM YYYY")}`;
-    const text = `LAPORAN BAGI HASIL - ${
-      t.name
-    }\nPeriode: ${periodLabel}\n
+    const text = `LAPORAN BAGI HASIL - ${t.name
+      }\nPeriode: ${periodLabel}\n
   Total Penjualan: ${formatRupiah(s.total)}
   Hak Owner (30%): ${formatRupiah(s.ownerShare)}
   Hak Tenant Murni (70%): ${formatRupiah(s.rawTenantShare)}
   Total Utang Periode: ${formatRupiah(s.debt)}
-    (Utang Awal: ${formatRupiah(t.utangAwal)})
-    (Utang Baru: ${formatRupiah(t.utangMasukPeriode)})
+    (Utang Awal: ${formatRupiah(t.utangAwal)})
+    (Utang Baru: ${formatRupiah(t.utangMasukPeriode)})
   Total Pembayaran Tenant (Net): ${formatRupiah(s.netTenantShare)}
   Sisa Utang (Periode Berikutnya): ${formatRupiah(s.remainingDebt)}
   `;
@@ -268,107 +267,148 @@ const HutangAdmin = () => {
   };
 
   // --- FUNGSI EXPORT EXCEL BARU (MENGGANTIKAN 'exportAll') ---
+  // --- FUNGSI EXPORT EXCEL (MODIFIED) ---
+  // --- FUNGSI EXPORT EXCEL (MODIFIED) ---
   const handleExportExcel = async () => {
     setExportLoading(true);
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      
-      // 1. Panggil API baru untuk data detail
+
+      // 1. Panggil API untuk data detail
       const exportData = await getBagiHasilDetail(startDate, endDate);
 
       const wb = new ExcelJS.Workbook();
-      
+
       // Style untuk border
       const borderStyle = {
         top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
       };
 
-      // 2. Loop data rekap (yang ada di state) untuk membuat sheet
+      // 2. Loop data rekap untuk membuat sheet
       for (const tenant of rekapData) {
         const tenantName = tenant.name;
-        // Buat sheet baru, potong nama jika terlalu panjang
-        const ws = wb.addWorksheet(tenantName.substring(0, 30)); 
-        
+        const ws = wb.addWorksheet(tenantName.substring(0, 30));
+
         const summary = computeShares(tenant);
-        const tenantDetails = exportData[tenantName]; // Ambil data detail dari API
-        
-        // --- A. BLOK RINGKASAN (Mirip CSV) ---
+        const tenantDetails = exportData[tenantName];
+
+        // --- A. BLOK RINGKASAN ---
         ws.addRow(["LAPORAN BAGI HASIL", tenantName]).font = { bold: true, size: 14 };
         ws.addRow(["Periode", `${startDate} s/d ${endDate}`]).font = { bold: true };
-        ws.addRow([]); // Baris kosong
-        
+        ws.addRow([]);
+
         ws.addRow(["Total Penjualan (Gross)", summary.total]).font = { bold: true };
-        ws.addRow(["Hak Owner (30%)", summary.ownerShare]);
         ws.addRow(["Hak Tenant Murni (70%)", summary.rawTenantShare]);
-        ws.addRow(["Total Utang Periode", summary.debt * -1]); // Tampilkan sbg negatif
-        ws.addRow(["   - Utang Awal", tenant.utangAwal * -1]);
-        ws.addRow(["   - Utang Baru Periode Ini", tenant.utangMasukPeriode * -1]);
+        ws.addRow(["Total Utang", summary.debt * -1]);
+
         ws.addRow(["Total Pembayaran Tenant (Net)", summary.netTenantShare]).font = { bold: true, color: { argb: 'FF008000' } };
-        ws.addRow(["Sisa Utang", summary.remainingDebt * -1]).font = { bold: true, color: { argb: 'FFFF0000' } };
-        ws.addRow([]); // Baris kosong
-        
+        ws.addRow([]);
+
         // Format Rupiah untuk blok ringkasan
-        for(let i=4; i<=11; i++) {
+        for (let i = 4; i <= 9; i++) {
           const cell = ws.getCell(`B${i}`);
           if (cell.value) {
             cell.numFmt = '"Rp"#,##0';
           }
         }
-        
-        // --- B. BLOK RINCIAN PENJUALAN ---
+
+        // --- B. BLOK RINCIAN PENJUALAN (TABEL) ---
         let currentRow = ws.actualRowCount + 1;
-        
+
         ws.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
         currentRow++;
-        
-        const salesHeader = ["Tanggal", "Produk", "Jumlah Qty", "Total Penjualan (Gross)"];
+
+        // 1. UBAH HEADER: Tambahkan "Total Tax (Pajak)" setelah Discount
+        const salesHeader = [
+          "Tanggal",
+          "Produk",
+          "Jumlah Qty",
+          "Total Penjualan (Gross)",
+          "Total Discount",
+          "Total Tax (Pajak)", // <--- KOLOM BARU
+          "Total Penjualan (Nett)"
+        ];
+
         ws.addRow(salesHeader).eachCell(cell => {
-          cell.font = { bold: true };
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1890FF' } };
           cell.border = borderStyle;
+          cell.alignment = { horizontal: 'center' };
         });
-        
+
         if (tenantDetails?.sales.length > 0) {
           tenantDetails.sales.forEach(sale => {
+            const gross = Number(sale.total_penjualan_gross) || 0;
+            const discount = Number(sale.total_discount) || 0;
+
+            // Ambil data pajak dari backend
+            const tax = Number(sale.total_pajak) || 0;
+
+            // --- PERBAIKAN DI SINI ---
+            // Tambahkan pajak ke dalam perhitungan Nett
+            const nett = gross - discount + tax;
+
+            // 3. MASUKKAN DATA KE ROW: Tambahkan 'tax' di urutan ke-6
             ws.addRow([
               dayjs(sale.tanggal).toDate(),
               sale.nama_produk,
               sale.jumlah_qty,
-              sale.total_penjualan_gross
+              gross,
+              discount,
+              tax, // <--- DATA PAJAK DIMASUKKAN SINI
+              nett
             ]).eachCell((cell, col) => {
               cell.border = borderStyle;
-              if (col === 1) cell.numFmt = 'DD/MM/YYYY';
-              if (col === 3) cell.alignment = { horizontal: 'right' };
-              if (col === 4) cell.numFmt = '#,##0';
+
+              // Format Tanggal (Kolom 1)
+              if (col === 1) {
+                cell.numFmt = 'DD/MM/YYYY';
+                cell.alignment = { horizontal: 'center' };
+              }
+              // Format Angka/Rupiah (Kolom 4, 5, 6, 7)
+              // Karena kolom bertambah satu, logika >= 4 tetap mencakup kolom Pajak
+              if (col >= 4) {
+                cell.numFmt = '#,##0';
+                cell.alignment = { horizontal: 'right' };
+              }
+              // Format Qty (Kolom 3)
+              if (col === 3) {
+                cell.alignment = { horizontal: 'center' };
+              }
             });
           });
         } else {
           ws.addRow(["Tidak ada data penjualan."]).getCell(1).font = { italic: true };
         }
-        
-        ws.addRow([]); // Baris kosong
+
+        ws.addRow([]);
 
         // --- C. BLOK RINCIAN UTANG ---
         currentRow = ws.actualRowCount + 1;
-        
-        // ws.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+        ws.getCell(`A${currentRow}`).font = { size: 11 };
         currentRow++;
 
         const debtHeader = ["Tanggal Utang", "Deskripsi", "Jumlah"];
         ws.addRow(debtHeader).eachCell(cell => {
-          cell.font = { bold: true };
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4380D' } };
           cell.border = borderStyle;
+          cell.alignment = { horizontal: 'center' };
         });
 
         if (tenantDetails?.debts.length > 0) {
           tenantDetails.debts.forEach(debt => {
-             ws.addRow([
+            ws.addRow([
               dayjs(debt.tanggal_utang).toDate(),
               debt.deskripsi,
               debt.jumlah
             ]).eachCell((cell, col) => {
               cell.border = borderStyle;
-              if (col === 1) cell.numFmt = 'DD/MM/YYYY';
+              if (col === 1) {
+                cell.numFmt = 'DD/MM/YYYY';
+                cell.alignment = { horizontal: 'center' };
+              }
               if (col === 3) cell.numFmt = '#,##0';
             });
           });
@@ -376,20 +416,22 @@ const HutangAdmin = () => {
           ws.addRow(["Tidak ada data utang."]).getCell(1).font = { italic: true };
         }
 
-        // Atur lebar kolom
+        // 4. ATUR LEBAR KOLOM: Tambahkan definisi lebar untuk kolom baru
         ws.columns = [
-          { width: 30 }, // A (Label)
-          { width: 20 }, // B (Value)
-          { width: 10 }, // C (Qty)
-          { width: 20 }, // D (Sales Total)
+          { width: 15 }, // A Tanggal
+          { width: 30 }, // B Produk
+          { width: 12 }, // C Qty
+          { width: 25 }, // D Gross
+          { width: 20 }, // E Discount
+          { width: 20 }, // F Tax (Kolom Baru)
+          { width: 25 }, // G Nett
         ];
-      } // Akhir loop per tenant
+      }
 
-      // 3. Tulis file dan download
       const buffer = await wb.xlsx.writeBuffer();
       const filename = `Laporan_Bagi_Hasil_${startDate}_sd_${endDate}.xlsx`;
       saveAs(new Blob([buffer]), filename);
-      
+
       message.success("File Excel berhasil dibuat!");
 
     } catch (error) {
@@ -399,7 +441,6 @@ const HutangAdmin = () => {
       setExportLoading(false);
     }
   };
-
 
   // --- DEFINISI KOLOM TABEL (Sederhana) ---
   const columns = [
@@ -447,7 +488,7 @@ const HutangAdmin = () => {
       width: 160,
     },
     {
-      title: "Total Utang", 
+      title: "Total Utang",
       key: "debt",
       align: "right",
       render: (_, record) => {
@@ -550,19 +591,19 @@ const HutangAdmin = () => {
       render: (v) => formatRupiah(v),
       sorter: (a, b) => a.jumlah - b.jumlah,
     },
-      {
+    {
       title: "Status",
       dataIndex: "status_lunas",
       key: "status_lunas",
       render: (lunas) => (
         lunas ? <Tag color="green">Lunas</Tag> : <Tag color="red">Belum Lunas</Tag>
       ),
-        filters: [
+      filters: [
         { text: 'Belum Lunas', value: 0 },
         { text: 'Lunas', value: 1 },
       ],
       onFilter: (value, record) => record.status_lunas === value,
-      defaultFilteredValue: [0], 
+      defaultFilteredValue: [0],
     },
     {
       title: "Aksi",
@@ -570,19 +611,19 @@ const HutangAdmin = () => {
       align: "center",
       render: (_, record) => (
         <Space>
-            <Tooltip title="Edit Utang">
+          <Tooltip title="Edit Utang">
             <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenEditUtang(record)} />
           </Tooltip>
           <Tooltip title="Hapus Utang">
             <Popconfirm
-                title="Hapus entri utang ini?"
-                description={`Yakin ingin menghapus utang ${formatRupiah(record.jumlah)}?`}
-                onConfirm={() => handleDeleteUtang(record.id_utang)}
-                okText="Ya, Hapus"
-                cancelText="Batal"
-                okButtonProps={{ danger: true }}
-              >
-                <Button size="small" danger icon={<DeleteOutlined />} />
+              title="Hapus entri utang ini?"
+              description={`Yakin ingin menghapus utang ${formatRupiah(record.jumlah)}?`}
+              onConfirm={() => handleDeleteUtang(record.id_utang)}
+              okText="Ya, Hapus"
+              cancelText="Batal"
+              okButtonProps={{ danger: true }}
+            >
+              <Button size="small" danger icon={<DeleteOutlined />} />
             </Popconfirm>
           </Tooltip>
         </Space>
@@ -665,10 +706,6 @@ const HutangAdmin = () => {
                   loading={loading}
                   locale={{ emptyText: "Tidak ada data penjualan untuk rentang tanggal ini." }}
                 />
-                <div style={{ padding: 16, display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #f0f0f0", flexWrap: 'wrap', gap: 16 }}>
-                  <Statistic title="Total Hak Owner (30%)" value={formatRupiah(totals.totalOwnerShare)} />
-                  <Statistic title="Total Pembayaran Tenant (Net)" value={formatRupiah(totals.totalTenantNetPayment)} style={{textAlign: 'right'}} />
-                </div>
               </Card>
             </Col>
           </Row>
@@ -684,7 +721,7 @@ const HutangAdmin = () => {
             footer={null}
             destroyOnClose
           >
-            <Form form={utangForm} onFinish={handleAddUtang} layout="vertical" style={{marginTop: 20}}>
+            <Form form={utangForm} onFinish={handleAddUtang} layout="vertical" style={{ marginTop: 20 }}>
               <Form.Item
                 name="id_tenant"
                 label="Pilih Nama Tenant"
@@ -703,16 +740,16 @@ const HutangAdmin = () => {
                   ))}
                 </Select>
               </Form.Item>
-              
+
               <Form.Item
                 name="tanggal_utang"
                 label="Tanggal Utang"
                 rules={[{ required: true, message: "Pilih tanggal utang" }]}
-                initialValue={dayjs()} 
+                initialValue={dayjs()}
               >
-                  <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
               </Form.Item>
-              
+
               <Form.Item
                 name="jumlah"
                 label="Jumlah Utang (Rp)"
@@ -725,16 +762,16 @@ const HutangAdmin = () => {
                   placeholder="Misalnya: 150.000"
                 />
               </Form.Item>
-              
-                <Form.Item
-                  name="deskripsi"
-                  label="Deskripsi Utang"
-                  rules={[{ required: true, message: "Deskripsi wajib diisi" }]}
-                >
-                  <Input.TextArea rows={2} placeholder="Contoh: Kasbon, dll." />
-                </Form.Item>
-              
-              <Form.Item style={{marginTop: 20}}>
+
+              <Form.Item
+                name="deskripsi"
+                label="Deskripsi Utang"
+                rules={[{ required: true, message: "Deskripsi wajib diisi" }]}
+              >
+                <Input.TextArea rows={2} placeholder="Contoh: Kasbon, dll." />
+              </Form.Item>
+
+              <Form.Item style={{ marginTop: 20 }}>
                 <Button type="primary" htmlType="submit" block icon={<PlusOutlined />} loading={submitLoading}>
                   Simpan Utang
                 </Button>
@@ -744,16 +781,16 @@ const HutangAdmin = () => {
 
           {/* --- MODAL Log Utang --- */}
           <Modal
-              open={logModalVisible}
-              title={`Log Utang untuk: ${selectedTenantForLog?.name}`}
-              onCancel={() => {
-                setLogModalVisible(false);
-                setSelectedTenantForLog(null);
-                setLogData([]);
-              }}
-              footer={null}
-              width={800}
-              destroyOnClose
+            open={logModalVisible}
+            title={`Log Utang untuk: ${selectedTenantForLog?.name}`}
+            onCancel={() => {
+              setLogModalVisible(false);
+              setSelectedTenantForLog(null);
+              setLogData([]);
+            }}
+            footer={null}
+            width={800}
+            destroyOnClose
           >
             <Spin spinning={logLoading}>
               <Alert
@@ -761,50 +798,50 @@ const HutangAdmin = () => {
                 description="Daftar ini berisi semua catatan utang untuk tenant ini (belum lunas dan sudah lunas) dari semua periode. Mengedit atau menghapus entri di sini akan memengaruhi perhitungan utang di tabel utama."
                 type="info"
                 showIcon
-                style={{marginBottom: 16}}
+                style={{ marginBottom: 16 }}
               />
               <Table
-                columns={logColumns} 
+                columns={logColumns}
                 dataSource={logData}
                 rowKey="id_utang"
                 size="small"
                 pagination={{ pageSize: 5 }}
-                scroll={{ y: 300 }} 
+                scroll={{ y: 300 }}
               />
             </Spin>
           </Modal>
 
           {/* --- MODAL Edit Entri Utang --- */}
           <Modal
-              open={editUtangModalVisible}
-              title="Edit Entri Utang"
-              onCancel={() => setEditUtangModalVisible(false)}
-              footer={null} 
-              destroyOnClose
+            open={editUtangModalVisible}
+            title="Edit Entri Utang"
+            onCancel={() => setEditUtangModalVisible(false)}
+            footer={null}
+            destroyOnClose
           >
-            {editingUtangEntry && ( 
+            {editingUtangEntry && (
               <Form
                 form={editUtangForm}
                 layout="vertical"
                 onFinish={handleUpdateUtang}
-                style={{marginTop: 20}}
+                style={{ marginTop: 20 }}
               >
                 <Form.Item name="tanggal_utang" label="Tanggal" rules={[{ required: true }]}>
-                    <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+                  <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
                 </Form.Item>
                 <Form.Item name="jumlah" label="Jumlah (Rp)" rules={[{ required: true }]}>
-                    <InputNumber
-                      style={{ width: "100%" }} min={0}
-                      formatter={formatNumberInput} parser={parseNumberInput}
-                    />
+                  <InputNumber
+                    style={{ width: "100%" }} min={0}
+                    formatter={formatNumberInput} parser={parseNumberInput}
+                  />
                 </Form.Item>
                 <Form.Item name="deskripsi" label="Deskripsi" rules={[{ required: true }]}>
-                    <Input.TextArea rows={2} />
+                  <Input.TextArea rows={2} />
                 </Form.Item>
                 <Form.Item name="status_lunas" label="Status" valuePropName="checked">
-                    <Switch checkedChildren="Lunas" unCheckedChildren="Belum Lunas" />
+                  <Switch checkedChildren="Lunas" unCheckedChildren="Belum Lunas" />
                 </Form.Item>
-                <Form.Item style={{marginTop: 20}}>
+                <Form.Item style={{ marginTop: 20 }}>
                   <Button type="primary" htmlType="submit" block loading={submitLoading}>
                     Update Entri Utang
                   </Button>
