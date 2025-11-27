@@ -10,10 +10,10 @@ import { formatRupiah } from '../../../utils/formatRupiah';
 import logoImage from '../../../assets/images/logo.png';
 import { Modal, message, Spin } from 'antd';
 import dayjs from 'dayjs';
+import { HistoryOutlined } from '@ant-design/icons'; // Import Icon untuk tombol history
 
 const BukaSesi = () => {
 
-    // --- (PERUBAHAN 1: Ambil 'userRole' dari useAuth) ---
     const {
         openSession,
         getLastSaldo,
@@ -21,10 +21,9 @@ const BukaSesi = () => {
         isSessionLoading,
         checkActiveSession,
         joinSession,
-        userRole, // <-- TAMBAHKAN INI
+        userRole,
         isLoggedIn
     } = useAuth();
-    // --- (AKHIR PERUBAHAN 1) ---
 
     const [namaSesi, setNamaSesi] = useState('');
     const [saldoAwal, setSaldoAwal] = useState('');
@@ -45,24 +44,28 @@ const BukaSesi = () => {
         'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
     ];
 
-    // Set nama sesi default (Tidak berubah)
     useEffect(() => {
         const tgl = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
         setNamaSesi(`Cashier ${tgl}`);
     }, []);
 
-    // --- (PERUBAHAN 2: Buat fungsi navigasi berdasarkan peran) ---
     const navigateToDashboard = (role) => {
         if (role === 'admin_tenant') {
             navigate('/ordertenant', { replace: true });
         } else {
-            // Default ke kasir (atau peran lain yang mungkin)
             navigate('/transaksikasir', { replace: true });
         }
     };
-    // --- (AKHIR PERUBAHAN 2) ---
 
-    // Fetch data sesi (Tidak berubah)
+    // --- FUNGSI BARU: Navigasi ke Riwayat ---
+    const handleViewHistory = (session) => {
+        if (userRole === 'admin_tenant') {
+            navigate(`/ordertenant/${session.id_sesi}`); // Ke Dashboard Tenant
+        } else {
+            navigate(`/kasir/riwayat-sesi/${session.id_sesi}`); // Ke Dashboard Kasir
+        }
+    };
+
     const fetchAllSessions = async () => {
         try {
             const [saldoData, openSessionsData, closedSessionsData] = await Promise.all([
@@ -71,7 +74,12 @@ const BukaSesi = () => {
                 apiGetRecentClosedSessions()
             ]);
 
-            setSaldoAwal(saldoData != null ? saldoData.toString() : '0');
+            // Handle jika saldoData berupa object { data: "..." }
+            const saldoVal = (saldoData && typeof saldoData === 'object' && saldoData.data)
+                ? saldoData.data
+                : saldoData;
+
+            setSaldoAwal(saldoVal != null ? saldoVal.toString() : '0');
             setOpenSessions(openSessionsData.sessions || []);
             setClosedSessions(closedSessionsData.sessions || []);
         } catch (err) {
@@ -83,25 +91,18 @@ const BukaSesi = () => {
         }
     };
 
-    // --- (PERUBAHAN 3: Update useEffect untuk navigasi berbasis peran) ---
     useEffect(() => {
-        // Jangan lakukan apa-apa jika AuthProvider masih loading
         if (isSessionLoading || !userRole) return;
 
-        // Cek jika kita sudah "join" sesi, langsung redirect
         if (activeSession) {
-            // Panggil fungsi navigasi baru Anda
             navigateToDashboard(userRole);
             return;
         }
 
-        // Jika belum join, baru fetch daftar sesi
         setIsPageLoading(true);
         fetchAllSessions();
-    }, [isSessionLoading, activeSession, navigate, userRole]); // <-- Tambahkan userRole
-    // --- (AKHIR PERUBAHAN 3) ---
+    }, [isSessionLoading, activeSession, navigate, userRole]);
 
-    // useMemo (allSessionsForDisplay) (Tidak berubah)
     const allSessionsForDisplay = useMemo(() => {
         const openWithStatus = openSessions.map(s => ({ ...s, status: 'open' }));
         const closedWithStatus = closedSessions.map(s => ({ ...s, status: 'closed' }));
@@ -109,8 +110,12 @@ const BukaSesi = () => {
 
         return combined.filter(session => {
             const sessionDate = new Date(session.waktu_mulai);
-            const matchSearch = session.nama_sesi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                session.nama_kasir?.toLowerCase().includes(searchQuery.toLowerCase());
+            // Null check untuk properti string agar tidak crash
+            const sName = session.nama_sesi || '';
+            const kName = session.nama_kasir || '';
+
+            const matchSearch = sName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                kName.toLowerCase().includes(searchQuery.toLowerCase());
             const matchMonth = sessionDate.getMonth() === selectedMonth;
             const matchYear = sessionDate.getFullYear() === selectedYear;
 
@@ -118,16 +123,14 @@ const BukaSesi = () => {
         }).sort((a, b) => new Date(b.waktu_mulai) - new Date(a.waktu_mulai));
     }, [openSessions, closedSessions, searchQuery, selectedMonth, selectedYear]);
 
-
-    // handleSubmitNewSession (Tidak Perlu Diubah)
-    // Fungsi ini memanggil `openSession`, yang memperbarui `activeSession`.
-    // `useEffect` (Perubahan 3) akan menangkap perubahan `activeSession` 
-    // dan melakukan navigasi berbasis peran secara otomatis.
     const handleSubmitNewSession = async (e) => {
         e.preventDefault();
         setError('');
 
-        if (!saldoAwal || isNaN(parseFloat(saldoAwal)) || parseFloat(saldoAwal) < 0) {
+        // Bersihkan string rupiah menjadi angka
+        const cleanSaldo = saldoAwal.toString().replace(/[^\d]/g, '');
+
+        if (!cleanSaldo || isNaN(parseFloat(cleanSaldo)) || parseFloat(cleanSaldo) < 0) {
             setError('Saldo awal tidak valid');
             return;
         }
@@ -135,12 +138,10 @@ const BukaSesi = () => {
         setIsSubmitting(true);
 
         try {
-            await openSession(namaSesi, parseFloat(saldoAwal));
-
+            await openSession(namaSesi, parseFloat(cleanSaldo));
             setShowModal(false);
             message.success("Sesi baru berhasil dibuat!");
-            // Navigasi akan di-handle oleh useEffect [activeSession]
-
+            // Navigasi ditangani oleh useEffect [activeSession]
         } catch (err) {
             setError(err.message || 'Gagal membuka sesi');
             message.error(err.message || 'Gagal membuka sesi');
@@ -149,28 +150,19 @@ const BukaSesi = () => {
         }
     };
 
-
-    // --- (PERUBAHAN 4: Update 'handleJoinSession' untuk navigasi berbasis peran) ---
     const handleJoinSession = (session) => {
         if (session.status !== 'open') return;
-
-        // Panggil fungsi 'joinSession' dari AuthProvider
         joinSession(session);
-
-        // Panggil fungsi navigasi baru Anda
         navigateToDashboard(userRole);
     };
-    // --- (AKHIR PERUBAHAN 4) ---
 
-    // Clock component (Tidak berubah)
     const [currentTime, setCurrentTime] = useState(new Date());
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    // Loading UI (Tidak berubah)
-    if (isPageLoading || isSessionLoading || (isLoggedIn && !userRole)) { // Tambahan cek userRole
+    if (isPageLoading || isSessionLoading || (isLoggedIn && !userRole)) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <div className="text-center">
@@ -180,20 +172,16 @@ const BukaSesi = () => {
         );
     }
 
-    // ... sisa JSX (return (...)) tidak perlu diubah ...
-    // (UI, Modal, Tampilan daftar sesi, dll. semuanya sudah benar)
-
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* Header (Tidak berubah) */}
+            {/* Header */}
             <div className="bg-white border-b sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                     <h1 className="text-xl font-semibold text-gray-800">Cashier Session</h1>
                     <button
                         onClick={() => {
-                            // Cek jika sudah ada sesi terbuka, jangan biarkan buat baru
                             if (openSessions.length > 0) {
-                                message.warn("Sesi sudah ada. Silakan gabung sesi yang sedang berjalan.");
+                                message.warning("Sesi sudah ada. Silakan gabung sesi yang sedang berjalan.");
                             } else {
                                 setShowModal(true);
                             }
@@ -208,9 +196,9 @@ const BukaSesi = () => {
 
             <div className="max-w-7xl mx-auto px-4 py-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left Column - Sessions List (Tidak berubah) */}
+                    {/* Left Column - Sessions List */}
                     <div className="lg:col-span-2 space-y-4">
-                        {/* Search Bar (Tidak berubah) */}
+                        {/* Search Bar */}
                         <div className="bg-white rounded-lg p-3 shadow-sm">
                             <div className="relative">
                                 <input
@@ -226,7 +214,7 @@ const BukaSesi = () => {
                             </div>
                         </div>
 
-                        {/* Month/Year Filter (Tidak berubah) */}
+                        {/* Month/Year Filter */}
                         <div className="flex justify-center gap-4 bg-white rounded-lg p-3 shadow-sm">
                             <select
                                 value={selectedYear}
@@ -248,7 +236,7 @@ const BukaSesi = () => {
                             </select>
                         </div>
 
-                        {/* Sessions List - Combined Open and Closed (Tidak berubah) */}
+                        {/* Sessions List */}
                         <div className="space-y-2">
                             {allSessionsForDisplay.length === 0 ? (
                                 <div className="bg-white rounded-lg p-8 text-center shadow-sm">
@@ -257,14 +245,12 @@ const BukaSesi = () => {
                             ) : (
                                 allSessionsForDisplay.map(session => {
                                     const isOpen = session.status === 'open';
-
-                                    // Pengecekan 'activeSession' dari AuthProvider
                                     const isMyJoinedSession = session.id_sesi === activeSession?.id_sesi;
 
                                     return (
                                         <div key={session.id_sesi} className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow ${isMyJoinedSession ? 'ring-2 ring-blue-500' : ''}`}>
                                             <div className="flex items-center gap-4 p-4">
-                                                {/* Status Badge (Tidak berubah) */}
+                                                {/* Status Badge */}
                                                 <div className={`flex-shrink-0 rounded-lg px-4 py-2 ${isOpen ? 'bg-blue-100' : 'bg-green-100'}`}>
                                                     <div className="flex items-center gap-2">
                                                         {isOpen ? (
@@ -285,7 +271,7 @@ const BukaSesi = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* Session Info (Tidak berubah) */}
+                                                {/* Session Info */}
                                                 <div className="flex-grow">
                                                     <p className="font-semibold text-gray-800">{session.nama_sesi}</p>
                                                     <p className="text-sm text-gray-500">Kasir: {session.nama_kasir}</p>
@@ -294,23 +280,27 @@ const BukaSesi = () => {
                                                     </p>
                                                 </div>
 
-                                                {/* Tombol Aksi (Tidak berubah) */}
+                                                {/* Tombol Aksi */}
                                                 {isOpen ? (
                                                     <button
                                                         onClick={() => handleJoinSession(session)}
                                                         className={`px-4 py-2 text-sm rounded-lg transition-colors font-medium ${isMyJoinedSession
-                                                                ? 'bg-green-600 text-white hover:bg-green-700'
-                                                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                            ? 'bg-green-600 text-white hover:bg-green-700'
+                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
                                                             }`}
                                                     >
                                                         {isMyJoinedSession ? 'Lanjutkan Sesi' : 'Masuk Sesi'}
                                                     </button>
                                                 ) : (
-                                                    <div className="px-4 py-2">
-                                                        <span className="text-sm font-medium text-gray-400">
-                                                            Selesai
-                                                        </span>
-                                                    </div>
+                                                    // --- MODIFIKASI DI SINI: Tombol Lihat Riwayat ---
+                                                    // UI tetap menggunakan style yang sama agar konsisten
+                                                    <button
+                                                        onClick={() => handleViewHistory(session)}
+                                                        className="px-4 py-2 text-sm bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-blue-600 hover:border-blue-200 transition-all font-medium flex items-center gap-2"
+                                                    >
+                                                        <HistoryOutlined />
+                                                        Lihat Riwayat
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -320,8 +310,8 @@ const BukaSesi = () => {
                         </div>
                     </div>
 
-                    {/* Right Column (Tidak berubah) */}
-                    <div className="hidden lg:flex flex-col items-center justify-start h-screen pt-20">
+                    {/* Right Column */}
+                    <div className="hidden lg:flex flex-col items-center justify-center fixed right-40 top-1/2 -translate-y-1/2">
                         <div className="w-36 h-36 mb-6 flex items-center justify-center">
                             <img
                                 src={logoImage}
@@ -346,7 +336,7 @@ const BukaSesi = () => {
                 </div>
             </div>
 
-            {/* Modal Add New Session (Tidak berubah) */}
+            {/* Modal Add New Session */}
             {showModal && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -361,7 +351,6 @@ const BukaSesi = () => {
                         className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        {/* Close Button */}
                         <button
                             onClick={() => setShowModal(false)}
                             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
@@ -372,21 +361,17 @@ const BukaSesi = () => {
                             </svg>
                         </button>
 
-                        {/* Modal Header */}
                         <div className="mb-6">
                             <h2 className="text-xl font-semibold text-gray-800">Add New Cashier Session</h2>
                         </div>
 
-                        {/* Error Message */}
                         {error && (
                             <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
                                 {error}
                             </div>
                         )}
 
-                        {/* Form */}
                         <form onSubmit={handleSubmitNewSession} className="space-y-5">
-                            {/* Nama Field */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Nama</label>
                                 <input
@@ -400,12 +385,11 @@ const BukaSesi = () => {
                                 />
                             </div>
 
-                            {/* Saldo Awal Field */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Saldo Awal</label>
                                 <input
                                     type="text"
-                                    value={saldoAwal === '0' ? 'Rp. 0' : `Rp. ${parseInt(saldoAwal).toLocaleString('id-ID')}`}
+                                    value={saldoAwal === '0' ? 'Rp. 0' : `Rp. ${parseInt(saldoAwal.toString().replace(/[^\d]/g, '') || 0).toLocaleString('id-ID')}`}
                                     onChange={(e) => {
                                         const value = e.target.value.replace(/[^\d]/g, '');
                                         setSaldoAwal(value || '0');
@@ -417,7 +401,6 @@ const BukaSesi = () => {
                                 />
                             </div>
 
-                            {/* Confirm Button */}
                             <button
                                 type="submit"
                                 className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:bg-gray-400"

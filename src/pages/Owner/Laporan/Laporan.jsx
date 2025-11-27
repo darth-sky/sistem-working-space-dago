@@ -98,6 +98,7 @@ const Laporan = () => {
   const [topFnb, setTopFnb] = useState([]);
   const [topWs, setTopWs] = useState([]);
   const [paymentBreakdown, setPaymentBreakdown] = useState([]);
+  const [tenantContribution, setTenantContribution] = useState([]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -131,6 +132,10 @@ const Laporan = () => {
         );
         setPaymentBreakdown(
           Array.isArray(d?.payment_breakdown) ? d.payment_breakdown : []
+        );
+
+        setTenantContribution(
+          Array.isArray(d?.tenant_contribution) ? d.tenant_contribution : []
         );
       } catch (e) {
         console.error(e);
@@ -297,20 +302,17 @@ const Laporan = () => {
     Math.max(1, dateRange[1].diff(dateRange[0], "day") + 1);
 
   // === Capture to Image Handler ===
-  const [previewSrc, setPreviewSrc] = useState(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-
   const handleCaptureImage = async () => {
     try {
-      const node = reportRef.current;
+      const node = document.getElementById("capture-area");
+
       if (!node) {
-        message.error("Area laporan tidak ditemukan.");
+        message.error("Area cetak tidak ditemukan");
         return;
       }
 
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 400));
 
-      // langsung capture
       const canvas = await html2canvas(node, {
         backgroundColor: "#ffffff",
         scale: 2,
@@ -320,20 +322,13 @@ const Laporan = () => {
 
       const dataUrl = canvas.toDataURL("image/png");
 
-      // tampilkan preview
-      setPreviewSrc(dataUrl);
-      setPreviewOpen(true);
-
-      // auto download PNG
       const link = document.createElement("a");
       link.href = dataUrl;
-      link.download = `Laporan-${dateRange[0].format(
-        "YYYYMMDD"
-      )}-${dateRange[1].format("YYYYMMDD")}.png`;
+      link.download = `laporan-summary-${dayjs().format("YYYYMMDD-HHmm")}.png`;
       link.click();
-    } catch (e) {
-      console.error(e);
-      message.error("Gagal membuat gambar laporan.");
+    } catch (err) {
+      console.error(err);
+      message.error("Gagal mencetak gambar");
     }
   };
 
@@ -603,9 +598,51 @@ const Laporan = () => {
     };
   }, [paymentBreakdown]);
 
+  const tenantPieData = useMemo(() => {
+    if (!tenantContribution || tenantContribution.length === 0) {
+      return { labels: [], datasets: [{ data: [], backgroundColor: [] }] };
+    }
+
+    const BLUE_TONES = [
+      "#1E3A8A",
+      "#1D4ED8",
+      "#3B82F6",
+      "#60A5FA",
+      "#93C5FD",
+      "#0EA5E9",
+      "#0284C7",
+      "#2563EB",
+      "#38BDF8",
+      "#0EA5E9",
+    ];
+
+    const WS_COLOR = "#10B981";
+
+    const labels = tenantContribution.map((t) => t.tenant);
+    const values = tenantContribution.map((t) => t.nett);
+
+    const colors = labels.map((name, i) => {
+      if (name.toLowerCase().includes("working space")) {
+        return WS_COLOR;
+      }
+      return BLUE_TONES[i % BLUE_TONES.length]; // rotate blue tones
+    });
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: colors,
+          hoverOffset: 8,
+        },
+      ],
+    };
+  }, [tenantContribution]);
+
   return (
     <ConfigProvider locale={locale}>
-      <div style={{ padding: 20 }} ref={reportRef}>
+      <div style={{ padding: 20 }}>
         {/* Header */}
         <Row
           gutter={[16, 16]}
@@ -847,48 +884,47 @@ const Laporan = () => {
             </Card>
 
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Kontribusi Kategori</Title>
-              <div style={{ height: 220 }}>
+              <Title level={5}>Kontribusi Tenant & Working Space</Title>
+
+              <div style={{ height: 260 }}>
                 <Doughnut
-                  data={doughnutData}
+                  data={tenantPieData}
                   options={{
                     maintainAspectRatio: false,
                     plugins: {
                       legend: { position: "bottom" },
                       datalabels: {
                         color: "#fff",
-                        formatter: (value, context) => {
-                          const total =
-                            context.chart.data.datasets[0].data.reduce(
-                              (a, b) => a + b,
-                              0
-                            );
-                          return total
-                            ? `${((value / total) * 100).toFixed(1)}%`
-                            : "0%";
-                        },
-                        font: { weight: "bold", size: 14 },
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: (ctx) => {
-                            const value = ctx.parsed || 0;
-                            const total = ctx.dataset.data.reduce(
-                              (s, v) => s + v,
-                              0
-                            );
-                            const pct = total
-                              ? ((value / total) * 100).toFixed(1)
-                              : 0;
-                            return `${ctx.label}: Rp ${formatRupiah(
-                              value
-                            )} (${pct}%)`;
-                          },
+                        formatter: (value, ctx) => {
+                          const total = ctx.dataset.data.reduce(
+                            (a, b) => a + b,
+                            0
+                          );
+                          if (!total) return "0%";
+                          return ((value / total) * 100).toFixed(1) + "%";
                         },
                       },
                     },
                   }}
                 />
+              </div>
+
+              <Divider />
+
+              <div>
+                {tenantContribution.map((t, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <Text>{t.tenant}</Text>
+                    <Text strong>Rp {formatRupiah(t.nett)}</Text>
+                  </div>
+                ))}
               </div>
             </Card>
 
@@ -999,71 +1035,222 @@ const Laporan = () => {
         </Row>
       </div>
 
-      {/* Preview modal sederhana */}
-      {previewSrc && (
-        <div>
-          <div
-            onClick={() => setPreviewOpen(false)}
-            style={{
-              display: previewOpen ? "block" : "none",
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.5)",
-              zIndex: 9999,
-            }}
-          />
-          <div
-            style={{
-              display: previewOpen ? "block" : "none",
-              position: "fixed",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              background: "#fff",
-              padding: 16,
-              borderRadius: 8,
-              zIndex: 10000,
-              maxWidth: "90vw",
-              maxHeight: "85vh",
-              overflow: "auto",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-            }}
-          >
-            <div
-              style={{
-                marginBottom: 8,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <strong>Preview Gambar</strong>
-              <button
-                type="button"
-                onClick={() => setPreviewOpen(false)}
-                style={{
-                  padding: "4px 10px",
-                  border: "1px solid #ddd",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                }}
-              >
-                Tutup
-              </button>
-            </div>
-            <img src={previewSrc} alt="preview" style={{ maxWidth: "100%" }} />
-            <div style={{ marginTop: 12, textAlign: "right" }}>
-              <a
-                href={previewSrc}
-                download={`laporan-${dateRange[0].format(
-                  "YYYYMMDD"
-                )}-${dateRange[1].format("YYYYMMDD")}.png`}
-                style={{ textDecoration: "none" }}
-              ></a>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ============================================================
+ AREA KHUSUS UNTUK CETAK GAMBAR (TIDAK TERLIHAT DI WEBSITE)
+============================================================ */}
+      <div
+        id="capture-area"
+        style={{
+          position: "absolute",
+          left: "-99999px",
+          top: 0,
+          width: "1200px",
+          padding: "20px",
+          background: "#fff",
+        }}
+      >
+        {/* ====== 4 KPI KOTAK (FULL WIDTH) ====== */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="Total Penjualan"
+                value={`Rp ${formatRupiah(totals.total_sales)}`}
+                prefix={<ShopOutlined />}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="Total Pengunjung"
+                value={totals.total_visitors}
+                prefix={<UsergroupAddOutlined />}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="Jumlah Transaksi"
+                value={totals.total_transactions}
+                prefix={<FieldTimeOutlined />}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Card>
+              <Statistic
+                title="Rata-rata Harian"
+                value={`Rp ${formatRupiah(totals.avg_daily)}`}
+                prefix={<ArrowUpOutlined />}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* ========== PAYMENT + TENANT CONTRIBUTION  ========== */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {/* PAYMENT */}
+          <Col span={12}>
+            <Card style={{ height: "100%" }}>
+              <Title level={5}>Metode Pembayaran</Title>
+              <div style={{ height: 240 }}>
+                <Doughnut
+                  data={paymentDoughnut}
+                  options={{
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: "bottom" },
+                      datalabels: {
+                        color: "#fff",
+                        font: { weight: "bold" },
+                        formatter: (value, ctx) => {
+                          const total = ctx.dataset.data.reduce(
+                            (s, v) => s + v,
+                            0
+                          );
+                          if (!total) return "0%";
+                          return ((value / total) * 100).toFixed(1) + "%";
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+
+              <Divider />
+
+              {paymentBreakdown.map((p, i) => (
+                <div
+                  key={i}
+                  style={{ display: "flex", justifyContent: "space-between" }}
+                >
+                  <Text>{p.method}</Text>
+                  <Text strong>Rp {formatRupiah(p.total)}</Text>
+                </div>
+              ))}
+            </Card>
+          </Col>
+
+          {/* TENANT CONTRIBUTION */}
+          <Col span={12}>
+            <Card style={{ height: "100%" }}>
+              <Title level={5}>Kontribusi Tenant & Working Space</Title>
+
+              <div style={{ height: 260 }}>
+                <Doughnut
+                  data={tenantPieData}
+                  options={{
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: "bottom" },
+                      datalabels: {
+                        color: "#fff",
+                        formatter: (value, ctx) => {
+                          const total = ctx.dataset.data.reduce(
+                            (a, b) => a + b,
+                            0
+                          );
+                          if (!total) return "0%";
+                          return ((value / total) * 100).toFixed(1) + "%";
+                        },
+                      },
+                    },
+                  }}
+                />
+              </div>
+
+              <Divider />
+
+              {tenantContribution.map((t, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text>{t.tenant}</Text>
+                  <Text strong>Rp {formatRupiah(t.nett)}</Text>
+                </div>
+              ))}
+            </Card>
+          </Col>
+        </Row>
+
+        {/* ========== TOP 10 FNB + TOP 5 WS ========== */}
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <Card title="Top 10 FNB" loading={loading}>
+              <Table
+                columns={[
+                  { title: "Menu", dataIndex: "item", key: "item" },
+                  {
+                    title: "Tenant",
+                    dataIndex: "tenant",
+                    key: "tenant",
+                    width: 140,
+                  },
+                  {
+                    title: "Jumlah Terjual",
+                    dataIndex: "qty",
+                    key: "qty",
+                    align: "right",
+                    render: (v) => formatRupiah(v),
+                  },
+                  {
+                    title: "Total Penjualan (Rp)",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (t) => `Rp ${formatRupiah(t)}`,
+                  },
+                ]}
+                dataSource={topFnb}
+                rowKey={(r) => `${r.item}-${r.tenant || ""}`}
+                pagination={false}
+                size="small"
+                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card title="Top 5 Working Space" loading={loading}>
+              <Table
+                columns={[
+                  {
+                    title: "Kategori - Durasi",
+                    dataIndex: "item",
+                    key: "item",
+                  },
+                  {
+                    title: "Jumlah Terjual",
+                    dataIndex: "qty",
+                    key: "qty",
+                    align: "right",
+                    render: (v) => formatRupiah(v),
+                  },
+                  {
+                    title: "Total Penjualan (Rp)",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (t) => `Rp ${formatRupiah(t)}`,
+                  },
+                ]}
+                dataSource={topWs}
+                rowKey={(r) => `${r.item}-${String(r.qty)}-${String(r.total)}`}
+                pagination={false}
+                size="small"
+                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+              />
+            </Card>
+          </Col>
+        </Row>
+      </div>
+      {/* END OF CAPTURE AREA */}
     </ConfigProvider>
   );
 };

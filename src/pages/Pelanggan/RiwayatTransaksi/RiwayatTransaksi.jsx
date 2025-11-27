@@ -14,7 +14,6 @@ import {
   Space,
   Spin,
   Collapse,
-
 } from "antd";
 import {
   CalendarOutlined,
@@ -46,6 +45,9 @@ const useWindowSize = () => {
 };
 
 const RiwayatTransaksi = () => {
+  // Definisi baseUrl di dalam komponen agar bisa dipakai di render
+  const baseUrl = import.meta.env.VITE_BASE_URL;
+  
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
@@ -53,11 +55,10 @@ const RiwayatTransaksi = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDates, setSelectedDates] = useState([]);
 
-
   const [width] = useWindowSize();
   const isMobile = width < 768;
 
-  // === PERUBAHAN 1: MAPPING DATA DARI API ===
+  // === FETCH DATA ===
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -66,18 +67,22 @@ const RiwayatTransaksi = () => {
           const mapped = res.data.map((trx) => {
             // Membuat array ringkasan untuk tampilan daftar utama
             const summaryItems = [
-              ...(trx.bookings?.map(b => `Booking Ruangan - ${b.nama_ruangan}`) || []),
-              ...(trx.memberships?.map(m => `Membership - ${m.nama_paket}`) || []),
-              ...(trx.virtual_offices?.map(v => `Virtual Office - ${v.nama_paket}`) || []),
-              ...(trx.events?.map(e => `Event - ${e.nama_event || e.nama_space}`) || []),
+              ...(trx.bookings?.map((b) => `Booking Ruangan - ${b.nama_ruangan}`) || []),
+              ...(trx.memberships?.map((m) => `Membership - ${m.nama_paket}`) || []),
+              ...(trx.virtual_offices?.map((v) => `Virtual Office - ${v.nama_paket}`) || []),
+              ...(trx.events?.map((e) => `Event - ${e.nama_event || e.nama_space}`) || []),
             ];
 
             return {
               id: trx.id_transaksi,
               tanggal: trx.tanggal_transaksi,
               total: trx.total_harga_final,
-              status: trx.status_pembayaran === "Lunas" ? "Sukses" :
-                trx.status_pembayaran === "Belum Lunas" ? "Pending" : "Gagal",
+              status:
+                trx.status_pembayaran === "Lunas"
+                  ? "Sukses"
+                  : trx.status_pembayaran === "Belum Lunas"
+                  ? "Pending"
+                  : "Gagal",
 
               // Menyimpan detail terstruktur untuk digunakan di dalam modal
               details: {
@@ -87,7 +92,7 @@ const RiwayatTransaksi = () => {
                 events: trx.events || [],
               },
 
-              // Menyimpan ringkasan teks untuk tampilan daftar
+              // Menyimpan ringkasan teks untuk tampilan daftar depan
               items: summaryItems,
             };
           });
@@ -114,8 +119,8 @@ const RiwayatTransaksi = () => {
     const filtered = transactions.filter((trx) => {
       const trxDate = dayjs(trx.tanggal);
       return (
-        trxDate.isAfter(start.startOf('day')) &&
-        trxDate.isBefore(end.endOf('day'))
+        trxDate.isAfter(start.startOf("day")) &&
+        trxDate.isBefore(end.endOf("day"))
       );
     });
     setFilteredTransactions(filtered);
@@ -143,7 +148,7 @@ const RiwayatTransaksi = () => {
     return (
       <div style={{ textAlign: "center", padding: "80px 0" }}>
         <Spin size="large" />
-        <p style={{ marginTop: '16px' }}>Sedang memuat data transaksi...</p>
+        <p style={{ marginTop: "16px" }}>Sedang memuat data transaksi...</p>
       </div>
     );
   }
@@ -160,6 +165,7 @@ const RiwayatTransaksi = () => {
           </Text>
         </div>
 
+        {/* FILTER SECTION */}
         <Row gutter={[12, 12]} justify="start" align="middle">
           <Col xs={24} sm={18}>
             <RangePicker
@@ -171,37 +177,38 @@ const RiwayatTransaksi = () => {
               style={{ width: "100%", borderRadius: "8px" }}
               placeholder={["Tanggal mulai", "Tanggal akhir"]}
             />
-
           </Col>
           <Col xs={24} sm={6}>
             <Button
               block
               onClick={() => {
-                setSelectedDates([]); // reset tampilan tanggal di RangePicker
-                handleFilter([]); // reset filter transaksi
+                setSelectedDates([]);
+                handleFilter([]);
               }}
               style={{ borderRadius: "8px" }}
             >
               Reset Filter
             </Button>
-
           </Col>
         </Row>
 
+        {/* LIST TRANSAKSI UTAMA */}
         {filteredTransactions.length === 0 ? (
           <Empty
             description={<span>Tidak ada transaksi pada periode ini.</span>}
-            style={{ marginTop: "40px", background: '#fff', padding: '40px', borderRadius: '12px' }}
+            style={{ marginTop: "40px", background: "#fff", padding: "40px", borderRadius: "12px" }}
           />
         ) : (
           <List
-            dataSource={filteredTransactions}
+            dataSource={filteredTransactions} // Pastikan ini menggunakan filteredTransactions
             renderItem={(item) => (
               <List.Item
                 actions={[
                   !isMobile && (
-                    <Button type="link" onClick={() => showDetail(item)}>Detail</Button>
-                  )
+                    <Button type="link" onClick={() => showDetail(item)}>
+                      Detail
+                    </Button>
+                  ),
                 ]}
                 style={{
                   border: "1px solid #f0f0f0",
@@ -218,17 +225,19 @@ const RiwayatTransaksi = () => {
                 <List.Item.Meta
                   avatar={
                     <div style={{ backgroundColor: "#e6f7ff", padding: "12px", borderRadius: "50%" }}>
-                      <FileTextOutlined style={{ color: "#1890ff", fontSize: '20px' }} />
+                      <FileTextOutlined style={{ color: "#1890ff", fontSize: "20px" }} />
                     </div>
                   }
                   title={
-                    <div style={{
-                      display: "flex",
-                      flexDirection: isMobile ? 'column' : 'row',
-                      alignItems: isMobile ? 'flex-start' : 'center',
-                      justifyContent: "space-between",
-                      gap: isMobile ? '8px' : '0'
-                    }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: isMobile ? "column" : "row",
+                        alignItems: isMobile ? "flex-start" : "center",
+                        justifyContent: "space-between",
+                        gap: isMobile ? "8px" : "0",
+                      }}
+                    >
                       <Text strong style={{ fontSize: "16px" }}>
                         {dayjs(item.tanggal).format("DD MMMM YYYY")}
                       </Text>
@@ -240,13 +249,13 @@ const RiwayatTransaksi = () => {
                       <Text
                         type="secondary"
                         ellipsis
-                        style={{ fontSize: "14px", display: 'block', marginTop: '8px' }}
+                        style={{ fontSize: "14px", display: "block", marginTop: "8px" }}
                       >
                         {item.items.join(", ")}
                       </Text>
                       <Text
                         strong
-                        style={{ fontSize: "15px", color: "#1890ff", display: 'block', marginTop: '4px' }}
+                        style={{ fontSize: "15px", color: "#1890ff", display: "block", marginTop: "4px" }}
                       >
                         <DollarCircleOutlined style={{ marginRight: "4px" }} />
                         Total: Rp {item.total.toLocaleString("id-ID")}
@@ -260,7 +269,7 @@ const RiwayatTransaksi = () => {
         )}
       </Space>
 
-      {/* === PERUBAHAN 2: TAMPILAN MODAL YANG LEBIH DETAIL === */}
+      {/* MODAL DETAIL TRANSAKSI */}
       <Modal
         title="Detail Transaksi"
         open={isModalVisible}
@@ -270,23 +279,38 @@ const RiwayatTransaksi = () => {
             Tutup
           </Button>,
         ]}
-        width={isMobile ? '95%' : 520}
+        width={isMobile ? "95%" : 520}
         centered
         bodyStyle={{ padding: "24px", background: "#f9fafb", borderRadius: "10px" }}
       >
         {selectedTransaction && (
           <Card bordered={false} style={{ background: "transparent", padding: 0 }} bodyStyle={{ padding: 0 }}>
-            <Row justify="space-between"><Col><Text strong>ID Transaksi:</Text></Col><Col><Text>#{selectedTransaction.id}</Text></Col></Row>
+            <Row justify="space-between">
+              <Col><Text strong>ID Transaksi:</Text></Col>
+              <Col><Text>#{selectedTransaction.id}</Text></Col>
+            </Row>
             <Divider style={{ margin: "12px 0" }} />
-            <Row justify="space-between"><Col><Text strong>Tgl. Transaksi:</Text></Col><Col><Text>{dayjs(selectedTransaction.tanggal).utc().format("DD MMM YYYY, HH:mm")}</Text></Col></Row>
+            <Row justify="space-between">
+              <Col><Text strong>Tgl. Transaksi:</Text></Col>
+              <Col><Text>{dayjs(selectedTransaction.tanggal).utc().format("DD MMM YYYY, HH:mm")}</Text></Col>
+            </Row>
             <Divider style={{ margin: "12px 0" }} />
-            <Row justify="space-between"><Col><Text strong>Total:</Text></Col><Col><Text>Rp {selectedTransaction.total.toLocaleString("id-ID")}</Text></Col></Row>
+            <Row justify="space-between">
+              <Col><Text strong>Total:</Text></Col>
+              <Col><Text>Rp {selectedTransaction.total.toLocaleString("id-ID")}</Text></Col>
+            </Row>
             <Divider style={{ margin: "12px 0" }} />
-            <Row justify="space-between" align="middle"><Col><Text strong>Status:</Text></Col><Col>{getStatusTag(selectedTransaction.status)}</Col></Row>
+            <Row justify="space-between" align="middle">
+              <Col><Text strong>Status:</Text></Col>
+              <Col>{getStatusTag(selectedTransaction.status)}</Col>
+            </Row>
             <Divider style={{ margin: "12px 0" }} />
 
-            <Title level={5} style={{ marginBottom: "16px" }}>Detail Item</Title>
+            <Title level={5} style={{ marginBottom: "16px" }}>
+              Detail Item
+            </Title>
 
+            {/* === DETAIL BOOKING RUANGAN (DENGAN GAMBAR) === */}
             {selectedTransaction.details.bookings.length > 0 && (() => {
               // Kelompokkan bookings berdasarkan tanggal
               const groupedBookings = selectedTransaction.details.bookings.reduce((acc, curr) => {
@@ -302,13 +326,7 @@ const RiwayatTransaksi = () => {
                     Booking Ruangan
                   </Text>
 
-                  <Collapse
-                    accordion
-                    bordered={false}
-                    style={{
-                      background: "transparent",
-                    }}
-                  >
+                  <Collapse accordion bordered={false} style={{ background: "transparent" }}>
                     {Object.entries(groupedBookings).map(([date, bookings]) => (
                       <Panel
                         key={date}
@@ -331,19 +349,41 @@ const RiwayatTransaksi = () => {
                           renderItem={(item, index) => (
                             <List.Item
                               style={{
-                                padding: "6px 0",
+                                padding: "10px 0",
                                 borderBottom:
                                   index === bookings.length - 1 ? "none" : "1px solid #f0f0f0",
                               }}
+                              // Menampilkan gambar di kanan (extra)
+                              extra={
+                                <img
+                                  alt={item.nama_ruangan}
+                                  src={`${baseUrl}/static/${item.gambar_ruangan}`}
+                                  style={{
+                                    width: 80,
+                                    height: 60,
+                                    objectFit: "cover",
+                                    borderRadius: "6px",
+                                    border: "1px solid #eee",
+                                    marginLeft: "10px",
+                                  }}
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = "https://placehold.co/80x60?text=No+Img";
+                                  }}
+                                />
+                              }
                             >
                               <List.Item.Meta
-                                title={<Text>{item.nama_ruangan}</Text>}
+                                title={<Text strong>{item.nama_ruangan}</Text>}
                                 description={
-                                  <Text type="secondary">
-                                    <CalendarOutlined style={{ marginRight: "6px" }} />
-                                    {dayjs(item.waktu_mulai).format("HH:mm")} -{" "}
-                                    {dayjs(item.waktu_selesai).format("HH:mm")}
-                                  </Text>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                    <Text type="secondary" style={{ fontSize: "13px" }}>
+                                      <CalendarOutlined style={{ marginRight: "6px" }} />
+                                      {dayjs(item.waktu_mulai).format("HH:mm")} -{" "}
+                                      {dayjs(item.waktu_selesai).format("HH:mm")}
+                                    </Text>
+
+                                  </div>
                                 }
                               />
                             </List.Item>
@@ -356,22 +396,34 @@ const RiwayatTransaksi = () => {
               );
             })()}
 
-
-            {/* Bagian Membership */}
+            {/* DETAIL MEMBERSHIP */}
             {selectedTransaction.details.memberships.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Paket Membership</Text>
+              <div style={{ marginBottom: "16px" }}>
+                <Text strong style={{ display: "block", marginBottom: "8px" }}>
+                  Paket Membership
+                </Text>
                 <List
                   itemLayout="horizontal"
                   dataSource={selectedTransaction.details.memberships}
                   renderItem={(item, index) => (
-                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.memberships.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                    <List.Item
+                      style={{
+                        padding: "8px",
+                        background: "#fff",
+                        borderRadius: "8px",
+                        borderBottom:
+                          index === selectedTransaction.details.memberships.length - 1
+                            ? "none"
+                            : "1px solid #f0f0f0",
+                      }}
+                    >
                       <List.Item.Meta
                         title={<Text>{item.nama_paket}</Text>}
                         description={
                           <Text type="secondary">
-                            <CalendarOutlined style={{ marginRight: '6px' }} />
-                            Aktif: {dayjs(item.tanggal_mulai).format('DD MMM YYYY')} - {dayjs(item.tanggal_berakhir).format('DD MMM YYYY')}
+                            <CalendarOutlined style={{ marginRight: "6px" }} />
+                            Aktif: {dayjs(item.tanggal_mulai).format("DD MMM YYYY")} -{" "}
+                            {dayjs(item.tanggal_berakhir).format("DD MMM YYYY")}
                           </Text>
                         }
                       />
@@ -381,21 +433,34 @@ const RiwayatTransaksi = () => {
               </div>
             )}
 
-            {/* Bagian Virtual Office */}
+            {/* DETAIL VIRTUAL OFFICE */}
             {selectedTransaction.details.virtual_offices.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Paket Virtual Office</Text>
+              <div style={{ marginBottom: "16px" }}>
+                <Text strong style={{ display: "block", marginBottom: "8px" }}>
+                  Paket Virtual Office
+                </Text>
                 <List
                   itemLayout="horizontal"
                   dataSource={selectedTransaction.details.virtual_offices}
                   renderItem={(item, index) => (
-                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.virtual_offices.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                    <List.Item
+                      style={{
+                        padding: "8px",
+                        background: "#fff",
+                        borderRadius: "8px",
+                        borderBottom:
+                          index === selectedTransaction.details.virtual_offices.length - 1
+                            ? "none"
+                            : "1px solid #f0f0f0",
+                      }}
+                    >
                       <List.Item.Meta
                         title={<Text>{item.nama_paket} ({item.nama_perusahaan})</Text>}
                         description={
                           <Text type="secondary">
-                            <CalendarOutlined style={{ marginRight: '6px' }} />
-                            Aktif: {dayjs(item.tanggal_mulai).format('DD MMM YYYY')} - {dayjs(item.tanggal_berakhir).format('DD MMM YYYY')}
+                            <CalendarOutlined style={{ marginRight: "6px" }} />
+                            Aktif: {dayjs(item.tanggal_mulai).format("DD MMM YYYY")} -{" "}
+                            {dayjs(item.tanggal_berakhir).format("DD MMM YYYY")}
                           </Text>
                         }
                       />
@@ -405,23 +470,56 @@ const RiwayatTransaksi = () => {
               </div>
             )}
 
-            {/* Bagian Event Spaces */}
-            {/* Bagian Event Spaces */}
+            {/* DETAIL EVENT */}
             {selectedTransaction.details.events.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <Text strong style={{ display: 'block', marginBottom: '8px' }}>Booking Event</Text>
+              <div style={{ marginBottom: "16px" }}>
+                <Text strong style={{ display: "block", marginBottom: "8px" }}>
+                  Booking Event
+                </Text>
                 <List
                   itemLayout="horizontal"
                   dataSource={selectedTransaction.details.events}
                   renderItem={(item, index) => (
-                    <List.Item style={{ padding: "8px", background: "#fff", borderRadius: "8px", borderBottom: index === selectedTransaction.details.events.length - 1 ? "none" : "1px solid #f0f0f0" }}>
+                    <List.Item
+                      style={{
+                        padding: "8px",
+                        background: "#fff",
+                        borderRadius: "8px",
+                        borderBottom:
+                          index === selectedTransaction.details.events.length - 1
+                            ? "none"
+                            : "1px solid #f0f0f0",
+                      }}
+                      // Opsional: Gambar Event (jika ada di backend)
+                      extra={
+                        item.gambar_ruangan ? (
+                          <img
+                            alt={item.nama_space}
+                            src={`${baseUrl}/static/${item.gambar_ruangan}`}
+                            style={{
+                              width: 80,
+                              height: 60,
+                              objectFit: "cover",
+                              borderRadius: "6px",
+                              border: "1px solid #eee",
+                              marginLeft: "10px",
+                            }}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "https://placehold.co/80x60?text=No+Img";
+                            }}
+                          />
+                        ) : null
+                      }
+                    >
                       <List.Item.Meta
                         title={<Text>{item.nama_event || "Booking Event"}</Text>}
                         description={
                           <Text type="secondary">
-                            <CalendarOutlined style={{ marginRight: '6px' }} />
-                            {/* --- PERUBAHAN DI SINI --- */}
-                            {item.nama_space} | {dayjs(item.waktu_mulai).format('DD MMM YYYY, HH:mm')} - {dayjs(item.waktu_selesai).format('HH:mm')}
+                            <CalendarOutlined style={{ marginRight: "6px" }} />
+                            {item.nama_space} |{" "}
+                            {dayjs(item.waktu_mulai).format("DD MMM YYYY, HH:mm")} -{" "}
+                            {dayjs(item.waktu_selesai).format("HH:mm")}
                           </Text>
                         }
                       />
@@ -430,7 +528,6 @@ const RiwayatTransaksi = () => {
                 />
               </div>
             )}
-
           </Card>
         )}
       </Modal>

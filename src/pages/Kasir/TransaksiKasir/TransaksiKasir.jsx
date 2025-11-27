@@ -14,34 +14,26 @@ import {
     Descriptions,
     Progress
 } from "antd";
-import { PlusOutlined, EditOutlined, PrinterOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, PrinterOutlined, ArrowLeftOutlined } from "@ant-design/icons";
 import { Pie } from "@ant-design/charts";
 import {
     getDataTransaksiKasir,
+    getTransaksiBySessionId,
     updatePaymentStatus,
     updateBatalStatus
 } from "../../../services/service.js";
 import dayjs from "dayjs";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { formatRupiah } from "../../../utils/formatRupiah";
 import { useAuth } from "../../../providers/AuthProvider";
-// import logoDago from "../../../assets/images/logo.png"; // Unused import commented out
+import logoDago from "../../../assets/images/logo.png"; // Pastikan path logo benar
 
 const { Option } = Select;
 
-// Palet warna tetap agar grafik dan list di bawahnya sinkron
 const CHART_COLORS = [
-    '#3B82F6', // Blue
-    '#10B981', // Green
-    '#F59E0B', // Amber
-    '#EF4444', // Red
-    '#8B5CF6', // Violet
-    '#EC4899', // Pink
-    '#6366F1', // Indigo
-    '#14B8A6', // Teal
+    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6',
 ];
 
-// Komponen OrderCard
 const OrderCard = ({ order, getStatusColor, getDisplayStatus, getPaymentStatusColor, onClick }) => (
     <div
         className="flex items-center justify-between bg-white rounded-xl px-5 py-4 shadow-sm border border-gray-100 hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer"
@@ -70,6 +62,9 @@ const OrderCard = ({ order, getStatusColor, getDisplayStatus, getPaymentStatusCo
 );
 
 const TransaksiKasir = () => {
+    const { id } = useParams();
+    const isHistoryMode = !!id;
+
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalVisible, setIsModalVisible] = useState(false);
@@ -80,15 +75,12 @@ const TransaksiKasir = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const navigate = useNavigate();
     const [isUpdating, setIsUpdating] = useState(false);
-
-    // State untuk loading print
     const [isPrinting, setIsPrinting] = useState(false);
 
     const notificationSound = useRef(null);
     const knownTransactionIds = useRef(new Set());
 
     const { activeSession, isSessionLoading, userProfile } = useAuth();
-    // Ambil nama kasir untuk struk
     const namaKasirLogin = userProfile?.detail?.nama || userProfile?.email || 'Kasir';
 
     useEffect(() => {
@@ -99,7 +91,12 @@ const TransaksiKasir = () => {
     const fetchAndCheckOrders = useCallback(async (isInitialLoad = false) => {
         if (isInitialLoad) setLoading(true);
         try {
-            const result = await getDataTransaksiKasir();
+            let result;
+            if (isHistoryMode) {
+                result = await getTransaksiBySessionId(id);
+            } else {
+                result = await getDataTransaksiKasir();
+            }
 
             if (result.message !== "OK") {
                 throw new Error(result.error || "Gagal mengambil data transaksi");
@@ -128,65 +125,67 @@ const TransaksiKasir = () => {
                     type: o.type || 'N/A',
                     payment_status: o.payment_status || 'N/A',
                     payment_method: o.payment_method || '-',
-
-                    // Data Rincian Harga & Kembalian
+                    
                     subtotal: parseFloat(o.subtotal) || 0,
                     tax_nominal: parseFloat(o.tax_nominal) || 0,
                     tax_percent: parseFloat(o.tax_percent) || 0,
                     uang_diterima: parseFloat(o.uang_diterima) || 0,
                     kembalian: parseFloat(o.kembalian) || 0,
+                    
+                    // --- DATA VOUCHER ---
+                    vouchers: o.vouchers || [] // Ambil data voucher dari API
+                    // --------------------
                 };
             }) || [];
 
-            const currentIds = new Set(fetchedOrders.map(o => o.id));
-            const hasNewOrder = fetchedOrders.some(
-                (order) => !knownTransactionIds.current.has(order.id)
-            );
-
-            if (hasNewOrder && knownTransactionIds.current.size > 0 && notificationSound.current) {
-                notificationSound.current.play().catch((e) => console.error("Audio play failed:", e));
+            if (!isHistoryMode) {
+                const currentIds = new Set(fetchedOrders.map(o => o.id));
+                const hasNewOrder = fetchedOrders.some(
+                    (order) => !knownTransactionIds.current.has(order.id)
+                );
+                if (hasNewOrder && knownTransactionIds.current.size > 0 && notificationSound.current) {
+                    notificationSound.current.play().catch((e) => console.error("Audio play failed:", e));
+                }
+                knownTransactionIds.current = currentIds;
             }
 
             setOrders(fetchedOrders);
-            knownTransactionIds.current = currentIds;
 
         } catch (err) {
-            console.error("Polling/Fetch error:", err);
+            console.error("Fetch error:", err);
             if (isInitialLoad) {
-                message.error(`Gagal memuat data transaksi: ${err.message || 'Error tidak diketahui'}`);
+                message.error(`Gagal memuat data: ${err.message}`);
             }
         } finally {
-            if (isInitialLoad) {
-                setLoading(false);
-            }
+            if (isInitialLoad) setLoading(false);
         }
-    }, []);
+    }, [id, isHistoryMode]);
 
     useEffect(() => {
         let intervalId = null;
-        const startPolling = () => {
+        
+        if (isHistoryMode) {
             fetchAndCheckOrders(true);
-            intervalId = setInterval(() => fetchAndCheckOrders(false), 15000);
-        };
-        if (isSessionLoading) {
-            setLoading(true);
-            return;
-        }
-        if (activeSession) {
-            startPolling();
         } else {
-            setLoading(false);
-            setOrders([]);
-            knownTransactionIds.current.clear();
-        }
-        return () => {
-            if (intervalId) {
-                clearInterval(intervalId);
+            if (isSessionLoading) {
+                setLoading(true);
+                return;
             }
-        };
-    }, [activeSession, isSessionLoading, fetchAndCheckOrders]);
+            if (activeSession) {
+                fetchAndCheckOrders(true);
+                intervalId = setInterval(() => fetchAndCheckOrders(false), 15000);
+            } else {
+                setLoading(false);
+                setOrders([]);
+                knownTransactionIds.current.clear();
+            }
+        }
 
-    // --- Helpers ---
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [activeSession, isSessionLoading, fetchAndCheckOrders, isHistoryMode]);
+
     const getStatusColor = (status) => {
         switch (status) {
             case "Baru": return "blue";
@@ -208,7 +207,7 @@ const TransaksiKasir = () => {
     };
     const getDisplayStatus = (status) => status || 'N/A';
 
-    // --- Filtering & Summary ---
+    // --- Logic Filter & Summary (Sama seperti sebelumnya) ---
     const filteredFnbOrders = useMemo(() => orders
         .filter((o) => o.type !== "Booking")
         .filter((order) => {
@@ -285,32 +284,25 @@ const TransaksiKasir = () => {
         }));
     }, [filteredFnbOrders]);
 
-    // Hitung total dari tenant summary untuk basis persentase
     const totalTenantSales = useMemo(() => 
         tenantSummary.reduce((sum, item) => sum + item.value, 0)
     , [tenantSummary]);
 
-    // --- KONFIGURASI CHART FIX (NO TOOLTIP, COLORS) ---
     const pieConfig = {
         data: tenantSummary,
         angleField: 'value',
         colorField: 'type',
-        color: CHART_COLORS, // Gunakan palet warna custom
+        color: CHART_COLORS,
         radius: 0.85,
         innerRadius: 0.6,
-        label: {
-            type: 'inner',
-            offset: '-50%',
-            content: '{value}',
-            style: { textAlign: 'center', fontSize: 12, fill: '#fff' }
-        },
-        legend: false, // Matikan legend bawaan, kita buat sendiri di bawah
-        tooltip: false, // MATIKAN TOOLTIP DI SINI
+        label: { type: 'inner', offset: '-50%', content: '{value}', style: { textAlign: 'center', fontSize: 12, fill: '#fff' } },
+        legend: false,
+        tooltip: false,
         interactions: [{ type: 'element-selected' }, { type: 'element-active' }],
         animation: { appear: { animation: 'wave-in', duration: 500 } },
     };
 
-    // --- Modal Handlers ---
+    // --- Handler Modal ---
     const handleOrderClick = (order) => {
         setSelectedOrder(order);
         setIsModalVisible(true);
@@ -322,6 +314,7 @@ const TransaksiKasir = () => {
     };
 
     const handleMarkAsPaid = async () => {
+        if (isHistoryMode) return; 
         if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return;
         setIsUpdating(true);
         try {
@@ -338,6 +331,7 @@ const TransaksiKasir = () => {
     };
 
     const handleMarkAsBatal = async () => {
+        if (isHistoryMode) return; 
         if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return;
         setIsUpdating(true);
         try {
@@ -354,21 +348,24 @@ const TransaksiKasir = () => {
     };
 
     const handleContinueOrder = () => {
+        if (isHistoryMode) return; 
         if (!selectedOrder || selectedOrder.payment_status !== 'Disimpan') return;
         handleCloseDetail();
         navigate('/orderkasir', { state: { savedOrderId: selectedOrder.id } });
     };
 
-    // --- FITUR CETAK STRUK ---
+    // --- FITUR CETAK ULANG ---
     const handlePrintReceipt = () => {
         if (!selectedOrder) return;
 
         console.log("Tombol Cetak Struk diklik...");
         setIsPrinting(true);
 
+        // Hitung Diskon Manual
         const discountNominal = (selectedOrder.subtotal + selectedOrder.tax_nominal) - selectedOrder.price;
         const fixedDiscount = discountNominal > 0.01 ? discountNominal : 0;
 
+        // Format F&B Items
         const formattedFnbItems = (selectedOrder.items || []).map(item => ({
             name: item.product || 'Item F&B',
             qty: item.qty,
@@ -376,6 +373,7 @@ const TransaksiKasir = () => {
             note: item.note
         }));
 
+        // Format Booking Items
         const formattedBookingItems = (selectedOrder.bookings || []).map(booking => {
             const startTime = dayjs(booking.start_time);
             const durationHours = (booking.duration || 0) / 60;
@@ -390,6 +388,12 @@ const TransaksiKasir = () => {
             };
         });
 
+        // Format Voucher (AMBIL DARI DATA DB YANG SUDAH DI-FETCH)
+        const formattedVouchers = (selectedOrder.vouchers || []).map(v => ({
+            profile: v.profile, // ex: shop-2h
+            code: v.code        // ex: s25kjr9f
+        }));
+
         let printerPaymentMethod = selectedOrder.payment_method;
         if (printerPaymentMethod && printerPaymentMethod.toUpperCase() === 'TUNAI') {
             printerPaymentMethod = 'CASH';
@@ -398,11 +402,13 @@ const TransaksiKasir = () => {
         const dataToPrint = {
             id: selectedOrder.id,
             time: selectedOrder.time,
-            cashier: namaKasirLogin,
+            cashier: namaKasirLogin + (isHistoryMode ? " (Arsip)" : ""),
             customer: selectedOrder.name,
             location: selectedOrder.location,
             items: formattedFnbItems,
             bookings: formattedBookingItems,
+            vouchers: formattedVouchers, // Kirim Voucher ke Flutter
+            
             subtotal: selectedOrder.subtotal,
             tax: selectedOrder.tax_nominal,
             discount: fixedDiscount,
@@ -430,15 +436,30 @@ const TransaksiKasir = () => {
         <div className="flex h-screen bg-gray-50 overflow-hidden">
             {/* LEFT PANEL */}
             <div className="flex-1 bg-white p-5 overflow-y-auto rounded-r-3xl shadow-inner custom-scrollbar">
+                {/* Header & Search ... (Sama) */}
                 <div className="flex justify-between items-center mb-4">
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-800">Welcome</h2>
-                        <p className="text-sm text-gray-500">Dago Creative Hub & Coffee Lab</p>
+                    <div className="flex items-center gap-2">
+                        {isHistoryMode && (
+                            <Button 
+                                icon={<ArrowLeftOutlined />} 
+                                type="text" 
+                                onClick={() => navigate('/kasir/buka-sesi')} 
+                                className="mr-2"
+                            />
+                        )}
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-800">
+                                {isHistoryMode ? `Riwayat Sesi #${id}` : "Welcome"}
+                            </h2>
+                            <p className="text-sm text-gray-500">Dago Creative Hub & Coffee Lab</p>
+                        </div>
                     </div>
                 </div>
                 <div className="pb-3">
                     <Input.Search placeholder="Cari ID, nama customer, lokasi/ruangan, atau produk..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="rounded-lg" allowClear />
                 </div>
+                
+                {/* Filters ... (Sama) */}
                 <div className="flex flex-wrap gap-3 justify-between items-center mb-5">
                     <div className="flex flex-wrap gap-3 items-center">
                         <Select value={filterStatus} onChange={setFilterStatus} className="w-full md:w-auto md:min-w-[180px]">
@@ -463,11 +484,18 @@ const TransaksiKasir = () => {
                             <Option value="Dibatalkan">Dibatalkan</Option>
                         </Select>
                     </div>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/buatorderkasir')} className="rounded-lg shadow-sm hover:shadow-md transition-all duration-200">
+                    <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />} 
+                        onClick={() => navigate('/buatorderkasir')} 
+                        className="rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
+                        disabled={isHistoryMode} 
+                    >
                         Order Baru
                     </Button>
                 </div>
 
+                {/* Order List */}
                 <h3 className="font-semibold mb-2 text-gray-700">Transaksi F&B ({filteredFnbOrders.length})</h3>
                 <div className="space-y-3">
                     {loading ? (
@@ -484,16 +512,8 @@ const TransaksiKasir = () => {
                 </div>
             </div>
 
-            {/* RIGHT PANEL */}
+            {/* RIGHT PANEL (Summary) ... (Sama) */}
             <div className="w-80 bg-gray-50 p-5 flex flex-col gap-4 h-full overflow-hidden border-l border-gray-200">
-                
-                {/* --- BAGIAN ATAS (STATIS - TIDAK ADA SCROLL) --- */}
-                
-                {/* Wrapper untuk konten atas agar bisa digabung dalam flex-shrink-0 jika perlu, 
-                    atau dibiarkan terpisah. Kita biarkan terpisah tapi pastikan flex-shrink-0 
-                    agar tidak tergencet oleh tabel. */}
-
-                {/* Section 1: Total Sales */}
                 <div className="flex justify-between bg-white rounded-xl p-4 shadow-sm flex-shrink-0">
                     <div>
                         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Penjualan</h3>
@@ -504,30 +524,23 @@ const TransaksiKasir = () => {
                     </div>
                 </div>
 
-                {/* Section 2: Chart & Legend (Dibuat memanjang ke bawah tanpa scroll internal) */}
                 <Card title="Sales per Tenant" size="small" className="shadow-sm flex-shrink-0 rounded-xl">
                     {loading ? (
                         <div className="flex justify-center items-center h-[280px]"><Spin /></div>
                     ) : tenantSummary.length > 0 ? (
                         <div className="flex flex-col pb-2">
-                            {/* CHART SECTION */}
                             <div style={{ position: 'relative', height: 200 }}>
                                 <Pie {...pieConfig} height={200} />
                                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '80px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                                     <img src="/img/logo_dago.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                 </div>
                             </div>
-
-                            {/* LEGEND SECTION (Scroll & Max-Height DIHAPUS) */}
-                            {/* Div ini sekarang akan tumbuh sesuai jumlah tenant */}
+                            {/* Legend ... (Sama) */}
                             <div className="mt-2 px-1">
                                 <div className="space-y-2">
                                     {tenantSummary.map((item, index) => {
-                                        const percentage = totalTenantSales > 0 
-                                            ? (item.value / totalTenantSales) * 100 
-                                            : 0;
+                                        const percentage = totalTenantSales > 0 ? (item.value / totalTenantSales) * 100 : 0;
                                         const color = CHART_COLORS[index % CHART_COLORS.length];
-                                        
                                         return (
                                             <div key={item.type} className="flex flex-col space-y-0.5">
                                                 <div className="flex justify-between items-center text-xs">
@@ -549,28 +562,12 @@ const TransaksiKasir = () => {
                     )}
                 </Card>
 
-                {/* --- BAGIAN BAWAH (SCROLLABLE) --- */}
-                
-                {/* Section 3: Top Produk */}
-                {/* flex-1: Mengambil SEMUA sisa ruang ke bawah */}
-                {/* min-h-0: Mencegah overflow keluar layar, memaksa scrollbar muncul di dalam */}
                 <div className="bg-white rounded-xl shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
                     <div className="p-3 border-b flex-shrink-0">
                         <h3 className="text-sm font-semibold text-gray-700">Top Produk (Lunas)</h3>
                     </div>
-                    
-                    {/* Area tabel ini yang akan punya scrollbar */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
-                        <Table 
-                            size="small" 
-                            pagination={false} 
-                            columns={[
-                                { title: "Produk", dataIndex: "item", key: "item", ellipsis: true, render: (text) => <span className="text-xs">{text}</span> }, 
-                                { title: "Qty", dataIndex: "qty", key: "qty", width: 40, align: 'center', render: (text) => <span className="text-xs">{text}</span> }, 
-                                { title: "Total", dataIndex: "total", key: "total", width: 85, align: 'right', render: (text) => <span className="text-xs font-medium">{text}</span> }
-                            ]} 
-                            dataSource={topProducts} 
-                        />
+                        <Table size="small" pagination={false} columns={[{ title: "Produk", dataIndex: "item", key: "item", ellipsis: true, render: (text) => <span className="text-xs">{text}</span> }, { title: "Qty", dataIndex: "qty", key: "qty", width: 40, align: 'center', render: (text) => <span className="text-xs">{text}</span> }, { title: "Total", dataIndex: "total", key: "total", width: 85, align: 'right', render: (text) => <span className="text-xs font-medium">{text}</span> }]} dataSource={topProducts} />
                     </div>
                 </div>
             </div>
@@ -585,25 +582,18 @@ const TransaksiKasir = () => {
                 destroyOnClose
                 footer={[
                     <Button key="back" onClick={handleCloseDetail}>Tutup</Button>,
-                    selectedOrder?.payment_status === "Disimpan" && (
+                    !isHistoryMode && selectedOrder?.payment_status === "Disimpan" && (
                         <Button key="continue" type="primary" icon={<EditOutlined />} onClick={handleContinueOrder} loading={isUpdating} disabled={isUpdating}>Lanjutkan Order</Button>
                     ),
-                    selectedOrder?.payment_status === "Belum Lunas" && (
+                    !isHistoryMode && selectedOrder?.payment_status === "Belum Lunas" && (
                         <Button key="pay" type="primary" loading={isUpdating} onClick={handleMarkAsPaid} className="bg-green-600 hover:bg-green-700 border-green-600 text-white">Tandai Lunas</Button>
                     ),
-                    selectedOrder?.payment_status === "Belum Lunas" && (
+                    !isHistoryMode && selectedOrder?.payment_status === "Belum Lunas" && (
                         <Button key="cancel" type="primary" danger loading={isUpdating} onClick={handleMarkAsBatal}>Tandai Batal</Button>
                     ),
                     selectedOrder?.payment_status !== "Disimpan" && (
-                        <Button
-                            key="print"
-                            type="primary"
-                            icon={<PrinterOutlined />}
-                            loading={isPrinting}
-                            onClick={handlePrintReceipt}
-                            className="bg-blue-600 hover:bg-blue-700 border-blue-600 text-white"
-                        >
-                            {isPrinting ? "Mencetak..." : "Cetak Struk"}
+                        <Button key="print" type="primary" icon={<PrinterOutlined />} loading={isPrinting} onClick={handlePrintReceipt} className="bg-blue-600 hover:bg-blue-700 border-blue-600 text-white">
+                            {isPrinting ? "Mencetak..." : (isHistoryMode ? "Cetak Ulang" : "Cetak Struk")}
                         </Button>
                     )
                 ]}
@@ -670,6 +660,19 @@ const TransaksiKasir = () => {
                                 )}
                             </Descriptions>
                         </div>
+
+                        {/* Tampilkan Voucher jika ada (Opsional untuk ditampilkan di Modal juga) */}
+                        {selectedOrder.vouchers && selectedOrder.vouchers.length > 0 && (
+                            <div className="mt-4 border-t pt-3">
+                                <h4 className="font-semibold mb-2 text-gray-800">Voucher WiFi:</h4>
+                                {selectedOrder.vouchers.map((v, i) => (
+                                    <div key={i} className="bg-blue-50 p-2 rounded text-xs mb-1 border border-blue-100">
+                                        <p><strong>Profile:</strong> {v.profile}</p>
+                                        <p><strong>Code:</strong> {v.code}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </Modal>

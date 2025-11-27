@@ -217,16 +217,21 @@ const AuthProvider = ({ children }) => {
      * checkActiveSession (versi sessionStorage) yang baru.
      */
     useEffect(() => {
-        if (isLoggedIn && userRole === 'kasir') {
-            // Saat refresh halaman, cek sessionStorage untuk sesi yang "diikuti"
-            checkActiveSession();
+        // 1. PENTING: Jika masih loading (cek token), JANGAN lakukan apa-apa.
+        // Ini mencegah sesi dihapus secara tidak sengaja saat refresh halaman.
+        if (loading) return;
+
+        if (isLoggedIn) {
+            // Jika user login sebagai kasir/tenant, cek apakah ada sesi tersimpan
+            if (userRole === 'kasir' || userRole === 'admin_tenant') {
+                checkActiveSession();
+            }
         } else {
-            // Jika bukan kasir, pastikan tidak ada sesi aktif
+            // Jika user BENAR-BENAR tidak login (dan loading selesai), barulah hapus sesi
             leaveSession();
             setIsSessionLoading(false);
         }
-    }, [isLoggedIn, userRole]); // <-- Ini sudah benar
-
+    }, [isLoggedIn, userRole, loading]);
     // --- (AKHIR PERBAIKAN LOGIKA SESI) ---
 
 

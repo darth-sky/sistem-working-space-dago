@@ -72,6 +72,7 @@ import GantiPasswordKasir from "./pages/Kasir/GantiPasswordKasir/GantiPasswordKa
 import SesiAktifGuard from "./components/SesiAktifGuard";
 import AboutUs from "./pages/Pelanggan/AboutUs/AboutUs";
 import FAQPage from "./pages/Pelanggan/FAQPage/FAQPage";
+import RiwayatSesiDetail from "./pages/Kasir/RiwayatSesiDetail/RiwayatSesiDetail";
 
 const App = () => {
   const Navigate = useNavigate();
@@ -235,20 +236,30 @@ const App = () => {
 
 
 
-
         {/* ======================= */}
         {/* === RUTE ADMIN TENANT === */}
         {/* ======================= */}
         <Route element={<PrivateRoute allowedRoles={['admin_tenant']} />}>
 
-          {/* Halaman ini TIDAK perlu sesi aktif */}
+          {/* 1. Halaman Buka Sesi (Tanpa Sidebar) */}
           <Route path="/tenant/buka-sesi" element={<BukaSesi />} />
 
-          {/* Halaman-halaman ini PERLU sesi aktif */}
-          {/* GANTI SesiKasirGuard dengan SesiAktifGuard */}
+          {/* 2. ROUTE KHUSUS RIWAYAT (PENTING!)
+      - Ditaruh DI LUAR 'SesiAktifGuard' agar bisa diakses dari BukaSesi tanpa start shift.
+      - Menggunakan SidebarTenant agar UI tetap konsisten.
+      - Mengarah ke 'DashboardTenant' yang sudah kita modifikasi (Dual Mode).
+        */}
+          <Route element={<SidebarTenant />}>
+            <Route path="/ordertenant/:id" element={<DashboardTenant />} />
+          </Route>
+
+          {/* 3. Halaman Operasional (Wajib Sesi Aktif) */}
           <Route element={<SesiAktifGuard />}>
             <Route element={<SidebarTenant />}>
+              {/* Route Live Dashboard */}
               <Route path="/ordertenant" element={<DashboardTenant />} />
+
+              {/* Route Tenant Lainnya */}
               <Route path="/stoktenant" element={<KelolaStok />} />
               <Route path="/settingstenant" element={<SettingTenant />} />
               {/* Tambahkan rute tenant lain di sini */}
@@ -256,8 +267,6 @@ const App = () => {
           </Route>
 
         </Route>
-
-
 
 
 
@@ -291,12 +300,31 @@ const App = () => {
             2. Sesi kasir yang aktif (SesiKasirGuard)
             3. Tampilan Sidebar (SidebarKasir)
           */}
-        <Route element={<PrivateRoute allowedRoles={['kasir']} />}>  {/* 1. Cek Login, Role, & FirstLogin */}
-          <Route element={<SesiKasirGuard />}> {/* 2. Cek Sesi Aktif */}
-            <Route element={<SidebarKasir />}> {/* 3. Tampilkan Layout Sidebar */}
+        {/* ======================= */}
+        {/* === RUTE KASIR === */}
+        {/* ======================= */}
+        <Route element={<PrivateRoute allowedRoles={['kasir']} />}>
 
-              {/* 4. Halaman-halaman ini akan dirender di dalam <Outlet /> milik SidebarKasir */}
+          {/* 1. Halaman Buka Sesi (Tanpa Sidebar) */}
+          <Route path="/kasir/buka-sesi" element={<BukaSesi />} />
+
+          {/* 2. ROUTE KHUSUS RIWAYAT (PENTING!)
+      - Menggunakan SidebarKasir agar UI konsisten (ada sidebar kiri).
+      - Ditaruh DI LUAR 'SesiKasirGuard' agar bisa dibuka walau belum Start Shift.
+      - Mengarah ke 'TransaksiKasir' agar tampilan Chart & Tabel sama persis.
+  */}
+          <Route element={<SidebarKasir />}>
+            <Route path="/kasir/riwayat-sesi/:id" element={<TransaksiKasir />} />
+          </Route>
+
+          {/* 3. Halaman Operasional (Wajib Sesi Aktif) */}
+          <Route element={<SesiKasirGuard />}>
+            <Route element={<SidebarKasir />}>
+
+              {/* Route Live POS */}
               <Route path="/transaksikasir" element={<TransaksiKasir />} />
+
+              {/* Route Kasir Lainnya */}
               <Route path="/merchantkasir" element={<MerchantKasir />} />
               <Route path="/productkasir" element={<ProductKasir />} />
               <Route path="/historykasir" element={<HistoryKasir />} />
@@ -309,6 +337,7 @@ const App = () => {
 
             </Route>
           </Route>
+
         </Route>
 
         {/* ======================= */}

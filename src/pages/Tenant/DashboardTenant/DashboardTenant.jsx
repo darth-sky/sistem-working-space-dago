@@ -1,6 +1,8 @@
+// src/pages/Tenant/DashboardTenant/DashboardTenant.jsx
+
 import React, { useState, useEffect, useContext, useRef } from "react";
 import { Input, Modal, Button, Spin, message } from "antd";
-// Pastikan import service dan context path-nya benar
+import { useParams } from "react-router-dom"; // 1. Import useParams
 import { getOrdersByTenant, updateOrderStatus } from "../../../services/service";
 import { AuthContext } from "../../../providers/AuthProvider";
 
@@ -15,12 +17,16 @@ const DashboardTenant = () => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [statusFilter, setStatusFilter] = useState("ALL");
 
-    // 1. 👈 PERBAIKAN: Ambil 'activeSession' dari Context
+    // 2. Deteksi Mode (Live vs History)
+    const { id } = useParams(); // Ambil ID dari URL jika ada
+    const isHistoryMode = !!id; // True jika sedang melihat riwayat
+
     const { userProfile, loading: authLoading, activeSession } = useAuth();
     
     const tenantId = userProfile?.detail?.id_tenant;
-    // 2. 👈 PERBAIKAN: Ambil sesiId dari activeSession
-    const sesiId = activeSession?.id_sesi;
+    
+    // 3. Tentukan Sesi ID yang dipakai (URL Priority > Active Session)
+    const sesiId = isHistoryMode ? id : activeSession?.id_sesi;
 
     const notificationSound = useRef(null);
     const knownOrderIds = useRef(new Set());
@@ -30,46 +36,52 @@ const DashboardTenant = () => {
     }, []);
 
     useEffect(() => {
-        // 3. 👈 PERBAIKAN: Cek keberadaan sesiId sebelum fetch
+        // Cek ketersediaan ID Sesi (baik dari URL maupun Active Session)
         if (authLoading || !tenantId || !sesiId) {
-            // Jika tidak ada sesi aktif, matikan loading agar tidak stuck
-            if (!authLoading) setLoading(false); 
+            if (!authLoading && !sesiId) setLoading(false); 
             return;
         }
 
         const fetchAndCheckOrders = async () => {
             try {
-                // 4. 👈 PERBAIKAN: Kirim 2 parameter (tenantId, sesiId)
                 const res = await getOrdersByTenant(tenantId, sesiId);
                 const fetchedOrders = res.data.datas || [];
 
-                const hasNewOrder = fetchedOrders.some(
-                    (order) => !knownOrderIds.current.has(order.id)
-                );
+                // Logic Notifikasi Suara (Hanya di Mode Live)
+                if (!isHistoryMode) {
+                    const hasNewOrder = fetchedOrders.some(
+                        (order) => !knownOrderIds.current.has(order.id)
+                    );
 
-                if (hasNewOrder && knownOrderIds.current.size > 0) {
-                    notificationSound.current.play().catch((e) =>
-                        console.error("Audio play failed:", e)
+                    if (hasNewOrder && knownOrderIds.current.size > 0) {
+                        notificationSound.current.play().catch((e) =>
+                            console.error("Audio play failed:", e)
+                        );
+                    }
+
+                    fetchedOrders.forEach((order) =>
+                        knownOrderIds.current.add(order.id)
                     );
                 }
 
-                fetchedOrders.forEach((order) =>
-                    knownOrderIds.current.add(order.id)
-                );
-
                 setOrders(fetchedOrders);
             } catch (err) {
-                console.error("Polling error:", err);
+                console.error("Fetch error:", err);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchAndCheckOrders();
-        const intervalId = setInterval(fetchAndCheckOrders, 15000);
-        return () => clearInterval(intervalId);
-    // 5. 👈 PERBAIKAN: Tambahkan sesiId ke dependency array
-    }, [tenantId, sesiId, authLoading]);
+        // 4. Logika Polling (Hanya jalan di Mode Live)
+        if (isHistoryMode) {
+            fetchAndCheckOrders(); // Fetch sekali saja
+        } else {
+            fetchAndCheckOrders();
+            const intervalId = setInterval(fetchAndCheckOrders, 15000); // Polling
+            return () => clearInterval(intervalId);
+        }
+
+    }, [tenantId, sesiId, authLoading, isHistoryMode]); // Tambahkan dependencies
 
     useEffect(() => {
         setFilteredOrders(orders);
@@ -85,6 +97,9 @@ const DashboardTenant = () => {
     }, [statusFilter, orders]);
 
     const updateStatus = async (transaksiId, newStatusUi) => {
+        // 5. Cegah Update jika di Mode History
+        if (isHistoryMode) return;
+
         if (!tenantId) {
             message.error("ID Tenant tidak ditemukan. Silakan login ulang.");
             return;
@@ -92,8 +107,6 @@ const DashboardTenant = () => {
 
         try {
             setIsUpdating(true);
-
-            // Service updateOrderStatus sudah benar menggunakan tenantId
             await updateOrderStatus(transaksiId, newStatusUi, tenantId);
 
             const dbStatusMap = {
@@ -155,7 +168,6 @@ const DashboardTenant = () => {
         );
     }
 
-    // Tambahan: Info jika tidak ada sesi aktif (Opsional)
     if (!sesiId) {
         return (
             <div className="p-6 text-center">
@@ -169,7 +181,10 @@ const DashboardTenant = () => {
 
     return (
         <div className="p-6 overflow-y-auto flex-1">
-            <h2 className="text-xl font-semibold mb-1">Welcome</h2>
+            <h2 className="text-xl font-semibold mb-1">
+                {/* Opsional: Ubah judul jika mode history, atau biarkan sama */}
+                {isHistoryMode ? `Riwayat Pesanan Sesi #${id}` : "Welcome"}
+            </h2>
             <p className="text-gray-600 mb-6">
                 DagoEng Creative Hub & Coffee Lab
             </p>
@@ -294,8 +309,9 @@ const DashboardTenant = () => {
                             ))}
                         </ul>
 
+                        {/* 6. Tombol Aksi disembunyikan/disabled jika Mode History */}
                         <div className="mt-6 flex gap-3 justify-center">
-                            {selectedOrder.status === "Baru" && (
+                            {!isHistoryMode && selectedOrder.status === "Baru" && (
                                 <Button
                                     type="primary"
                                     onClick={() =>
@@ -310,7 +326,7 @@ const DashboardTenant = () => {
                                 </Button>
                             )}
 
-                            {selectedOrder.status === "Diproses" && (
+                            {!isHistoryMode && selectedOrder.status === "Diproses" && (
                                 <Button
                                     type="primary"
                                     style={{
@@ -329,9 +345,12 @@ const DashboardTenant = () => {
                                 </Button>
                             )}
 
-                            {selectedOrder.status === "Selesai" && (
-                                <div className="text-green-600 font-bold text-lg p-2 border-2 border-green-600 rounded">
-                                    ✅ SELESAI
+                            {/* Jika History Mode atau Status Selesai, tampilkan badge saja */}
+                            {(isHistoryMode || selectedOrder.status === "Selesai") && (
+                                <div className={`text-lg font-bold p-2 border-2 rounded ${
+                                    selectedOrder.status === "Selesai" ? "text-green-600 border-green-600" : "text-gray-500 border-gray-500"
+                                }`}>
+                                    {selectedOrder.status === "Selesai" ? "✅ SELESAI" : `STATUS: ${selectedOrder.status}`}
                                 </div>
                             )}
                         </div>

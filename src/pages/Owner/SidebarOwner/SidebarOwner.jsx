@@ -13,7 +13,7 @@ import { CiDollar } from "react-icons/ci";
 const SidebarOwner = () => {
     const [selectedMenu, setSelectedMenu] = useState("Laporan");
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    
+
     // --- TAMBAHAN: State untuk modal konfirmasi ---
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
     // --- AKHIR TAMBAHAN ---
@@ -36,9 +36,9 @@ const SidebarOwner = () => {
 
     // useEffect ini tidak diperlukan lagi
     // useEffect(() => {
-    //     if (userProfile.roles !== "owner") {
-    //         navigate("/");
-    //     }
+    //   if (userProfile.roles !== "owner") {
+    //     navigate("/");
+    //   }
     // }, [userProfile]);
 
 
@@ -58,11 +58,11 @@ const SidebarOwner = () => {
             {/* Sidebar */}
             <div
                 className={`
-                     fixed md:static inset-y-0 left-0 z-40 bg-gray-100 border-r border-gray-300
-                     transform transition-all duration-300
-                     ${isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0 md:w-20"}
-                 `}
-            >
+                fixed md:static inset-y-0 left-0 z-40 bg-gray-100 border-r border-gray-300
+                transform transition-all duration-300
+                ${isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0 md:w-20"}
+                `}
+                >
                 {/* Logo Section */}
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                     <img
@@ -126,7 +126,11 @@ const SidebarOwner = () => {
             {/* Overlay (untuk mobile) */}
             {isSidebarOpen && (
                 <div
-                    className="fixed inset-0 z-30 bg-black bg-opacity-25 md:hidden"
+                    // HAPUS class 'bg-black' dan 'bg-opacity-25' dari sini
+                    className="fixed inset-0 z-30 md:hidden"
+
+
+
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
@@ -212,7 +216,7 @@ const SidebarOwner = () => {
                 </div>
             )}
             {/* --- AKHIR TAMBAHAN --- */}
-            
+
         </div>
     );
 };

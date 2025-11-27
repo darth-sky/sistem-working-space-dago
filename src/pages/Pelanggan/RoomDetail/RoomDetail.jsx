@@ -5,7 +5,7 @@ import "react-day-picker/dist/style.css";
 import moment from "moment";
 import { formatRupiah } from "../../../utils/formatRupiah";
 import { Alert, Divider, Button as AntButton, Input, Modal, Typography, Radio, Tag, Spin } from "antd";
-import { ArrowLeft, Users, Calendar, Clock, Info, Banknote, Type, CreditCard, CheckCircle } from "lucide-react";
+import { ArrowLeft, Users, Calendar, Clock, Info, Banknote, Type, CreditCard, CheckCircle, TicketPercent } from "lucide-react";
 
 // Impor semua fungsi service yang dibutuhkan dari satu file
 import { getPromo, getMembershipForCategory, getDataPrivate, getVOClientByUserId } from "../../../services/service";
@@ -56,6 +56,17 @@ const RoomDetail = () => {
     const today = new Date();
     const features = room?.fitur_ruangan ? room.fitur_ruangan.split(/\r?\n|,/).map(f => f.trim()).filter(Boolean) : [];
     const getFeatureIcon = () => <CheckCircle size={18} className="text-green-500" />;
+
+    const getPromoRequirement = (promoItem) => {
+        try {
+            if (!promoItem.syarat) return null;
+            const syarat = typeof promoItem.syarat === 'string' ? JSON.parse(promoItem.syarat) : promoItem.syarat;
+            if (syarat.min_durasi_jam) return `Min. booking ${syarat.min_durasi_jam} jam`;
+            return null;
+        } catch (e) {
+            return null;
+        }
+    };
 
     const countIncludedDays = (start, end, includeSat, includeSun) => {
         if (!start) return 0;
@@ -248,6 +259,7 @@ const RoomDetail = () => {
     }, [selectedRange?.from, room?.id_ruangan]);
 
     // 7. Hitung total harga/biaya
+    // 7. Hitung total harga/biaya
     useEffect(() => {
         if (duration > 0) {
             const days = countedDays > 0 ? countedDays : 1;
@@ -263,9 +275,21 @@ const RoomDetail = () => {
                 const pricePerDay = room.paket_harga.find(p => p.durasi_jam === duration)?.harga_paket || 0;
                 let total = pricePerDay * days;
 
+                // --- PERBAIKAN LOGIKA DISKON (PERSEN VS NOMINAL) ---
                 if (appliedPromo && isPromoConditionsMet) {
-                    total = Math.max(total - (Number(appliedPromo.nilai_diskon) || 0), 0);
+                    const nilaiDiskon = Number(appliedPromo.nilai_diskon) || 0;
+
+                    // Jika nilai <= 100, hitung sebagai PERSEN
+                    if (nilaiDiskon <= 100) {
+                        const potongan = (total * nilaiDiskon) / 100;
+                        total = Math.max(total - potongan, 0);
+                    }
+                    // Jika nilai > 100, hitung sebagai NOMINAL RUPIAH
+                    else {
+                        total = Math.max(total - nilaiDiskon, 0);
+                    }
                 }
+                // --- AKHIR PERBAIKAN ---
 
                 setTotalPrice(total);
                 setCreditCost(0);
@@ -275,7 +299,6 @@ const RoomDetail = () => {
             setCreditCost(0);
         }
     }, [selectedRange, duration, room.paket_harga, appliedPromo, paymentMethod, userMembership, countedDays, isPromoConditionsMet]);
-
 
     // --- HANDLER & GUARDS ---
 
@@ -372,6 +395,50 @@ const RoomDetail = () => {
                         <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
                             <h2 className="text-xl font-bold text-gray-800 mb-4">Jadwalkan Sesi Anda</h2>
                             <div className="space-y-4">
+                                {/* --- BAGIAN BARU: LIST PROMO TERSEDIA --- */}
+                                {promo.length > 0 && (
+                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 mb-4">
+                                        <h3 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                                            <TicketPercent size={18} /> Promo Spesial Untukmu
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {promo.map((p) => {
+                                                const nilai = Number(p.nilai_diskon);
+                                                const isPersen = nilai <= 100;
+                                                const syaratText = getPromoRequirement(p);
+
+                                                return (
+                                                    <div key={p.id_promo} className="bg-white p-3 rounded-lg border border-blue-100 shadow-sm flex justify-between items-start">
+                                                        <div>
+                                                            <div className="font-bold text-gray-800 text-sm">{p.kode_promo}</div>
+                                                            <div className="text-xs text-gray-500 mt-1">{p.deskripsi_promo}</div>
+
+                                                            {/* Tampilkan Jam Berlaku jika ada */}
+                                                            {p.waktu_mulai && p.waktu_selesai && (
+                                                                <div className="text-xs text-orange-600 mt-1 font-medium flex items-center gap-1">
+                                                                    <Clock size={10} /> Berlaku jam: {p.waktu_mulai.slice(0, 5)} - {p.waktu_selesai.slice(0, 5)}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Tampilkan Syarat jika ada */}
+                                                            {syaratText && (
+                                                                <div className="text-xs text-gray-500 mt-0.5 italic">
+                                                                    * {syaratText}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="block font-bold text-green-600 text-sm">
+                                                                Diskon {isPersen ? `${nilai}%` : formatRupiah(nilai)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {/* --- AKHIR BAGIAN BARU --- */}
 
                                 {/* Metode Pembayaran Dinamis */}
                                 {isLoadingUser || isLoadingMembership || isLoadingVO ? (
@@ -505,7 +572,17 @@ const RoomDetail = () => {
                                         <>
                                             <div className={`flex justify-between items-center ${isPromoConditionsMet ? 'text-green-700' : 'text-gray-500'}`}>
                                                 <span><Tag color={isPromoConditionsMet ? "green" : "default"}>Promo ({appliedPromo.kode_promo})</Tag></span>
-                                                <strong>-{formatRupiah(Number(appliedPromo.nilai_diskon))}</strong>
+
+                                                {/* --- PERBAIKAN TAMPILAN --- */}
+                                                <strong>
+                                                    -
+                                                    {Number(appliedPromo.nilai_diskon) <= 100
+                                                        ? `${Number(appliedPromo.nilai_diskon)}%`
+                                                        : formatRupiah(Number(appliedPromo.nilai_diskon))
+                                                    }
+                                                </strong>
+                                                {/* -------------------------- */}
+
                                             </div>
                                             {!isPromoConditionsMet && duration > 0 && appliedPromo.syarat && (
                                                 <div className="text-right text-xs text-orange-600 mt-1">

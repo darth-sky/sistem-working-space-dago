@@ -1,51 +1,72 @@
 import React, { useState } from "react";
-// --- TAMBAHAN: Impor Ikon Peringatan ---
 import { Menu, X, TriangleAlert } from "lucide-react";
-// --- AKHIR TAMBAHAN ---
-import { Link, useNavigate, Outlet } from "react-router-dom";
+import { Link, useNavigate, Outlet, useParams, useLocation } from "react-router-dom"; // Import useLocation & useParams
 import { useAuth } from "../../../providers/AuthProvider";
 import { BsCart3 } from "react-icons/bs";
 import { IoSettingsOutline } from "react-icons/io5";
 import { SlLogout } from "react-icons/sl";
 import { MdOutlineInventory } from "react-icons/md";
 
-
 const SidebarTenant = () => {
     const [selectedMenu, setSelectedMenu] = useState("Order Tenant");
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const navigate = useNavigate();
-
-    // --- TAMBAHAN: State untuk modal konfirmasi ---
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-    // --- AKHIR TAMBAHAN ---
+    const { userProfile, logout, activeSession } = useAuth(); // Ambil activeSession
 
-    const { userProfile, logout } = useAuth();
+    // --- LOGIKA BARU UNTUK MENENTUKAN BASE PATH ---
+    const { id } = useParams(); // Ambil ID dari URL (jika dalam mode riwayat)
+    const location = useLocation();
 
-    // --- PERBAIKAN: handleLogout sekarang membuka modal ---
+    // Tentukan apakah kita sedang dalam mode riwayat (ada ID di URL)
+    // atau mode live (menggunakan activeSession global)
+    const currentSessionId = id || activeSession?.id_sesi;
+    const isHistoryMode = !!id; // True jika ada ID di URL
+
     const handleLogout = () => {
         setIsLogoutModalOpen(true);
     };
-    // --- AKHIR PERBAIKAN ---
 
-    // --- TAMBAHAN: Fungsi untuk menjalankan logout ---
     const executeLogout = () => {
         logout();
-        // setIsLogoutModalOpen(false); // Tidak perlu, komponen akan unmount
     };
-    // --- AKHIR TAMBAHAN ---
 
-    // useEffect untuk cek role tidak diperlukan lagi
-
+    // Menu Items Dinamis
     const menuItems = [
-        { name: "Order Tenant", icon: <BsCart3 />, path: "/ordertenant" },
-        { name: "Kelola Stok", icon: <MdOutlineInventory />, path: "/stoktenant" },
-        // { name: "Settings", icon: <IoSettingsOutline />, path: "/settingstenant" },
+        { 
+            name: "Order Tenant", 
+            icon: <BsCart3 />, 
+            // Jika mode riwayat, arahkan ke /ordertenant/:id, jika live ke /ordertenant
+            path: isHistoryMode ? `/ordertenant/${currentSessionId}` : "/ordertenant" 
+        },
+        { 
+            name: "Kelola Stok", 
+            icon: <MdOutlineInventory />, 
+            // Kelola stok biasanya fitur global, tidak terikat sesi. 
+            // Tapi jika ingin konsisten agar tidak ditendang, bisa diarahkan
+            // namun pastikan halaman stok tidak error jika tidak ada sesi.
+            // Disini kita asumsikan stok itu global jadi path-nya tetap.
+            path: "/stoktenant" 
+        },
+        { 
+            name: "Settings", 
+            icon: <IoSettingsOutline />, 
+            path: "/settingstenant" 
+        },
         {
             name: "Logout",
             icon: <SlLogout />,
-            action: handleLogout // Ini sekarang memanggil fungsi yang membuka modal
+            action: handleLogout
         }
     ];
+
+    // Helper untuk mengecek menu aktif
+    const isMenuActive = (path) => {
+        // Cek apakah path saat ini mengandung path menu (untuk handle nested routes atau params)
+        // Contoh: /ordertenant/123 cocok dengan /ordertenant
+        if (path === '/ordertenant' && location.pathname.includes('/ordertenant')) return true;
+        return location.pathname === path;
+    };
 
     return (
         <div className="flex h-screen bg-gradient-to-br from-blue-50 via-gray-100 to-blue-100 overflow-hidden">
@@ -53,10 +74,10 @@ const SidebarTenant = () => {
             {/* Sidebar */}
             <div
                 className={`
-                     fixed md:static inset-y-0 left-0 z-40 bg-gray-100 border-r border-gray-300
-                     transform transition-all duration-300
-                     ${isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0 md:w-20"}
-                 `}
+                    fixed md:static inset-y-0 left-0 z-40 bg-gray-100 border-r border-gray-300
+                    transform transition-all duration-300
+                    ${isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0 md:w-20"}
+                `}
             >
                 {/* Logo Section */}
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center">
@@ -75,7 +96,6 @@ const SidebarTenant = () => {
                     )}
                 </div>
 
-
                 {/* Menu Section */}
                 <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
                     {menuItems.map((item, index) =>
@@ -83,12 +103,9 @@ const SidebarTenant = () => {
                             <button
                                 key={index}
                                 onClick={item.action}
-                                className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
-                                    ? "bg-blue-600 text-white"
-                                    : "text-gray-800 hover:bg-blue-100"
-                                    }`}
+                                className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 text-gray-800 hover:bg-blue-100`}
                             >
-                                <span className={`text-xl ${selectedMenu === item.name ? "text-white" : "text-gray-700"}`}>
+                                <span className="text-xl text-gray-700">
                                     {item.icon}
                                 </span>
                                 <span className={`font-medium ${!isSidebarOpen && 'md:hidden'}`}>{item.name}</span>
@@ -101,12 +118,13 @@ const SidebarTenant = () => {
                                     setSelectedMenu(item.name);
                                     if (window.innerWidth < 768) { setIsSidebarOpen(false); }
                                 }}
-                                className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
+                                className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${
+                                    isMenuActive(item.path)
                                     ? "bg-blue-600 text-white"
                                     : "text-gray-800 hover:bg-blue-100"
                                     }`}
                             >
-                                <span className={`text-xl ${selectedMenu === item.name ? "text-white" : "text-gray-700"}`}>
+                                <span className={`text-xl ${isMenuActive(item.path) ? "text-white" : "text-gray-700"}`}>
                                     {item.icon}
                                 </span>
                                 <span className={`font-medium ${!isSidebarOpen && 'md:hidden'}`}>{item.name}</span>
@@ -119,11 +137,11 @@ const SidebarTenant = () => {
             {/* Overlay (untuk mobile) */}
             {isSidebarOpen && (
                 <div
-                    className="fixed inset-0 z-30 bg-black bg-opacity-25 md:hidden"
+                    // HAPUS class 'bg-black' dan 'bg-opacity-25' dari sini
+                    className="fixed inset-0 z-30 md:hidden"
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
-
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col bg-white overflow-hidden">
@@ -138,7 +156,9 @@ const SidebarTenant = () => {
                             <Menu className="h-6 w-6 text-gray-700" />
                         </button>
                         <div>
-                            <h1 className="text-lg lg:text-xl font-bold text-gray-800">Tenant Dashboard</h1>
+                            <h1 className="text-lg lg:text-xl font-bold text-gray-800">
+                                {isHistoryMode ? `History: Sesi #${currentSessionId}` : "Tenant Dashboard"}
+                            </h1>
                             <p className="text-sm text-gray-600">
                                 {userProfile?.detail?.nama_tenant || "Nama Tenant Anda"}
                             </p>
@@ -163,7 +183,7 @@ const SidebarTenant = () => {
 
             </div>
 
-            {/* --- TAMBAHAN: Modal Konfirmasi Logout --- */}
+            {/* Modal Konfirmasi Logout */}
             {isLogoutModalOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300 backdrop-blur-sm"
@@ -191,14 +211,14 @@ const SidebarTenant = () => {
                             <button
                                 type="button"
                                 className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
-                                onClick={executeLogout} // Memanggil fungsi logout
+                                onClick={executeLogout}
                             >
                                 Logout
                             </button>
                             <button
                                 type="button"
                                 className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 sm:mt-0 sm:w-auto sm:text-sm"
-                                onClick={() => setIsLogoutModalOpen(false)} // Menutup modal
+                                onClick={() => setIsLogoutModalOpen(false)}
                             >
                                 Batal
                             </button>
@@ -206,7 +226,6 @@ const SidebarTenant = () => {
                     </div>
                 </div>
             )}
-            {/* --- AKHIR TAMBAHAN --- */}
 
         </div>
     );

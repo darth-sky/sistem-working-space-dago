@@ -161,6 +161,7 @@ const WorkingSpace = () => {
     () =>
       dashboardData?.stats || {
         totalRevenue: 0,
+        totalDiscount: 0,
         totalBookings: 0,
         totalVisitors: 0,
       },
@@ -365,11 +366,41 @@ const WorkingSpace = () => {
             dataMap["Space Monitor"] || 0,
             totalMeetingRoom,
           ],
-          backgroundColor: ["#2563eb", "#10B981", "#F59E0B"],
+          backgroundColor: ["#2563eb", "#10B981", "#F59E0B", "#EF4444"],
           hoverOffset: 8,
         },
       ],
     };
+  }, [dashboardData]);
+
+  const productDoughnutData = useMemo(() => {
+    const pc = dashboardData?.productContribution || [];
+
+    if (!pc.length)
+      return {
+        labels: [],
+        datasets: [{ data: [] }],
+      };
+
+    return {
+      labels: pc.map((p) => p.name),
+      datasets: [
+        {
+          data: pc.map((p) => p.value),
+          backgroundColor: ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444"],
+          hoverOffset: 8,
+        },
+      ],
+    };
+  }, [dashboardData]);
+
+  const productContribution = useMemo(() => {
+    const list = dashboardData?.productContribution || [];
+    const map = list.reduce((acc, item) => {
+      acc[item.name] = Number(item.value || 0);
+      return acc;
+    }, {});
+    return map;
   }, [dashboardData]);
 
   const totalOpenSpace = doughnutData.datasets?.[0]?.data?.[0] || 0;
@@ -563,16 +594,15 @@ const WorkingSpace = () => {
       },
       datalabels: {
         formatter: (value, ctx) => {
+          if (value === 0) return ""; // ⛔ jangan tampilkan label 0%
           const total = ctx.chart.data.datasets[0].data.reduce(
             (a, b) => a + b,
             0
           );
-          return total === 0
-            ? "0.0%"
-            : ((value / total) * 100).toFixed(1) + "%";
+          return ((value / total) * 100).toFixed(1) + "%";
         },
         color: "#fff",
-        font: { weight: "bold", size: 16 },
+        font: { weight: "bold", size: 14 },
       },
     },
   };
@@ -657,16 +687,13 @@ const WorkingSpace = () => {
   // ===== Capture to Image =====
   const handleCaptureImage = async () => {
     try {
-      const node = reportRef.current;
+      const node = document.getElementById("capture-area-ws");
       if (!node) {
-        message.error("Area laporan tidak ditemukan.");
-        return;
+        return message.error("Area cetak tidak ditemukan.");
       }
 
-      // 🔥 beri waktu semua chart/canvas render dulu
       await new Promise((r) => setTimeout(r, 600));
 
-      // 🔥 langsung capture tanpa clone (lebih stabil & ringan)
       const canvas = await html2canvas(node, {
         backgroundColor: "#ffffff",
         scale: 2,
@@ -676,16 +703,11 @@ const WorkingSpace = () => {
 
       const dataUrl = canvas.toDataURL("image/png");
 
-      // tampilkan preview
-      setPreviewSrc(dataUrl);
-      setPreviewOpen(true);
-
-      // auto download PNG
       const link = document.createElement("a");
       link.href = dataUrl;
-      link.download = `laporan-${dateRange[0].format(
-        "YYYYMMDD"
-      )}-${dateRange[1].format("YYYYMMDD")}.png`;
+      link.download = `WorkingSpace_Report_${dayjs().format(
+        "YYYYMMDD_HHmm"
+      )}.png`;
       link.click();
     } catch (e) {
       console.error(e);
@@ -1052,6 +1074,7 @@ const WorkingSpace = () => {
 
           {/* Statistic Cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            {/* 1. TOTAL REVENUE */}
             <Col xs={24} sm={12} md={6}>
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
@@ -1068,11 +1091,32 @@ const WorkingSpace = () => {
                 </Card>
               </motion.div>
             </Col>
+
+            {/* 2. TOTAL DISCOUNT */}
             <Col xs={24} sm={12} md={6}>
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 }}
+              >
+                <Card>
+                  <Spin spinning={loading}>
+                    <Statistic
+                      title="Total Diskon"
+                      value={`Rp ${formatRupiah(stats.totalDiscount)}`}
+                      prefix={<ArrowUpOutlined />}
+                    />
+                  </Spin>
+                </Card>
+              </motion.div>
+            </Col>
+
+            {/* 3. TOTAL VISITORS */}
+            <Col xs={24} sm={12} md={6}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
               >
                 <Card>
                   <Spin spinning={loading}>
@@ -1085,6 +1129,8 @@ const WorkingSpace = () => {
                 </Card>
               </motion.div>
             </Col>
+
+            {/* 4. TOTAL BOOKINGS */}
             <Col xs={24} sm={12} md={6}>
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
@@ -1102,29 +1148,13 @@ const WorkingSpace = () => {
                 </Card>
               </motion.div>
             </Col>
-            <Col xs={24} sm={12} md={6}>
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-              >
-                <Card>
-                  <Spin spinning={loading}>
-                    <Statistic
-                      title="Rata-rata Harian"
-                      value={`Rp ${formatRupiah(avgDaily)}`}
-                      prefix={<ArrowUpOutlined />}
-                    />
-                  </Spin>
-                </Card>
-              </motion.div>
-            </Col>
           </Row>
 
           {/* Charts */}
-          <Row gutter={[16, 16]}>
+          <Row gutter={[16, 8]}>
             <Col xs={24} lg={16}>
-              <Card style={{ marginBottom: 16 }}>
+              {/* DAILY BOOKING */}
+              <Card style={{ marginBottom: 8 }}>
                 <Spin spinning={loading}>
                   <Title level={5}>Daily Booking (per Space Category)</Title>
                   <div style={{ height: 300 }}>
@@ -1133,7 +1163,8 @@ const WorkingSpace = () => {
                 </Spin>
               </Card>
 
-              <Card style={{ marginBottom: 16 }}>
+              {/* TRAFIK BOOKING PER DURASI */}
+              <Card style={{ marginBottom: 8 }}>
                 <Spin spinning={loading}>
                   <Title level={5}>Trafik Booking per Durasi</Title>
                   <Text type="secondary">
@@ -1148,10 +1179,25 @@ const WorkingSpace = () => {
                   </div>
                 </Spin>
               </Card>
+
+              {/* PEAK HOURS */}
+              <Card style={{ marginBottom: 8 }}>
+                <Spin spinning={loading}>
+                  <Title level={5}>Peak Hours</Title>
+                  <Text type="secondary">
+                    Menampilkan jam berdasarkan mulai booking. Bar merah
+                    merupakan top 3 jumlah booking tertinggi.
+                  </Text>
+                  <div style={{ height: 300, marginTop: 10 }}>
+                    <Bar data={peakHoursData} options={peakHoursOptions} />
+                  </div>
+                </Spin>
+              </Card>
             </Col>
 
             <Col xs={24} lg={8}>
-              <Card>
+              {/* KONTRIBUSI SPACE */}
+              <Card style={{ marginBottom: 16 }}>
                 <Spin spinning={loading}>
                   <Title level={5}>Kontribusi Space</Title>
                   <div style={{ height: 220 }}>
@@ -1174,6 +1220,7 @@ const WorkingSpace = () => {
                       </Text>
                       <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
                     </div>
+
                     <div
                       style={{
                         display: "flex",
@@ -1185,6 +1232,7 @@ const WorkingSpace = () => {
                       </Text>
                       <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
                     </div>
+
                     <div
                       style={{
                         display: "flex",
@@ -1200,6 +1248,100 @@ const WorkingSpace = () => {
                 </Spin>
               </Card>
 
+              {/* KONTRIBUSI PRODUCT */}
+              <Card style={{ marginBottom: 16 }}>
+                <Divider orientation="left" plain>
+                  Kontribusi Product
+                </Divider>
+
+                <div style={{ height: 220, marginBottom: 16 }}>
+                  {loading ? (
+                    <Spin />
+                  ) : (
+                    <Doughnut
+                      data={productDoughnutData}
+                      options={doughnutOptions}
+                    />
+                  )}
+                </div>
+
+                <Divider />
+
+                <Space
+                  direction="vertical"
+                  size="small"
+                  style={{ width: "100%" }}
+                >
+                  {[
+                    "Membership",
+                    "Virtual Office",
+                    "Private Office",
+                    "Event Space",
+                  ].map((label) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text>{label}</Text>
+                      <Text strong>
+                        Rp {formatRupiah(productContribution[label] || 0)}
+                      </Text>
+                    </div>
+                  ))}
+                </Space>
+              </Card>
+
+              {/* POPULAR SPACE */}
+              <Card title="Popular Space" loading={loading}>
+                <Table
+                  columns={[
+                    {
+                      title: "Kategori (Durasi)",
+                      dataIndex: "item",
+                      width: 170,
+                    },
+                    {
+                      title: "Jumlah Terjual",
+                      dataIndex: "qty",
+                      align: "right",
+                      width: 70,
+                    },
+                    {
+                      title: "Total Penjualan (Rp)",
+                      dataIndex: "total",
+                      align: "right",
+                      width: 140,
+                      render: (t) => `Rp ${formatRupiah(t)}`,
+                    },
+                  ]}
+                  dataSource={topWs}
+                  pagination={false}
+                  size="small"
+                  rowKey={(r) => `${r.item}-${r.qty}-${r.total}`}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+            <Col xs={24} lg={16}>
+              <Card>
+                <Title level={5} style={{ marginBottom: 8 }}>
+                  Booking Pattern by Day
+                </Title>
+                <Text type="secondary">
+                  Distribusi booking per hari (Senin - Minggu)
+                </Text>
+                <div style={{ height: 220 }}>
+                  <Radar data={radarData} options={radarOptions} />
+                </div>
+              </Card>
+            </Col>
+
+            <Col Col xs={24} lg={8}>
               <Card>
                 <Title level={5}>Quick Actions</Title>
                 <Space direction="vertical" style={{ width: "100%" }}>
@@ -1235,87 +1377,182 @@ const WorkingSpace = () => {
               </Card>
             </Col>
           </Row>
+        </div>
 
-          <Row gutter={[16, 16]}>
-            <Col xs={24} lg={16}>
+        {/* ===========================
+    AREA CAPTURE — ONLY KPI + KONTRIBUSI + POPULAR
+  =========================== */}
+        <div
+          id="capture-area-ws"
+          style={{
+            position: "absolute",
+            left: "-99999px",
+            top: 0,
+            width: "1200px",
+            padding: "20px",
+            background: "#ffffff",
+          }}
+        >
+          {/* ===== KPI SECTION ===== */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col span={6}>
               <Card>
-                <Spin spinning={loading}>
-                  <Title level={5}>Peak Hours</Title>
-                  <Text type="secondary">
-                    Menampilkan jam berdasarkan mulai booking. Bar merah
-                    merupakan top 3 jumlah booking tertinggi.
-                  </Text>
-                  <div style={{ height: 300, marginTop: 10 }}>
-                    <Bar data={peakHoursData} options={peakHoursOptions} />
-                  </div>
-                </Spin>
-              </Card>
-            </Col>
-
-            <Col xs={24} lg={8}>
-              <Card title="Popular Space" loading={loading}>
-                <Table
-                  columns={[
-                    {
-                      title: "Kategori (Durasi)",
-                      dataIndex: "item",
-                      key: "item",
-                      width: 170,
-                    },
-                    {
-                      title: "Jumlah Terjual",
-                      dataIndex: "qty",
-                      key: "qty",
-                      align: "right",
-                      width: 70,
-                    },
-                    {
-                      title: "Total Penjualan (Rp)",
-                      dataIndex: "total",
-                      key: "total",
-                      align: "right",
-                      width: 140,
-                      render: (t) => `Rp ${formatRupiah(t)}`,
-                    },
-                  ]}
-                  dataSource={topWs}
-                  rowKey={(r) =>
-                    `${r.item}-${String(r.qty)}-${String(r.total)}`
-                  }
-                  pagination={false}
-                  size="small"
-                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                <Statistic
+                  title="Total Pendapatan"
+                  value={`Rp ${formatRupiah(stats.totalRevenue)}`}
                 />
               </Card>
             </Col>
-          </Row>
 
-          <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-            <Col xs={24} lg={16}>
+            <Col span={6}>
               <Card>
-                <Title level={5} style={{ marginBottom: 8 }}>
-                  Booking Pattern by Day
-                </Title>
-                <Text type="secondary">
-                  Distribusi booking per hari (Senin - Minggu)
-                </Text>
-                <div style={{ height: 220 }}>
-                  <Radar data={radarData} options={radarOptions} />
-                </div>
+                <Statistic
+                  title="Total Diskon"
+                  value={`Rp ${formatRupiah(stats.totalDiscount)}`}
+                />
+              </Card>
+            </Col>
+
+            <Col span={6}>
+              <Card>
+                <Statistic
+                  title="Total Pengunjung"
+                  value={formatRupiah(stats.totalVisitors)}
+                />
+              </Card>
+            </Col>
+
+            <Col span={6}>
+              <Card>
+                <Statistic title="Jumlah Booking" value={stats.totalBookings} />
               </Card>
             </Col>
           </Row>
+
+          {/* ===== KONTRIBUSI SPACE ===== */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col span={12}>
+              <Card>
+                <Title level={5}>Kontribusi Space</Title>
+
+                <div style={{ height: 260 }}>
+                  <Doughnut data={doughnutData} options={doughnutOptions} />
+                </div>
+
+                {/* ==== Pendapatan per kategori ===== */}
+                <Divider />
+
+                <Space
+                  direction="vertical"
+                  size="small"
+                  style={{ width: "100%" }}
+                >
+                  {/* Open Space */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text>
+                      <Tag color="#2563eb" /> Open Space
+                    </Text>
+                    <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
+                  </div>
+
+                  {/* Space Monitor */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text>
+                      <Tag color="#10B981" /> Space Monitor
+                    </Text>
+                    <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
+                  </div>
+
+                  {/* Meeting Room */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text>
+                      <Tag color="#F59E0B" /> Meeting Room
+                    </Text>
+                    <Text strong>Rp {formatRupiah(totalMeetingRoom)}</Text>
+                  </div>
+                </Space>
+              </Card>
+            </Col>
+
+            {/* ===== KONTRIBUSI PRODUCT ===== */}
+            <Col span={12}>
+              <Card>
+                <Title level={5}>Kontribusi Product</Title>
+
+                <div style={{ height: 260 }}>
+                  <Doughnut
+                    data={productDoughnutData}
+                    options={doughnutOptions}
+                  />
+                </div>
+
+                <Divider />
+
+                <Space
+                  direction="vertical"
+                  size="small"
+                  style={{ width: "100%" }}
+                >
+                  {[
+                    "Membership",
+                    "Virtual Office",
+                    "Private Office",
+                    "Event Space",
+                  ].map((label) => (
+                    <div
+                      key={label}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Text>{label}</Text>
+                      <Text strong>
+                        Rp {formatRupiah(productContribution[label] || 0)}
+                      </Text>
+                    </div>
+                  ))}
+                </Space>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* ===== POPULAR SPACE TABLE ===== */}
+          <Card title="Popular Space">
+            <Table
+              columns={[
+                { title: "Kategori (Durasi)", dataIndex: "item" },
+                { title: "Qty", dataIndex: "qty", align: "right" },
+                {
+                  title: "Total Penjualan (Rp)",
+                  dataIndex: "total",
+                  align: "right",
+                  render: (t) => `Rp ${formatRupiah(t)}`,
+                },
+              ]}
+              dataSource={topWs}
+              pagination={false}
+              size="small"
+              rowKey={(r) => `${r.item}-${r.qty}-${r.total}`}
+            />
+          </Card>
         </div>
       </ConfigProvider>
-
-      <Modal
-        open={previewOpen}
-        onCancel={() => setPreviewOpen(false)}
-        footer={null}
-        width={900}
-      >
-        <Image src={previewSrc} alt="Preview" style={{ width: "100%" }} />
-      </Modal>
     </>
   );
 };

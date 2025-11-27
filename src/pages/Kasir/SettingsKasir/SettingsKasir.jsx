@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react'; 
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../providers/AuthProvider.jsx';
 import { useNavigate } from 'react-router-dom';
 import { message } from 'antd';
-// Tambahkan DatabaseOutlined dan DownloadOutlined
-import { 
-  PrinterOutlined, 
-  ApiOutlined, 
-  DisconnectOutlined, 
-  DatabaseOutlined, 
-  DownloadOutlined 
-} from '@ant-design/icons'; 
+import {
+  PrinterOutlined,
+  ApiOutlined,
+  DisconnectOutlined,
+  DatabaseOutlined,
+  DownloadOutlined
+} from '@ant-design/icons';
 
-// Import service baru (Pastikan sudah dibuat di service.js)
-import { apiExportDatabase } from '../../../services/service.js';
+// --- PERUBAHAN 1: Import apiGenerateTestVoucher ---
+import { apiExportDatabase, apiGenerateTestVoucher } from '../../../services/service.js';
 
 const SettingsKasir = () => {
   const { logout, closeSession, userProfile } = useAuth();
@@ -24,7 +23,7 @@ const SettingsKasir = () => {
   const [saldoAkhir, setSaldoAkhir] = useState('');
   const [error, setError] = useState('');
   const [isTesting, setIsTesting] = useState(false);
-  
+
   // State Baru untuk Export
   const [isExporting, setIsExporting] = useState(false);
 
@@ -43,7 +42,7 @@ const SettingsKasir = () => {
         message.info("Koneksi printer terputus.");
       }
     };
-    
+
     if (window.flutter_inappwebview) {
       window.flutter_inappwebview.callHandler('flutterGetConnectedPrinter');
     }
@@ -53,14 +52,14 @@ const SettingsKasir = () => {
     };
   }, []);
 
-  const handleCloseSessionClick = () => { 
+  const handleCloseSessionClick = () => {
     setError('');
     setNamaKonfirmasi('');
     setSaldoAkhir('');
     setShowModal(true);
   };
 
-  const handleConfirmCloseSession = async () => { 
+  const handleConfirmCloseSession = async () => {
     if (!namaKonfirmasi || namaKonfirmasi.trim() === '') {
       setError('Nama kasir wajib diisi untuk konfirmasi.');
       return;
@@ -101,36 +100,75 @@ const SettingsKasir = () => {
     }
   };
 
-  const handleTestPrint = () => {
+  // --- PERUBAHAN 2: Update Logic Test Print dengan Voucher ---
+  const handleTestPrint = async () => {
     setIsTesting(true);
-    const dataTes = {
-      items: [{ name: "TEST ITEM 1", qty: 1, price: 1000 }],
-      total: 1000,
-      kasir: namaKasirLogin || "Tes Kasir"
-    };
-    if (window.flutter_inappwebview) {
-      message.info("Mengirim perintah cetak ke Flutter...");
-      window.flutter_inappwebview.callHandler('flutterPrintHandler', dataTes);
-    } else {
-      message.error("Gagal: 'window.flutter_inappwebview' tidak ditemukan.");
+    message.loading({ content: 'Menghubungkan ke Mikrotik...', key: 'print_test' });
+
+    try {
+      // 1. Generate Voucher Real-time dari Mikrotik
+      const voucher = await apiGenerateTestVoucher();
+
+      // 2. Susun data struk (menyesuaikan format printer_service.dart)
+      const dataTes = {
+        id: "TEST-001",
+        time: new Date().toISOString(),
+        cashier: namaKasirLogin || "Tes Kasir",
+        customer: "Test Printer",
+        location: "Settings Menu",
+
+        // Masukkan Voucher sebagai Item
+        items: [
+          {
+            name: "TEST PRINTER OK",
+            qty: 1,
+            price: 0,
+            note: "Koneksi printer berhasil."
+          }
+        ],
+        bookings: [], // Kosongkan array booking
+        vouchers: [
+          {
+            profile: "SHOP-2H", // Sesuai format yang diinginkan
+            code: voucher.user  // Single code
+          }
+        ],
+
+        // Data Keuangan Dummy
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        total: 0,
+        paymentMethod: "CASH",
+        tunai: 0,
+        kembali: 0
+      };
+
+      // 3. Kirim ke Flutter
+      if (window.flutter_inappwebview) {
+        console.log("Mengirim data tes ke printer:", dataTes);
+        window.flutter_inappwebview.callHandler('flutterPrintHandler', dataTes);
+        message.success({ content: 'Perintah cetak dikirim!', key: 'print_test' });
+      } else {
+        message.error({ content: "Gagal: Mode Browser (bukan App)", key: 'print_test' });
+      }
+
+    } catch (error) {
+      console.error("Test Print Error:", error);
+      message.error({ content: `Gagal generate voucher: ${error.message}`, key: 'print_test' });
+    } finally {
+      setIsTesting(false);
     }
-    setTimeout(() => { setIsTesting(false); }, 1000);
   };
+  // --- AKHIR PERUBAHAN ---
 
-  // --- FUNGSI BARU: Handle Export DB ---
   const handleExportDB = async () => {
-    // Opsional: Cek Role jika hanya owner yang boleh
-    // if (!userProfile?.roles?.includes('owner')) {
-    //    message.error("Hanya Owner yang bisa backup database");
-    //    return;
-    // }
-
     try {
       setIsExporting(true);
       message.loading({ content: 'Sedang memproses backup database...', key: 'backup_msg' });
-      
+
       await apiExportDatabase();
-      
+
       message.success({ content: 'Database berhasil di-backup!', key: 'backup_msg' });
     } catch (error) {
       console.error("Export failed:", error);
@@ -143,7 +181,7 @@ const SettingsKasir = () => {
   return (
     <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-8">
-        
+
         {/* --- Section Session --- */}
         <div>
           <h2 className="text-sm font-bold text-gray-600 uppercase mb-2 px-2">Session</h2>
@@ -164,7 +202,7 @@ const SettingsKasir = () => {
         <div>
           <h2 className="text-sm font-bold text-gray-600 uppercase mb-2 px-2">Hardware / Printer</h2>
           <div className="bg-white border border-gray-200 rounded-lg shadow p-6 space-y-4">
-            
+
             <div className="flex flex-wrap gap-2 justify-between items-center">
               <div className='flex-1 min-w-[200px]'>
                 <h3 className="text-lg font-semibold text-gray-700">Printer Terhubung</h3>
@@ -178,7 +216,7 @@ const SettingsKasir = () => {
                   </p>
                 )}
               </div>
-              
+
               <div className="flex gap-2">
                 <button
                   onClick={handleShowPrinterList}
@@ -187,7 +225,7 @@ const SettingsKasir = () => {
                   <ApiOutlined className="mr-1" />
                   {printerName ? 'Ganti' : 'Pilih'} Printer
                 </button>
-                
+
                 {printerName && (
                   <button
                     onClick={handleDisconnectPrinter}
@@ -199,13 +237,13 @@ const SettingsKasir = () => {
                 )}
               </div>
             </div>
-            
+
             <hr />
 
             <div className="flex justify-between items-center">
               <div className='flex-1'>
-                <h3 className="text-lg font-semibold text-gray-700">Test Cetak</h3>
-                <p className="text-sm text-gray-500">Gunakan tombol ini untuk mencetak struk tes.</p>
+                <h3 className="text-lg font-semibold text-gray-700">Test Cetak & Voucher</h3>
+                <p className="text-sm text-gray-500">Cetak struk tes beserta kode voucher Mikrotik 2 Jam.</p>
               </div>
               <button
                 onClick={handleTestPrint}
@@ -213,13 +251,13 @@ const SettingsKasir = () => {
                 className="px-5 py-2 text-sm font-semibold text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 <PrinterOutlined className="mr-1" />
-                {isTesting ? 'Mencetak...' : 'Test Print'}
+                {isTesting ? 'Memproses...' : 'Test Print'}
               </button>
             </div>
           </div>
         </div>
 
-        {/* --- SECTION BARU: Data Management (Export DB) --- */}
+        {/* --- Section Data Management --- */}
         <div>
           <h2 className="text-sm font-bold text-gray-600 uppercase mb-2 px-2">Data Management</h2>
           <div className="bg-white border border-gray-200 rounded-lg shadow p-6">
@@ -253,10 +291,9 @@ const SettingsKasir = () => {
             </div>
           </div>
         </div>
-        {/* --- Akhir Section Baru --- */}
 
       </div>
-      
+
       {/* --- MODAL (Tidak Berubah) --- */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">

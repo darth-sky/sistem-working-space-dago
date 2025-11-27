@@ -1142,10 +1142,7 @@ const PrivateOffice = () => {
                                     </li>
                                 ))}
                             </ul>
-                            <p className="text-xs text-gray-500 mt-2">
-                                Catatan: estimasi harga hanya tampilan. Harga final dihitung
-                                oleh backend saat konfirmasi pembayaran.
-                            </p>
+
                         </div>
 
                         {/* Footer Buttons */}

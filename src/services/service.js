@@ -7,6 +7,52 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 
 // --- FAQ ADMIN ENDPOINTS ---
 
+// ... service lainnya
+
+export const apiGenerateTestVoucher = async () => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/test-voucher`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) throw new Error("Gagal generate voucher test");
+    
+    const result = await response.json();
+    return result.voucher; // Mengembalikan { user, pass, duration }
+  } catch (error) {
+    console.error("Error generating test voucher:", error);
+    throw error;
+  }
+};
+
+
+export const getTransaksiBySessionId = async (idSesi) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/kasir/transaksi/session/${idSesi}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Gagal mengambil data riwayat sesi");
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Error fetching transaction history by session:", error);
+    throw error;
+  }
+};
+
+
 export const getAdminFAQ = async () => {
   try {
     const token = await jwtStorage.retrieveToken();
@@ -2186,6 +2232,7 @@ export const getOrdersByTenant = async (tenantId, sesiId) => {
     throw error;
   }
 };
+
 
 
 export const updateOrderStatus = async (transaksiId, newStatus, tenantId) => {

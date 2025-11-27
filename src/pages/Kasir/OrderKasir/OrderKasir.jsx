@@ -7,7 +7,7 @@ import {
     Select,
     Tag,
     Modal,
-    Form, // <-- 'Form' masih di-import untuk modal LAIN (seperti addNoteForm)
+    Form,
     InputNumber,
     Radio,
     message,
@@ -34,16 +34,15 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../../providers/AuthProvider"; //
+import { useAuth } from "../../../providers/AuthProvider";
 import {
     getPosInitData,
-    createOrderKasir, // Akan menangani F&B dan Ruangan
+    createOrderKasir,
     getRoomsToday,
-    // createRoomBookingKasir, // Service ini tidak lagi dipakai di sini
-    saveOrderKasir, // Akan menangani F&B dan Ruangan
+    saveOrderKasir,
     getSavedOrderDetails,
-    paySavedOrder // Akan menangani F&B dan Ruangan
-} from "../../../services/service"; //
+    paySavedOrder
+} from "../../../services/service";
 import { MdOutlineShoppingCart } from "react-icons/md";
 import { FaRegIdCard } from "react-icons/fa";
 
@@ -60,62 +59,81 @@ const generateOrderNumber = () => {
     return `T${Math.floor(100000 + Math.random() * 900000)}`;
 };
 
-
 const OrderKasir = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const initialState = location.state || {};
 
-    const { activeSession, userProfile } = useAuth(); //
+    const { activeSession, userProfile } = useAuth();
 
     // --- States ---
     const [searchProductQuery, setSearchProductQuery] = useState("");
     const [selectedMerchant, setSelectedMerchant] = useState("all_merchants");
     const [selectedProductType, setSelectedProductType] = useState("all_types");
+    
     const [currentOrderType, setCurrentOrderType] = useState(initialState.orderType || "dinein");
     const [currentOrderNumber, setCurrentOrderNumber] = useState(generateOrderNumber());
     const [customerName, setCustomerName] = useState(initialState.customerName || "Guest");
     const [room, setRoom] = useState(initialState.room || null);
     const [cashierName, setCashierName] = useState(userProfile?.nama_user || userProfile?.nama || "Kasir");
     const [currentDate, setCurrentDate] = useState(dayjs());
+    
     const [selectedItems, setSelectedItems] = useState([]);
+    
+    // --- STATE DISKON BARU ---
+    const [discountType, setDiscountType] = useState("percent"); // "percent" | "nominal"
+    const [discountValue, setDiscountValue] = useState(0);        // Nilai input (e.g., 10 atau 50000)
+    // -------------------------
+
     const [taxRateFnbPercentFromAPI, setTaxRateFnbPercentFromAPI] = useState(0);
     const [loadingError, setLoadingError] = useState(null);
+    
+    // Modals State
     const [isNewOrderModalVisible, setIsNewOrderModalVisible] = useState(false);
     const [newOrderForm] = Form.useForm();
+    
     const [isCashPaymentModalVisible, setIsCashPaymentModalVisible] = useState(false);
     const [isStrukModalVisible, setIsStrukModalVisible] = useState(false);
+    
     const [isAddNoteModalVisible, setIsAddNoteModalVisible] = useState(false);
     const [itemToAddNote, setItemToAddNote] = useState(null);
     const [addNoteForm] = Form.useForm();
+    
     const [cashInput, setCashInput] = useState(0);
     const [paymentSuccess, setPaymentSuccess] = useState(false);
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+    
     const [products, setProducts] = useState([]);
     const [merchantCategories, setMerchantCategories] = useState([]);
     const [productTypeCategories, setProductTypeCategories] = useState([]);
     const [orderTypes, setOrderTypes] = useState([]);
+    
     const [isLoadingInitData, setIsLoadingInitData] = useState(true);
     const [isLoading, setIsLoadingSavedOrder] = useState(false);
-    const [discountPercentage, setDiscountPercentage] = useState(0);
+    
     const [isDiscountModalVisible, setIsDiscountModalVisible] = useState(false);
     const [discountForm] = Form.useForm();
+    
     const [posMode, setPosMode] = useState('fnb');
     const [rooms, setRooms] = useState([]);
     const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+    
     const [selectedRoomForBooking, setSelectedRoomForBooking] = useState(null);
     const [selectedDuration, setSelectedDuration] = useState(null);
     const [selectedStartTime, setSelectedStartTime] = useState(null);
     const [isBookingConfirmModalVisible, setIsBookingConfirmModalVisible] = useState(false);
+    
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isBookingProcessing, setIsBookingProcessing] = useState(false); // State untuk loading di modal booking
+    const [isBookingProcessing, setIsBookingProcessing] = useState(false);
     const [editingOrderId, setEditingOrderId] = useState(null);
     const [isPrinting, setIsPrinting] = useState(false);
 
-    
     const resetOrderState = () => {
         setSelectedItems([]);
-        setDiscountPercentage(0);
+        // Reset Diskon
+        setDiscountType("percent");
+        setDiscountValue(0);
+        
         setCashInput(0);
         setCustomerName("Guest");
         setRoom(null);
@@ -160,7 +178,7 @@ const OrderKasir = () => {
             setIsLoadingInitData(true);
             setLoadingError(null);
             try {
-                const data = await getPosInitData(); //
+                const data = await getPosInitData();
                 if (isMounted) {
                     setProducts(data.products || []);
                     setMerchantCategories(data.merchantCategories || []);
@@ -185,7 +203,6 @@ const OrderKasir = () => {
         return () => { isMounted = false; };
     }, []);
 
-
     // useEffect for loading SAVED ORDER
     useEffect(() => {
         let isMounted = true;
@@ -195,7 +212,7 @@ const OrderKasir = () => {
             setIsLoadingSavedOrder(true);
             console.log(`Attempting to load saved order ID: ${orderId}`);
             try {
-                const savedOrderData = await getSavedOrderDetails(orderId); //
+                const savedOrderData = await getSavedOrderDetails(orderId);
                 console.log("Saved order data received:", savedOrderData);
 
                 if (isMounted) {
@@ -204,7 +221,18 @@ const OrderKasir = () => {
                     setCurrentOrderType(orderTypeFrontend);
                     setRoom(savedOrderData.room || null);
                     setSelectedItems(savedOrderData.items || []);
-                    setDiscountPercentage(savedOrderData.discountPercentage || 0);
+                    
+                    // --- LOAD LOGIC DISKON ---
+                    // Prioritaskan Nominal jika ada data baru dari backend, jika tidak pakai persen
+                    if (savedOrderData.discountNominal && savedOrderData.discountNominal > 0) {
+                        setDiscountType("nominal");
+                        setDiscountValue(savedOrderData.discountNominal);
+                    } else {
+                        setDiscountType("percent");
+                        setDiscountValue(savedOrderData.discountPercentage || 0);
+                    }
+                    // -------------------------
+
                     setCurrentOrderNumber(savedOrderData.orderNumber || generateOrderNumber());
                     setEditingOrderId(orderId);
 
@@ -252,7 +280,7 @@ const OrderKasir = () => {
         const loadRoomData = async () => {
             try {
                 setIsLoadingRooms(true);
-                const roomData = await getRoomsToday(); //
+                const roomData = await getRoomsToday();
                 setRooms(roomData || []);
             } catch (error) {
                 message.error("Gagal memuat data ruangan.");
@@ -289,7 +317,7 @@ const OrderKasir = () => {
     }, [selectedMerchant, availableProductTypes, selectedProductType]);
 
 
-    // --- Logika Kalkulasi Harga Total (Campuran) ---
+    // --- LOGIKA KALKULASI (DIPERBARUI UNTUK NOMINAL/PERSEN) ---
     const subtotalFnb = useMemo(() =>
         selectedItems
             .filter(item => item.type === 'fnb')
@@ -306,13 +334,27 @@ const OrderKasir = () => {
 
     const subtotal = useMemo(() => subtotalFnb + subtotalRoom, [subtotalFnb, subtotalRoom]);
 
-    const totalDiscountNominal = useMemo(() =>
-        subtotal * (discountPercentage / 100),
-        [subtotal, discountPercentage]
-    );
+    // Kalkulasi Diskon (Nominal Absolute)
+    const totalDiscountNominal = useMemo(() => {
+        if (subtotal === 0) return 0;
+        if (discountType === "nominal") {
+            // Pastikan nominal tidak lebih besar dari subtotal
+            return Math.min(discountValue, subtotal);
+        } else {
+            // Persentase
+            return subtotal * (discountValue / 100);
+        }
+    }, [subtotal, discountType, discountValue]);
+
+    // Hitung Persentase Efektif (untuk dikirim ke backend jika perlu, atau untuk display)
+    const effectiveDiscountPercentage = useMemo(() => {
+        if (subtotal === 0 || totalDiscountNominal === 0) return 0;
+        return (totalDiscountNominal / subtotal) * 100;
+    }, [subtotal, totalDiscountNominal]);
 
     const fnbTaxableAmount = useMemo(() => {
         if (subtotal === 0) return 0;
+        // Alokasi diskon proporsional ke F&B
         const fnbDiscountPortion = (subtotalFnb / subtotal) * totalDiscountNominal;
         const taxable = subtotalFnb - fnbDiscountPortion;
         return taxable > 0 ? taxable : 0;
@@ -330,7 +372,8 @@ const OrderKasir = () => {
     
     const changeAmount = useMemo(() =>
         parseFloat(cashInput) > totalAmount ? parseFloat(cashInput) - totalAmount : 0,
-        [cashInput, totalAmount]);
+        [cashInput, totalAmount]
+    );
     // --- AKHIR KALKULASI ---
 
 
@@ -355,26 +398,41 @@ const OrderKasir = () => {
         setSelectedItems(selectedItems.filter((item) => item.cartId !== cartId));
     };
 
-    // --- Event Handlers Modal ---
+    // --- Event Handlers Modal Diskon ---
     const showDiscountModal = () => {
-        discountForm.setFieldsValue({ discount: discountPercentage });
+        // Set nilai form sesuai state saat ini
+        discountForm.setFieldsValue({ 
+            type: discountType, 
+            value: discountValue 
+        });
         setIsDiscountModalVisible(true);
     };
+
     const handleDiscountSubmit = async () => {
         try {
             const values = await discountForm.validateFields();
-            const discountValue = parseFloat(values.discount) || 0;
-            if (discountValue < 0 || discountValue > 100) {
-                message.error("Diskon harus antara 0 dan 100.");
+            const inputVal = parseFloat(values.value) || 0;
+            const type = values.type;
+
+            // Validasi input
+            if (type === "percent" && inputVal > 100) {
+                message.error("Diskon persen tidak boleh lebih dari 100%.");
                 return;
             }
-            setDiscountPercentage(discountValue);
+            
+            setDiscountType(type);
+            setDiscountValue(inputVal);
+            
             setIsDiscountModalVisible(false);
-            message.success(`Diskon ${discountValue}% berhasil diterapkan.`);
+            
+            const formattedValue = type === "percent" ? `${inputVal}%` : formatRupiah(inputVal);
+            message.success(`Diskon ${formattedValue} berhasil diterapkan.`);
         } catch (error) {
             console.error("Validation failed:", error);
         }
     };
+
+    // --- Event Handlers Order Baru ---
     const showNewOrderModal = () => {
         setIsNewOrderModalVisible(true);
     };
@@ -481,7 +539,6 @@ const OrderKasir = () => {
     };
 
     // --- Fungsi Helper untuk Membangun Data Order ---
-    // --- PERBAIKAN BUG ---
     const buildMixedOrderData = () => {
         const isCash = selectedPaymentMethod === 'cash';
         return {
@@ -492,9 +549,7 @@ const OrderKasir = () => {
             paymentMethod: selectedPaymentMethod === 'cash' ? 'CASH' : selectedPaymentMethod === 'qris' ? 'QRIS' : 'DEBIT',
             
             uang_diterima: isCash ? parseFloat(cashInput) : null,
-            // --- INI PERBAIKANNYA ---
-            kembalian: isCash ? parseFloat(changeAmount) : null, // Menggunakan changeAmount, bukan cashInput
-            // --- AKHIR PERBAIKAN ---
+            kembalian: isCash ? parseFloat(changeAmount) : null,
 
             items: selectedItems.map(item => ({
                 id: item.id,
@@ -505,8 +560,12 @@ const OrderKasir = () => {
                 bookingData: item.type === 'room' ? item.bookingData : null
             })),
             subtotal: subtotal,
-            discountPercentage: discountPercentage,
-            discountNominal: totalDiscountNominal,
+            
+            // --- DATA DISKON DIKIRIM LENGKAP ---
+            discountPercentage: parseFloat(effectiveDiscountPercentage.toFixed(2)), 
+            discountNominal: totalDiscountNominal, 
+            // -----------------------------------
+
             taxDetails: {
                 fnbTaxableAmount: fnbTaxableAmount,
                 taxRate: taxRateFnbPercentFromAPI,
@@ -517,7 +576,6 @@ const OrderKasir = () => {
             totalAmount: totalAmount,
         };
     };
-    // --- AKHIR PERBAIKAN BUG ---
 
     // --- Handler untuk Simpan & Bayar (Keranjang Campuran) ---
     const handleSaveOrder = async () => {
@@ -531,11 +589,11 @@ const OrderKasir = () => {
         }
         setIsProcessing(true);
         const orderData = buildMixedOrderData();
-        delete orderData.paymentMethod; // Hapus data pembayaran
+        delete orderData.paymentMethod; // Hapus data pembayaran untuk save draft
 
         try {
             console.log("Menyimpan Order Data (Kasir):", orderData);
-            const result = await saveOrderKasir(orderData); //
+            const result = await saveOrderKasir(orderData);
             message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
             navigate('/transaksikasir');
             resetOrderState();
@@ -547,9 +605,89 @@ const OrderKasir = () => {
         }
     };
 
-    const handleStrukConfirmPayment = async () => {
+    // --- MODIFIED: FITUR CETAK STRUK ---
+    const handlePrintReceipt = (voucherDataFromBackend = null) => {
+        console.log("Mencetak struk order baru...");
+        setIsPrinting(true);
+
+        // 1. Format Item F&B
+        const formattedFnbItems = selectedItems
+            .filter(item => item.type === 'fnb')
+            .map(item => ({
+                name: item.name,
+                qty: item.qty,
+                price: item.price,
+                note: item.note
+            }));
+
+        // 2. Format Item Booking
+        const formattedBookingItems = selectedItems
+            .filter(item => item.type === 'room')
+            .map(item => ({
+                name: item.name,
+                price: item.price, // Harga total paket
+                bookingData: {
+                    durasi_jam: item.bookingData.durasi_jam,
+                    waktu_mulai_jam: item.bookingData.waktu_mulai_jam,
+                }
+            }));
+            
+        // 3. Format Vouchers (BARU)
+        // Ambil dari parameter jika ada (hasil generate backend)
+        const formattedVouchers = [];
+        if (voucherDataFromBackend) {
+            formattedVouchers.push({
+                profile: voucherDataFromBackend.profile, // Ex: shop-2h
+                code: voucherDataFromBackend.code // Single code
+            });
+        }
+
+        // 4. Mapping Payment Method
+        let printerPaymentMethod = selectedPaymentMethod === 'cash' ? 'CASH' 
+                                 : selectedPaymentMethod === 'qris' ? 'QRIS' 
+                                 : 'DEBIT';
+
+        // 5. Susun Data
+        const dataToPrint = {
+            id: currentOrderNumber, // Gunakan nomor order sementara/baru
+            time: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+            cashier: cashierName,
+            customer: customerName,
+            location: room || "-",
+            
+            items: formattedFnbItems,
+            bookings: formattedBookingItems,
+            
+            // Field Voucher (Untuk Printer Service)
+            vouchers: formattedVouchers, 
+            
+            subtotal: subtotal,
+            tax: totalTaxNominal,
+            discount: totalDiscountNominal,
+            total: totalAmount,
+            
+            paymentMethod: printerPaymentMethod,
+            tunai: parseFloat(cashInput) || 0,
+            kembali: parseFloat(changeAmount) || 0
+        };
+
+        // 6. Kirim ke Flutter
+        if (window.flutter_inappwebview) {
+            window.flutter_inappwebview.callHandler('flutterPrintHandler', dataToPrint);
+            message.info("Mencetak struk...");
+        } else {
+            message.error("Printer tidak ditemukan (Mode Web).");
+            console.log("Data Print:", dataToPrint);
+        }
+
+        setTimeout(() => setIsPrinting(false), 2000);
+    };
+    // --- AKHIR FITUR CETAK ---
+
+    // --- MODIFIED: Menambahkan opsi shouldPrint (default true) ---
+    // --- ALUR BARU: SIMPAN DULU -> BARU CETAK ---
+    const handleStrukConfirmPayment = async (shouldPrint = true) => {
         setIsProcessing(true);
-        handlePrintReceipt()
 
         if (!activeSession || !activeSession.id_sesi) {
             message.error("Sesi kasir tidak aktif. Silakan kembali ke 'Buka Sesi'.");
@@ -557,26 +695,37 @@ const OrderKasir = () => {
             return;
         }
 
-        const orderData = buildMixedOrderData();
-
         try {
             let result;
+            // 1. SIMPAN KE DATABASE (Backend akan generate voucher jika perlu)
             if (editingOrderId) {
-                console.log(`Membayar Order Tersimpan (ID: ${editingOrderId}):`, orderData);
-                result = await paySavedOrder(editingOrderId, orderData); //
-                message.success(result.info || `Order #${editingOrderId} berhasil diselesaikan!`);
+                console.log(`Membayar Order Tersimpan (ID: ${editingOrderId})`);
+                result = await paySavedOrder(editingOrderId, buildMixedOrderData());
             } else {
-                console.log("Mengirim Order Data Baru (Kasir):", orderData);
-                result = await createOrderKasir(orderData); //
-                message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
+                console.log("Mengirim Order Data Baru (Kasir)");
+                result = await createOrderKasir(buildMixedOrderData());
             }
 
-            navigate('/transaksikasir');
-            resetOrderState(); 
+            message.success(`Order #${result.id_transaksi || 'N/A'} berhasil disimpan!`);
+            
+            // 2. AMBIL DATA VOUCHER DARI RESPONSE BACKEND
+            const generatedVoucher = result.voucher; // { code, profile, duration }
+
+            // 3. CETAK STRUK (Jika diminta)
+            if (shouldPrint) {
+                // Kirim voucher yang baru dibuat ke fungsi cetak
+                handlePrintReceipt(generatedVoucher);
+            }
+
+            // 4. PINDAH HALAMAN (Tunggu sebentar biar proses cetak jalan)
+            setTimeout(() => {
+                navigate('/transaksikasir');
+                resetOrderState();
+            }, 1000);
 
         } catch (error) {
-            message.error(`Gagal ${editingOrderId ? 'menyelesaikan' : 'menyimpan'} order: ${error.message || 'Error tidak diketahui'}`);
-            console.error(`Error ${editingOrderId ? 'paying saved' : 'saving new'} order:`, error);
+            message.error(`Gagal memproses order: ${error.message || 'Error tidak diketahui'}`);
+            console.error(`Error processing order:`, error);
         } finally {
             setIsProcessing(false);
             setIsStrukModalVisible(false);
@@ -679,71 +828,6 @@ const OrderKasir = () => {
         return matchesMerchant && matchesProductType && matchesSearch;
     });
 
-    // --- FITUR CETAK STRUK (Order Baru) ---
-    const handlePrintReceipt = () => {
-        console.log("Mencetak struk order baru...");
-        setIsPrinting(true);
-
-        // 1. Format Item F&B
-        const formattedFnbItems = selectedItems
-            .filter(item => item.type === 'fnb')
-            .map(item => ({
-                name: item.name,
-                qty: item.qty,
-                price: item.price,
-                note: item.note
-            }));
-
-        // 2. Format Item Booking
-        const formattedBookingItems = selectedItems
-            .filter(item => item.type === 'room')
-            .map(item => ({
-                name: item.name,
-                price: item.price, // Harga total paket
-                bookingData: {
-                    durasi_jam: item.bookingData.durasi_jam,
-                    waktu_mulai_jam: item.bookingData.waktu_mulai_jam,
-                }
-            }));
-            
-        // 3. Mapping Payment Method
-        let printerPaymentMethod = selectedPaymentMethod === 'cash' ? 'CASH' 
-                                 : selectedPaymentMethod === 'qris' ? 'QRIS' 
-                                 : 'DEBIT';
-
-        // 4. Susun Data
-        const dataToPrint = {
-            id: currentOrderNumber, // Gunakan nomor order sementara/baru
-            time: dayjs().format("YYYY-MM-DD HH:mm:ss"),
-            cashier: cashierName,
-            customer: customerName,
-            location: room || "-",
-            
-            items: formattedFnbItems,
-            bookings: formattedBookingItems,
-            
-            subtotal: subtotal,
-            tax: totalTaxNominal,
-            discount: totalDiscountNominal,
-            total: totalAmount,
-            
-            paymentMethod: printerPaymentMethod,
-            tunai: parseFloat(cashInput) || 0,
-            kembali: parseFloat(changeAmount) || 0
-        };
-
-        // 5. Kirim ke Flutter
-        if (window.flutter_inappwebview) {
-            window.flutter_inappwebview.callHandler('flutterPrintHandler', dataToPrint);
-            message.info("Mencetak struk...");
-        } else {
-            message.error("Printer tidak ditemukan (Mode Web).");
-            console.log("Data Print:", dataToPrint);
-        }
-
-        setTimeout(() => setIsPrinting(false), 2000);
-    };
-
     // --- JSX (RENDER) ---
     return (
         <Spin spinning={isLoadingInitData || isLoading || isProcessing} tip={isProcessing ? "Menyimpan..." : "Memuat..."} size="large">
@@ -766,7 +850,7 @@ const OrderKasir = () => {
                                 </div>
                             </Radio.Button>
                         </Radio.Group>
-                        <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" /> {/* */}
+                        <img src="/img/logo_dago.png" alt="Dago Creative Home" className="h-12" /> 
                         <div className="flex items-center space-x-2 text-gray-600"><UserOutlined /><span>{cashierName}</span></div>
                     </div>
 
@@ -924,9 +1008,12 @@ const OrderKasir = () => {
                                     <span className="font-medium">{formatRupiah(subtotalRoom)}</span>
                                 </div>
                                 
-                                {discountPercentage > 0 && (
+                                {/* DISKON SECTION */}
+                                {totalDiscountNominal > 0 && (
                                     <div className="flex justify-between items-center text-sm mb-1 text-red-600">
-                                        <span>Diskon ({discountPercentage}%)</span>
+                                        <span>
+                                            Diskon {discountType === 'percent' ? `(${discountValue}%)` : '(Manual)'}
+                                        </span>
                                         <span className="font-medium">-{formatRupiah(totalDiscountNominal)}</span>
                                     </div>
                                 )}
@@ -968,7 +1055,7 @@ const OrderKasir = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-3 text-sm font-medium">
                             <Button
-                                type={selectedPaymentMethod === "cash" ? "primary" : "default"}
+                                type="default"
                                 className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "cash" ? "bg-blue-600 text-white" : "text-gray-700"}`}
                                 icon={<DollarOutlined />}
                                 onClick={() => setSelectedPaymentMethod("cash")}
@@ -976,7 +1063,7 @@ const OrderKasir = () => {
                                 Cash
                             </Button>
                             <Button
-                                type={selectedPaymentMethod === "qris" ? "primary" : "default"}
+                                type="default"
                                 className={`flex-1 py-2 px-3 ${selectedPaymentMethod === "qris" ? "bg-blue-600 text-white" : "text-gray-700"}`}
                                 icon={<QrcodeOutlined />}
                                 onClick={() => setSelectedPaymentMethod("qris")}
@@ -1012,11 +1099,79 @@ const OrderKasir = () => {
 
             {/* --- Modals --- */}
 
-            {/* Discount Modal */}
-            <Modal title="Masukkan Diskon Manual" open={isDiscountModalVisible} onOk={handleDiscountSubmit} onCancel={() => setIsDiscountModalVisible(false)} okText="Terapkan" cancelText="Batal">
-                <Form form={discountForm} layout="vertical" className="mt-4">
-                    <Form.Item label="Persentase Diskon" name="discount" rules={[{ required: true, message: 'Harap masukkan nilai diskon!' }]}>
-                        <InputNumber min={0} max={100} formatter={(value) => `${value}%`} parser={(value) => value.replace('%', '')} className="w-full" size="large" />
+            {/* MODAL DISKON BARU */}
+            <Modal 
+                title="Atur Diskon" 
+                open={isDiscountModalVisible} 
+                onOk={handleDiscountSubmit} 
+                onCancel={() => setIsDiscountModalVisible(false)} 
+                okText="Terapkan" 
+                cancelText="Batal"
+                centered
+            >
+                <Form form={discountForm} layout="vertical" className="mt-4" initialValues={{ type: 'percent', value: 0 }}>
+                    
+                    {/* Pilihan Tipe Diskon */}
+                    <Form.Item name="type" className="mb-4">
+                        <Radio.Group className="w-full flex" buttonStyle="solid">
+                            <Radio.Button value="percent" className="flex-1 text-center">
+                                <PercentageOutlined className="mr-2"/> Persen (%)
+                            </Radio.Button>
+                            <Radio.Button value="nominal" className="flex-1 text-center">
+                                <DollarOutlined className="mr-2"/> Nominal (Rp)
+                            </Radio.Button>
+                        </Radio.Group>
+                    </Form.Item>
+
+                    {/* Input Nilai - Dinamis berdasarkan Tipe */}
+                    <Form.Item 
+                        noStyle 
+                        shouldUpdate={(prev, curr) => prev.type !== curr.type}
+                    >
+                        {({ getFieldValue }) => {
+                            const type = getFieldValue('type') || 'percent';
+                            return (
+                                <Form.Item 
+                                    label={type === 'percent' ? "Nilai Persentase" : "Nilai Rupiah"} 
+                                    name="value" 
+                                    rules={[{ required: true, message: 'Harap masukkan nilai diskon!' }]}
+                                >
+                                    <InputNumber
+                                        style={{ width: '100%' }}
+                                        size="large"
+                                        min={0}
+                                        max={type === 'percent' ? 100 : subtotal} 
+                                        formatter={value => type === 'percent' 
+                                            ? `${value}%` 
+                                            : `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                                        }
+                                        parser={value => type === 'percent'
+                                            ? value.replace('%', '') 
+                                            : value.replace(/\Rp\s?|(,*)/g, '')
+                                        }
+                                        placeholder={type === 'percent' ? "Contoh: 10" : "Contoh: 50000"}
+                                    />
+                                </Form.Item>
+                            );
+                        }}
+                    </Form.Item>
+                    
+                    {/* Info Preview Diskon */}
+                    <Form.Item shouldUpdate>
+                        {({ getFieldValue }) => {
+                            const val = getFieldValue('value') || 0;
+                            const type = getFieldValue('type');
+                            let previewNominal = 0;
+                            
+                            if (type === 'percent') previewNominal = subtotal * (val / 100);
+                            else previewNominal = val;
+
+                            return (
+                                <div className="text-right text-gray-500 text-sm">
+                                    Estimasi potongan: <span className="font-bold text-red-500">{formatRupiah(previewNominal)}</span>
+                                </div>
+                            );
+                        }}
                     </Form.Item>
                 </Form>
             </Modal>
@@ -1338,17 +1493,26 @@ const OrderKasir = () => {
             <Modal
                 title={<div className="text-xl font-bold text-gray-800">Struk Pembayaran</div>}
                 open={isStrukModalVisible}
-                onOk={handleStrukConfirmPayment}
+                onOk={() => handleStrukConfirmPayment(true)} // Default print = true untuk tombol enter
                 onCancel={handleStrukCancel}
                 footer={[
                     <Button key="back" size="large" onClick={handleStrukCancel}>
                         {paymentSuccess ? "Tutup" : "Batal Pembayaran"}
                     </Button>,
                     <Button
+                        key="no-print"
+                        size="large"
+                        onClick={() => handleStrukConfirmPayment(false)}
+                        loading={isProcessing}
+                        disabled={isProcessing}
+                    >
+                        Selesai (Tanpa Cetak)
+                    </Button>,
+                    <Button
                         key="submit"
                         type="primary"
                         size="large"
-                        onClick={handleStrukConfirmPayment}
+                        onClick={() => handleStrukConfirmPayment(true)}
                         loading={isProcessing}
                         disabled={isProcessing}
                     >
@@ -1398,9 +1562,9 @@ const OrderKasir = () => {
                                 <span>{formatRupiah(subtotalRoom)}</span>
                             </div>
                         )}
-                        {discountPercentage > 0 && (
+                        {totalDiscountNominal > 0 && (
                             <div className="flex justify-between text-red-600">
-                                <span>Diskon ({discountPercentage}%)</span>
+                                <span>Diskon {discountType === 'percent' ? `(${discountValue}%)` : '(Rp)'}</span>
                                 <span>-{formatRupiah(totalDiscountNominal)}</span>
                             </div>
                         )}
