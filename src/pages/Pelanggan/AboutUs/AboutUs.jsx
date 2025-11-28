@@ -15,7 +15,7 @@ const developers = [
     {
         name: "Aditya Gunawan",
         role: "Fullstack Developer",
-        tech: "React, Tailwind, Node.js",
+        tech: "React, Tailwind, Flask, MySQL",
         img: "src/assets/images/adit.png",
         ig: "https://www.instagram.com/adit.g777?igsh=Yzd2MTIwZDdodjQ%3D&utm_source=qr",
         email: "adityadewa777@gmail.com",
@@ -32,7 +32,7 @@ const developers = [
     },
     {
         name: "Diah Pramesti",
-        role: "UI/UX Designer",
+        role: "UI/UX & Frontend Developer",
         tech: "Figma, Adobe XD",
         img: "src/assets/images/diah.png",
         ig: "https://www.instagram.com/gdyahh_?igsh=MThkczNibXk2bGhy",

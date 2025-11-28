@@ -9,6 +9,53 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 
 // ... service lainnya
 
+
+export const getRepaymentLink = async (transactionId) => {
+  try {
+    // --- PERBAIKAN DISINI: Tambahkan 'await' ---
+    const token = await jwtStorage.retrieveToken(); 
+    
+    if (!token) {
+        throw new Error("Token tidak ditemukan. Silakan login ulang.");
+    }
+
+    const response = await fetch(`${baseUrl}/api/v1/transaksi/repay/${transactionId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`, // Sekarang token berisi string yang benar
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Gagal mengambil link pembayaran");
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getVOPaymentLink = async (transactionId) => {
+  try {
+    const token = jwtStorage.retrieveToken();
+    const response = await fetch(`${baseUrl}/api/v1/virtualOffice/get-payment-link/${transactionId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Gagal mengambil link pembayaran");
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const apiGenerateTestVoucher = async () => {
   try {
     const token = await jwtStorage.retrieveToken();
@@ -3704,6 +3751,8 @@ export const submitVOPaymentProof = async (transactionId) => { // Hapus paramete
     throw error; // Lempar error agar bisa ditangkap di komponen
   }
 };
+
+
 // cek masa vo start
 export const getVirtualOfficeDetail = async (userId) => {
   try {

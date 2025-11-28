@@ -1,107 +1,31 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
 import {
     Card, Progress, Button, Typography, Row, Col, Space, List, Tag,
-    Alert, Empty, Spin, Statistic, Divider, Grid, message, Modal, Image // Tambahkan Image
+    Alert, Empty, Spin, Statistic, Divider, Grid, message
 } from "antd";
 import {
     CrownOutlined, SafetyCertificateOutlined, HistoryOutlined, CalendarOutlined,
     InfoCircleOutlined, SendOutlined, CheckCircleOutlined, ExclamationCircleOutlined,
-    BankOutlined, QrcodeOutlined, CloseCircleOutlined // Tambahkan CloseCircleOutlined
+    BankOutlined, CloseCircleOutlined
 } from "@ant-design/icons";
 import { AuthContext } from "../../../providers/AuthProvider";
-import { getVirtualOfficeDetail, submitVOPaymentProof } from "../../../services/service"; // Pastikan path import benar
+import { getVirtualOfficeDetail, getVOPaymentLink } from "../../../services/service"; // Gunakan getVOPaymentLink
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { Countdown } = Statistic;
 const { useBreakpoint } = Grid;
 
-// --- Komponen Modal Pembayaran dengan QR ---
-const PaymentInfoModal = ({ visible, onClose, transactionId, harga, onPaymentSuccess }) => {
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handleSubmit = async () => {
-        setIsSubmitting(true);
-        try {
-            const res = await submitVOPaymentProof(transactionId);
-            if (res.message === "OK") {
-                message.success("Konfirmasi berhasil! Layanan Anda kini aktif. 🎉");
-                onPaymentSuccess(); // Menutup modal dan me-refresh data
-            } else {
-                message.error(res.error || "Gagal mengkonfirmasi pembayaran.");
-            }
-        } catch (error) {
-            message.error(error.message || "Terjadi kesalahan server.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <Modal
-            title="Instruksi Pembayaran Virtual Office"
-            open={visible}
-            onCancel={onClose}
-            footer={[
-                <Button key="back" onClick={onClose} disabled={isSubmitting}>
-                    Tutup
-                </Button>,
-                <Button key="submit" type="primary" loading={isSubmitting} onClick={handleSubmit}>
-                    Saya Sudah Bayar & Aktifkan
-                </Button>,
-            ]}
-            maskClosable={!isSubmitting}
-            closable={!isSubmitting}
-        >
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-                <Paragraph>
-                    Silakan lakukan pembayaran sejumlah <Text strong style={{ color: '#d46b08', fontSize: 16 }}>Rp {new Intl.NumberFormat('id-ID').format(harga)}</Text>
-                </Paragraph>
-
-                {/* Opsi 1: QRIS */}
-                <Card size="small">
-                    <Space align="center">
-                        <QrcodeOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
-                        <Text strong>Scan QRIS</Text>
-                    </Space>
-                    <Divider style={{ margin: '12px 0' }} />
-                    <div style={{ textAlign: 'center' }}>
-                        {/* --- GANTI DENGAN PATH QR CODE ANDA --- */}
-                        <Image
-                            width={200}
-                            // Ganti src dengan URL atau path ke gambar QRIS Anda di folder public
-                            src="../../../../public/img/WhatsApp Image 2025-10-08 at 09.02.45.jpeg"
-                            alt="Kode QRIS Pembayaran"
-                            preview={false}
-                            fallback="/images/image-error.png" // Gambar placeholder jika error
-                        />
-                        <Paragraph type="secondary" style={{ marginTop: '8px', fontSize: '12px' }}>
-                            Scan menggunakan aplikasi E-Wallet atau Mobile Banking Anda yang mendukung QRIS.
-                        </Paragraph>
-                    </div>
-                </Card>
-
-                <Alert
-                    message="Penting"
-                    description="Setelah melakukan pembayaran, klik tombol 'Saya Sudah Bayar & Aktifkan' di bawah untuk mengaktifkan layanan Anda secara otomatis."
-                    type="warning"
-                    showIcon
-                />
-            </Space>
-        </Modal>
-    );
-};
-
-
-// --- Komponen Utama CekMasaVO ---
 const CekMasaVO = () => {
     const { userProfile } = useContext(AuthContext);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [isActivating, setIsActivating] = useState(false); // Untuk tombol aktivasi di modal
     const [error, setError] = useState(null);
-    const [isPaymentInfoModalOpen, setIsPaymentInfoModalOpen] = useState(false);
+    
+    // State untuk loading tombol bayar (redirecting)
+    const [isRedirecting, setIsRedirecting] = useState(false); 
+    
     const navigate = useNavigate();
     const screens = useBreakpoint();
 
@@ -117,12 +41,10 @@ const CekMasaVO = () => {
                 setData(result.data);
                 setError(null);
             } else {
-                // Backend return error (misal 404)
                 setError(result.error || "Data langganan tidak ditemukan.");
                 setData(null);
             }
         } catch (err) {
-            // Error dari fetch (network, 500, atau parse error)
             if (err.message && (err.message.includes("404") || err.message.toLowerCase().includes("tidak ditemukan"))) {
                 setError("Anda belum memiliki langganan Virtual Office.");
             } else {
@@ -139,18 +61,34 @@ const CekMasaVO = () => {
     }, [fetchData]);
 
     const handlePerpanjang = () => {
-        if (data?.id_paket_vo) {
-            navigate('/virtual-office');
-        } else {
-            navigate('/virtual-office');
-        }
+        navigate('/virtual-office');
     };
 
-    const handleShowPaymentInfo = () => {
-        if (data && data.id_transaksi) {
-            setIsPaymentInfoModalOpen(true);
-        } else {
-            message.error("ID Transaksi tidak ditemukan, hubungi admin.");
+    // --- HANDLER PEMBAYARAN IPAYMU ---
+    const handlePayNow = async () => {
+        if (!data || !data.id_transaksi) {
+            message.error("ID Transaksi tidak ditemukan.");
+            return;
+        }
+
+        setIsRedirecting(true);
+        try {
+            // Panggil API Backend untuk dapatkan link iPaymu baru
+            const res = await getVOPaymentLink(data.id_transaksi);
+            
+            if (res.payment_url) {
+                message.loading("Mengalihkan ke halaman pembayaran...", 2.5);
+                setTimeout(() => {
+                    window.location.href = res.payment_url;
+                }, 1000);
+            } else {
+                message.error("Gagal mendapatkan link pembayaran.");
+                setIsRedirecting(false);
+            }
+        } catch (err) {
+            console.error("Payment error:", err);
+            message.error(err.message || "Gagal memproses pembayaran.");
+            setIsRedirecting(false);
         }
     };
 
@@ -216,16 +154,11 @@ const CekMasaVO = () => {
         );
     }
 
-    // 4. Menunggu Pembayaran
-    // 4. Menunggu Pembayaran
+    // 4. Menunggu Pembayaran (DIPERBARUI)
     if (data.status_client_vo === 'Menunggu Pembayaran') {
         return (
             <div style={containerStyle}>
                 <Card style={{ maxWidth: 800, margin: "24px auto" }}>
-
-                    {/* --- PERUBAHAN DI SINI --- */}
-
-                    {/* 1. Alert HANYA untuk pesan */}
                     <Alert
                         type="success"
                         showIcon
@@ -236,10 +169,9 @@ const CekMasaVO = () => {
                                 Silakan selesaikan pembayaran untuk mengaktifkan layanan.
                             </Text>
                         }
-                        style={{ marginBottom: 24 }} // Beri jarak ke elemen di bawahnya
+                        style={{ marginBottom: 24 }}
                     />
 
-                    {/* 2. Pindahkan Row agar menjadi child dari Card, BUKAN dari Alert */}
                     <Row justify="space-between" align="middle" gutter={[16, 16]}>
                         <Col xs={24} sm={12}>
                             <Text strong>Total Tagihan:</Text>
@@ -248,40 +180,26 @@ const CekMasaVO = () => {
                             </Title>
                         </Col>
 
-                        {/* Logika responsive Anda sudah benar, 
-                  hanya perlu dipindahkan ke sini */}
                         <Col xs={24} sm={12} style={{ textAlign: screens.xs ? 'center' : 'right' }}>
                             <Button
                                 type="primary"
                                 size="large"
-                                onClick={handleShowPaymentInfo}
+                                onClick={handlePayNow} // <-- Handler Baru
+                                loading={isRedirecting} // <-- Loading State
                                 block={screens.xs}
                                 icon={<BankOutlined />}
+                                style={{ background: "#1890ff", borderColor: "#1890ff", fontWeight: "bold" }}
                             >
-                                Lihat Instruksi Pembayaran
+                                Bayar Sekarang (iPaymu)
                             </Button>
                         </Col>
                     </Row>
-                    {/* --- AKHIR PERUBAHAN --- */}
-
                 </Card>
-
-                <PaymentInfoModal
-                    visible={isPaymentInfoModalOpen}
-                    onClose={() => setIsPaymentInfoModalOpen(false)}
-                    transactionId={data.id_transaksi}
-                    harga={data.harga}
-                    onPaymentSuccess={() => {
-                        setIsPaymentInfoModalOpen(false);
-                        fetchData(); // Refresh data setelah aktivasi
-                    }}
-                />
             </div>
         );
     }
 
-    // --- 5. Kasus: Langganan Aktif atau Kadaluarsa ---
-    // Pastikan tanggal_mulai dan tanggal_berakhir ada
+    // 5. Kasus: Langganan Aktif atau Kadaluarsa
     if (!data.tanggal_mulai || !data.tanggal_berakhir) {
         return (
             <div style={containerStyle}>
@@ -299,10 +217,10 @@ const CekMasaVO = () => {
     const today = dayjs();
     const endDate = dayjs(data.tanggal_berakhir);
     const startDate = dayjs(data.tanggal_mulai);
-    const isExpired = endDate.isBefore(today, 'day') || data.status_client_vo === 'Kadaluarsa'; // Cek 'day' agar hari terakhir masih aktif
+    const isExpired = endDate.isBefore(today, 'day') || data.status_client_vo === 'Kadaluarsa';
 
     const totalDuration = endDate.diff(startDate, 'day');
-    const elapsedDuration = Math.max(0, today.diff(startDate, 'day')); // Pastikan tidak negatif
+    const elapsedDuration = Math.max(0, today.diff(startDate, 'day'));
     const progressPercentage = totalDuration > 0 ? Math.min(100, Math.max(0, (elapsedDuration / totalDuration) * 100)) : (isExpired ? 100 : 0);
     const daysRemaining = isExpired ? 0 : Math.max(0, endDate.diff(today, 'day'));
 
@@ -340,9 +258,8 @@ const CekMasaVO = () => {
                                 <Col xs={24} sm={12}>
                                     <Space direction="vertical" size={0}>
                                         <Text strong><SafetyCertificateOutlined /> Status Pembayaran</Text>
-                                        {/* Ambil status pembayaran dari data transaksi jika ada */}
                                         <Tag color={data.status_pembayaran === 'Lunas' ? 'success' : 'warning'}>
-                                            {data.status_pembayaran || 'Lunas'} {/* Default ke Lunas jika aktif */}
+                                            {data.status_pembayaran || 'Lunas'}
                                         </Tag>
                                     </Space>
                                 </Col>
@@ -380,7 +297,6 @@ const CekMasaVO = () => {
                     </Col>
 
                     <Col xs={24} md={8}>
-                        {/* Tampilkan info benefit jika ada */}
                         {(data.benefit_jam_meeting_room_per_bulan > 0 || data.benefit_jam_working_space_per_bulan > 0) && (
                             <Card title={<Space><InfoCircleOutlined /> Benefit Paket Anda</Space>} style={{ borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", marginBottom: "16px" }}>
                                 <List size="small">
@@ -413,7 +329,6 @@ const CekMasaVO = () => {
                     </Col>
                 </Row>
 
-                {/* Riwayat Pemakaian Benefit */}
                 <Row style={{ marginTop: "24px" }}>
                     <Col span={24}>
                         <Card title={<Space><HistoryOutlined /> Riwayat Pemakaian Benefit</Space>} style={{ borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
@@ -421,8 +336,8 @@ const CekMasaVO = () => {
                                 <List
                                     itemLayout="horizontal"
                                     dataSource={data.riwayat_pemakaian}
-                                    renderItem={(item, index) => ( // Tambahkan index untuk key
-                                        <List.Item key={index}> {/* Tambahkan key */}
+                                    renderItem={(item, index) => (
+                                        <List.Item key={index}>
                                             <List.Item.Meta
                                                 avatar={<div style={{ backgroundColor: '#e6f7ff', borderRadius: '50%', padding: '10px', display: 'flex' }}><CheckCircleOutlined style={{ color: '#1890ff', fontSize: '20px' }} /></div>}
                                                 title={<Text strong>Penggunaan {item.jenis_benefit === 'meeting_room' ? 'Meeting Room' : 'Working Space'}</Text>}
@@ -444,7 +359,6 @@ const CekMasaVO = () => {
                     </Col>
                 </Row>
 
-                {/* Tombol Aksi Cepat (Perpanjang/Daftar Baru) */}
                 {(data.status_client_vo === 'Aktif' || data.status_client_vo === 'Kadaluarsa') && (
                     <Row style={{ marginTop: "24px" }}>
                         <Col span={24}>

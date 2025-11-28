@@ -10,7 +10,6 @@ import {
 import { getMembershipPackageDetail, registerMembership } from "../../../services/service";
 import { AuthContext } from "../../../providers/AuthProvider";
 import { ArrowLeft } from "lucide-react";
-import PaymentConfirmationModal from "../../../components/PaymentConfirmationModal";
 
 const { Title, Text } = Typography;
 
@@ -23,12 +22,9 @@ const DaftarMember = () => {
   const [membership, setMembership] = useState(null);
   const [form] = Form.useForm();
   const { userProfile } = useContext(AuthContext);
+  const [isAgreed, setIsAgreed] = useState(false);
 
-  // 🆕 State untuk modal & checkbox
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [transactionDetails, setTransactionDetails] = useState(null);
-  const [isAgreed, setIsAgreed] = useState(false); // <--- Tambahan
-
+  // Ambil detail paket
   useEffect(() => {
     const fetchDetail = async () => {
       try {
@@ -48,7 +44,7 @@ const DaftarMember = () => {
     fetchDetail();
   }, [id]);
 
-  // Submit handler
+  // Submit handler dengan Redirect iPaymu
   const handleSubmit = async (values) => {
     setSubmitting(true);
     try {
@@ -61,15 +57,21 @@ const DaftarMember = () => {
 
       const result = await registerMembership(payload);
 
-      if (result.message === "OK") {
-        setTransactionDetails({
-          id_transaksi: result.id_transaksi,
-          nama_paket: membership.nama_paket,
-          harga: membership.harga,
+      if (result.message === "OK" && result.payment_url) {
+        // Notifikasi loading sebelum redirect
+        notification.info({
+            message: "Mengalihkan ke Pembayaran...",
+            description: "Mohon tunggu, Anda akan diarahkan ke halaman pembayaran aman.",
+            duration: 2,
         });
-        setPaymentModalVisible(true);
+
+        // Redirect ke iPaymu
+        setTimeout(() => {
+            window.location.href = result.payment_url;
+        }, 1000);
+
       } else {
-        throw new Error(result.error || "Pendaftaran gagal");
+        throw new Error(result.error || "Gagal mendapatkan link pembayaran");
       }
     } catch (err) {
       notification.error({
@@ -78,18 +80,8 @@ const DaftarMember = () => {
         placement: "topRight",
       });
     } finally {
-      setSubmitting(false);
+      setSubmitting(false); // Matikan loading jika gagal (jika sukses, halaman akan redirect)
     }
-  };
-
-  const handlePaymentConfirm = () => {
-    setPaymentModalVisible(false);
-    notification.success({
-      message: "Menunggu Verifikasi",
-      description: "Pembayaran Anda akan segera diverifikasi oleh admin.",
-      placement: "topRight",
-    });
-    navigate("/riwayat-transaksi");
   };
 
   if (loading) return (
@@ -108,10 +100,11 @@ const DaftarMember = () => {
         >
           <ArrowLeft size={20} className="text-gray-700" />
         </button>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Kembali</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Detail Pembelian</h1>
       </div>
 
       <Row gutter={[24, 24]}>
+        {/* Kolom Kiri: Info Paket */}
         <Col xs={24} lg={10}>
           {membership && (
             <Card
@@ -176,6 +169,7 @@ const DaftarMember = () => {
           )}
         </Col>
 
+        {/* Kolom Kanan: Form Data Diri */}
         <Col xs={24} lg={14}>
           <Card
             style={{
@@ -204,15 +198,16 @@ const DaftarMember = () => {
                 />
               </Form.Item>
 
-              {/* 🆕 Checkbox persetujuan */}
               <Form.Item>
                 <Checkbox checked={isAgreed} onChange={(e) => setIsAgreed(e.target.checked)}>
-                  Dengan mengklik "Daftar Sekarang", Anda menyetujui{" "}
+                  Dengan mengklik "Bayar Sekarang", Anda menyetujui{" "}
                   <a href="#">Syarat & Ketentuan</a> yang berlaku.
                 </Checkbox>
               </Form.Item>
 
-              <Divider style={{ margin: "20px 0" }} />
+              <div className="bg-blue-50 p-3 rounded-lg mb-4 text-xs text-blue-700 border border-blue-100">
+                Anda akan diarahkan ke halaman pembayaran aman iPaymu setelah ini.
+              </div>
 
               <Form.Item style={{ marginBottom: 0 }}>
                 <Button
@@ -220,7 +215,7 @@ const DaftarMember = () => {
                   htmlType="submit"
                   block
                   size="large"
-                  disabled={!isAgreed} // 🔒 Tidak bisa klik sebelum setuju
+                  disabled={!isAgreed}
                   style={{
                     borderRadius: "8px",
                     height: "48px",
@@ -234,20 +229,13 @@ const DaftarMember = () => {
                   }}
                   loading={submitting}
                 >
-                  Daftar Sekarang
+                  Bayar Sekarang
                 </Button>
               </Form.Item>
             </Form>
           </Card>
         </Col>
       </Row>
-
-      <PaymentConfirmationModal
-        open={paymentModalVisible}
-        details={transactionDetails}
-        onConfirm={handlePaymentConfirm}
-        onCancel={() => setPaymentModalVisible(false)}
-      />
     </div>
   );
 };

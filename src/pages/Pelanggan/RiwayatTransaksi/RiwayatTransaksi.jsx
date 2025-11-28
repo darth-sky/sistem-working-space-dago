@@ -14,6 +14,7 @@ import {
   Space,
   Spin,
   Collapse,
+  message, // Tambahkan message
 } from "antd";
 import {
   CalendarOutlined,
@@ -22,9 +23,11 @@ import {
   CheckCircleOutlined,
   LoadingOutlined,
   CloseCircleOutlined,
+  BankOutlined, // Tambahkan icon Bank
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { getRiwayatTransaksi } from "../../../services/service";
+// Tambahkan getRepaymentLink ke import
+import { getRiwayatTransaksi, getRepaymentLink } from "../../../services/service";
 import utc from "dayjs/plugin/utc";
 
 dayjs.extend(utc);
@@ -45,7 +48,6 @@ const useWindowSize = () => {
 };
 
 const RiwayatTransaksi = () => {
-  // Definisi baseUrl di dalam komponen agar bisa dipakai di render
   const baseUrl = import.meta.env.VITE_BASE_URL;
   
   const [transactions, setTransactions] = useState([]);
@@ -54,6 +56,9 @@ const RiwayatTransaksi = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedDates, setSelectedDates] = useState([]);
+  
+  // State untuk loading tombol bayar (supaya tidak double click)
+  const [isRepaying, setIsRepaying] = useState(false); 
 
   const [width] = useWindowSize();
   const isMobile = width < 768;
@@ -65,7 +70,6 @@ const RiwayatTransaksi = () => {
         const res = await getRiwayatTransaksi();
         if (res?.data) {
           const mapped = res.data.map((trx) => {
-            // Membuat array ringkasan untuk tampilan daftar utama
             const summaryItems = [
               ...(trx.bookings?.map((b) => `Booking Ruangan - ${b.nama_ruangan}`) || []),
               ...(trx.memberships?.map((m) => `Membership - ${m.nama_paket}`) || []),
@@ -77,22 +81,17 @@ const RiwayatTransaksi = () => {
               id: trx.id_transaksi,
               tanggal: trx.tanggal_transaksi,
               total: trx.total_harga_final,
-              status:
-                trx.status_pembayaran === "Lunas"
-                  ? "Sukses"
-                  : trx.status_pembayaran === "Belum Lunas"
-                  ? "Pending"
-                  : "Gagal",
-
-              // Menyimpan detail terstruktur untuk digunakan di dalam modal
+              // Map status dari DB ke UI
+              status: trx.status_pembayaran === "Lunas" ? "Sukses"
+                    : trx.status_pembayaran === "Belum Lunas" ? "Pending"
+                    : "Gagal",
+              
               details: {
                 bookings: trx.bookings || [],
                 memberships: trx.memberships || [],
                 virtual_offices: trx.virtual_offices || [],
                 events: trx.events || [],
               },
-
-              // Menyimpan ringkasan teks untuk tampilan daftar depan
               items: summaryItems,
             };
           });
@@ -109,6 +108,29 @@ const RiwayatTransaksi = () => {
 
     fetchData();
   }, []);
+
+  // --- HANDLER PEMBAYARAN ULANG (REPAY) ---
+  const handleRepay = async (transactionId) => {
+    setIsRepaying(true);
+    try {
+        // Panggil endpoint backend
+        const res = await getRepaymentLink(transactionId);
+        
+        if (res.payment_url) {
+            message.loading("Mengalihkan ke halaman pembayaran...", 2);
+            setTimeout(() => {
+                window.location.href = res.payment_url;
+            }, 1000);
+        } else {
+            message.error("Gagal mendapatkan link pembayaran.");
+            setIsRepaying(false);
+        }
+    } catch (error) {
+        console.error("Repay error:", error);
+        message.error(error.message || "Gagal memproses pembayaran.");
+        setIsRepaying(false);
+    }
+  };
 
   const handleFilter = (dates) => {
     if (!dates || dates.length === 0) {
@@ -136,7 +158,8 @@ const RiwayatTransaksi = () => {
       case "Sukses":
         return <Tag icon={<CheckCircleOutlined />} color="success">Sukses</Tag>;
       case "Pending":
-        return <Tag icon={<LoadingOutlined />} color="processing">Pending</Tag>;
+        // Ubah label Pending jadi 'Belum Lunas' agar lebih jelas urgensinya
+        return <Tag icon={<LoadingOutlined />} color="warning">Belum Lunas</Tag>;
       case "Gagal":
         return <Tag icon={<CloseCircleOutlined />} color="error">Gagal</Tag>;
       default:
@@ -200,10 +223,26 @@ const RiwayatTransaksi = () => {
           />
         ) : (
           <List
-            dataSource={filteredTransactions} // Pastikan ini menggunakan filteredTransactions
+            dataSource={filteredTransactions}
             renderItem={(item) => (
               <List.Item
                 actions={[
+                  // --- TOMBOL BAYAR SEKARANG (HANYA MUNCUL JIKA PENDING) ---
+                  item.status === "Pending" && (
+                    <Button 
+                        type="primary" 
+                        size={isMobile ? "small" : "middle"}
+                        danger 
+                        icon={<BankOutlined />}
+                        loading={isRepaying}
+                        onClick={(e) => {
+                            e.stopPropagation(); // Mencegah modal terbuka saat klik bayar
+                            handleRepay(item.id);
+                        }}
+                    >
+                        Bayar
+                    </Button>
+                  ),
                   !isMobile && (
                     <Button type="link" onClick={() => showDetail(item)}>
                       Detail
@@ -275,9 +314,22 @@ const RiwayatTransaksi = () => {
         open={isModalVisible}
         onCancel={() => setIsModalVisible(false)}
         footer={[
-          <Button key="close" type="primary" onClick={() => setIsModalVisible(false)} style={{ borderRadius: "8px" }}>
+          <Button key="close" onClick={() => setIsModalVisible(false)} style={{ borderRadius: "8px" }}>
             Tutup
           </Button>,
+          // --- TOMBOL BAYAR JUGA ADA DI DALAM MODAL ---
+          selectedTransaction?.status === "Pending" && (
+             <Button 
+                key="pay" 
+                type="primary" 
+                danger 
+                loading={isRepaying}
+                onClick={() => handleRepay(selectedTransaction.id)}
+                style={{ borderRadius: "8px" }}
+             >
+                Bayar Sekarang
+             </Button>
+          )
         ]}
         width={isMobile ? "95%" : 520}
         centered
@@ -353,7 +405,6 @@ const RiwayatTransaksi = () => {
                                 borderBottom:
                                   index === bookings.length - 1 ? "none" : "1px solid #f0f0f0",
                               }}
-                              // Menampilkan gambar di kanan (extra)
                               extra={
                                 <img
                                   alt={item.nama_ruangan}
@@ -382,7 +433,6 @@ const RiwayatTransaksi = () => {
                                       {dayjs(item.waktu_mulai).format("HH:mm")} -{" "}
                                       {dayjs(item.waktu_selesai).format("HH:mm")}
                                     </Text>
-
                                   </div>
                                 }
                               />
@@ -490,7 +540,6 @@ const RiwayatTransaksi = () => {
                             ? "none"
                             : "1px solid #f0f0f0",
                       }}
-                      // Opsional: Gambar Event (jika ada di backend)
                       extra={
                         item.gambar_ruangan ? (
                           <img
