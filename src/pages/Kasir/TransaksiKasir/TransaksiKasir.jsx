@@ -125,13 +125,13 @@ const TransaksiKasir = () => {
                     type: o.type || 'N/A',
                     payment_status: o.payment_status || 'N/A',
                     payment_method: o.payment_method || '-',
-                    
+
                     subtotal: parseFloat(o.subtotal) || 0,
                     tax_nominal: parseFloat(o.tax_nominal) || 0,
                     tax_percent: parseFloat(o.tax_percent) || 0,
                     uang_diterima: parseFloat(o.uang_diterima) || 0,
                     kembalian: parseFloat(o.kembalian) || 0,
-                    
+
                     // --- DATA VOUCHER ---
                     vouchers: o.vouchers || [] // Ambil data voucher dari API
                     // --------------------
@@ -163,7 +163,7 @@ const TransaksiKasir = () => {
 
     useEffect(() => {
         let intervalId = null;
-        
+
         if (isHistoryMode) {
             fetchAndCheckOrders(true);
         } else {
@@ -208,41 +208,65 @@ const TransaksiKasir = () => {
     const getDisplayStatus = (status) => status || 'N/A';
 
     // --- Logic Filter & Summary (Sama seperti sebelumnya) ---
-    const filteredFnbOrders = useMemo(() => orders
-        .filter((o) => o.type !== "Booking")
+    // ...
+    // Saya sarankan ubah nama variabel dari 'filteredOrders' menjadi 'filteredOrders' agar lebih akurat
+    const filteredOrders = useMemo(() => orders
+        // HAPUS BARIS FILTER BOOKING DISINI
         .filter((order) => {
+            // Logika filter dropdown
             if (filterStatus !== "all") {
                 if (filterStatus === "Diproses") {
                     if (order.status !== "Diproses" && order.status !== "Sebagian Diproses") return false;
                 } else if (order.status !== filterStatus) return false;
             }
+
             if (filterType !== "all") {
-                const typeMap = { dinein: "Dine In", takeaway: "Takeaway", pickup: "Pick Up" };
-                if (order.type.toLowerCase() !== typeMap[filterType].toLowerCase()) return false;
+                const typeMap = {
+                    dinein: "Dine In",
+                    takeaway: "Takeaway",
+                    pickup: "Pick Up",
+                    booking: "Booking" // Tambahkan mapping ini
+                };
+
+                // Handle khusus jika filterType bukan Booking tapi ordernya Booking
+                if (order.type === 'Booking' && filterType !== 'booking') {
+                    // Jika user ingin filter Dine In, maka Booking jangan muncul
+                    // Kecuali Anda ingin Booking muncul di 'all' saja
+                    if (filterType !== 'all') return false;
+                } else {
+                    if (order.type.toLowerCase() !== typeMap[filterType]?.toLowerCase()) return false;
+                }
             }
+
             if (filterPayment !== "all") {
                 if (order.payment_status !== filterPayment) return false;
             }
+
             if (searchText) {
                 const searchLower = searchText.toLowerCase();
+                // ... (logika search tetap sama)
                 const itemMatch = order.items?.some(item => item.product?.toLowerCase().includes(searchLower));
+                // Tambahkan pencarian berdasarkan nama ruangan juga jika perlu
+                const bookingMatch = order.bookings?.some(b => b.room_name?.toLowerCase().includes(searchLower));
+
                 return (
                     order.name?.toLowerCase().includes(searchLower) ||
                     order.location?.toLowerCase().includes(searchLower) ||
                     order.id?.toString().includes(searchLower) ||
-                    itemMatch
+                    itemMatch ||
+                    bookingMatch // Tambahkan ini
                 );
             }
             return true;
         }), [orders, filterStatus, filterType, filterPayment, searchText]);
 
     const totalSales = useMemo(() =>
-        filteredFnbOrders
+        filteredOrders
             .filter(order => order.payment_status === 'Lunas')
             .reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
-        , [filteredFnbOrders]);
+        , [filteredOrders]);
 
-    const productSummary = useMemo(() => filteredFnbOrders
+    const productSummary = useMemo(() => filteredOrders
         .filter(order => order.payment_status === 'Lunas')
         .reduce((acc, order) => {
             order.items?.forEach((item) => {
@@ -253,7 +277,7 @@ const TransaksiKasir = () => {
             });
             return acc;
         }, {})
-        , [filteredFnbOrders]);
+        , [filteredOrders]);
 
     const topProducts = useMemo(() => Object.entries(productSummary)
         .map(([product, data], index) => ({
@@ -267,7 +291,7 @@ const TransaksiKasir = () => {
         , [productSummary]);
 
     const tenantSummary = useMemo(() => {
-        const summary = filteredFnbOrders
+        const summary = filteredOrders
             .filter(order => order.payment_status === 'Lunas')
             .reduce((acc, order) => {
                 order.items?.forEach((item) => {
@@ -282,11 +306,11 @@ const TransaksiKasir = () => {
             type: tenantName,
             value: total,
         }));
-    }, [filteredFnbOrders]);
+    }, [filteredOrders]);
 
-    const totalTenantSales = useMemo(() => 
+    const totalTenantSales = useMemo(() =>
         tenantSummary.reduce((sum, item) => sum + item.value, 0)
-    , [tenantSummary]);
+        , [tenantSummary]);
 
     const pieConfig = {
         data: tenantSummary,
@@ -314,7 +338,7 @@ const TransaksiKasir = () => {
     };
 
     const handleMarkAsPaid = async () => {
-        if (isHistoryMode) return; 
+        if (isHistoryMode) return;
         if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return;
         setIsUpdating(true);
         try {
@@ -331,7 +355,7 @@ const TransaksiKasir = () => {
     };
 
     const handleMarkAsBatal = async () => {
-        if (isHistoryMode) return; 
+        if (isHistoryMode) return;
         if (!selectedOrder || selectedOrder.payment_status === 'Lunas' || selectedOrder.payment_status === 'Disimpan') return;
         setIsUpdating(true);
         try {
@@ -348,7 +372,7 @@ const TransaksiKasir = () => {
     };
 
     const handleContinueOrder = () => {
-        if (isHistoryMode) return; 
+        if (isHistoryMode) return;
         if (!selectedOrder || selectedOrder.payment_status !== 'Disimpan') return;
         handleCloseDetail();
         navigate('/orderkasir', { state: { savedOrderId: selectedOrder.id } });
@@ -408,7 +432,7 @@ const TransaksiKasir = () => {
             items: formattedFnbItems,
             bookings: formattedBookingItems,
             vouchers: formattedVouchers, // Kirim Voucher ke Flutter
-            
+
             subtotal: selectedOrder.subtotal,
             tax: selectedOrder.tax_nominal,
             discount: fixedDiscount,
@@ -440,10 +464,10 @@ const TransaksiKasir = () => {
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2">
                         {isHistoryMode && (
-                            <Button 
-                                icon={<ArrowLeftOutlined />} 
-                                type="text" 
-                                onClick={() => navigate('/kasir/buka-sesi')} 
+                            <Button
+                                icon={<ArrowLeftOutlined />}
+                                type="text"
+                                onClick={() => navigate('/kasir/buka-sesi')}
                                 className="mr-2"
                             />
                         )}
@@ -458,7 +482,7 @@ const TransaksiKasir = () => {
                 <div className="pb-3">
                     <Input.Search placeholder="Cari ID, nama customer, lokasi/ruangan, atau produk..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="rounded-lg" allowClear />
                 </div>
-                
+
                 {/* Filters ... (Sama) */}
                 <div className="flex flex-wrap gap-3 justify-between items-center mb-5">
                     <div className="flex flex-wrap gap-3 items-center">
@@ -475,6 +499,7 @@ const TransaksiKasir = () => {
                             <Option value="dinein">Dine In</Option>
                             <Option value="takeaway">Takeaway</Option>
                             <Option value="pickup">Pick Up</Option>
+                            <Option value="booking">Booking Ruangan</Option>
                         </Select>
                         <Select value={filterPayment} onChange={setFilterPayment} className="w-full md:w-auto md:min-w-[180px]">
                             <Option value="all">Semua Status Bayar</Option>
@@ -484,28 +509,28 @@ const TransaksiKasir = () => {
                             <Option value="Dibatalkan">Dibatalkan</Option>
                         </Select>
                     </div>
-                    <Button 
-                        type="primary" 
-                        icon={<PlusOutlined />} 
-                        onClick={() => navigate('/buatorderkasir')} 
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => navigate('/buatorderkasir')}
                         className="rounded-lg shadow-sm hover:shadow-md transition-all duration-200"
-                        disabled={isHistoryMode} 
+                        disabled={isHistoryMode}
                     >
                         Order Baru
                     </Button>
                 </div>
 
                 {/* Order List */}
-                <h3 className="font-semibold mb-2 text-gray-700">Transaksi F&B ({filteredFnbOrders.length})</h3>
+                <h3 className="font-semibold mb-2 text-gray-700">Transaksi F&B ({filteredOrders.length})</h3>
                 <div className="space-y-3">
                     {loading ? (
                         <div className="flex justify-center items-center py-16"><Spin tip="Memuat transaksi..." size="large" /></div>
                     ) : orders.length === 0 && !loading ? (
                         <div className="text-center py-8 text-gray-400">{activeSession ? "Tidak ada transaksi pada sesi ini." : "Tidak ada sesi kasir yang aktif."}</div>
-                    ) : filteredFnbOrders.length === 0 ? (
+                    ) : filteredOrders.length === 0 ? (
                         <div className="text-center py-8 text-gray-400">Tidak ada transaksi F&B yang cocok dengan filter.</div>
                     ) : (
-                        filteredFnbOrders.map((order) => (
+                        filteredOrders.map((order) => (
                             <OrderCard key={order.id} order={order} getStatusColor={getStatusColor} getDisplayStatus={getDisplayStatus} getPaymentStatusColor={getPaymentStatusColor} onClick={handleOrderClick} />
                         ))
                     )}

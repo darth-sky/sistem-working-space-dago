@@ -62,7 +62,7 @@ const { RangePicker } = DatePicker;
 const formatRupiah = (n) =>
   new Intl.NumberFormat("id-ID").format(Math.round(Number(n) || 0));
 
-// ===== Helpers: pilih Top-N & sembunyikan batang lain (untuk PEAK saja) =====
+// ===== Helpers =====
 const getTopNIndices = (arr, n = 3) =>
   arr
     .map((v, i) => ({ v: Number(v) || 0, i }))
@@ -72,7 +72,7 @@ const getTopNIndices = (arr, n = 3) =>
 
 const maskExceptIndices = (arr, indices) => {
   const keep = new Set(indices);
-  return arr.map((v, i) => (keep.has(i) ? v : null)); // null => Chart.js tidak menggambar batang
+  return arr.map((v, i) => (keep.has(i) ? v : null));
 };
 
 const Laporan = () => {
@@ -88,6 +88,7 @@ const Laporan = () => {
     total_fnb: 0,
     total_ws: 0,
     total_sales: 0,
+    total_tax: 0, // Ditambahkan untuk perhitungan bersih
     total_transactions: 0,
     total_visitors: 0,
     avg_daily: 0,
@@ -113,6 +114,7 @@ const Laporan = () => {
           total_fnb: Number(d?.totals?.total_fnb || 0),
           total_ws: Number(d?.totals?.total_ws || 0),
           total_sales: Number(d?.totals?.total_sales || 0),
+          total_tax: Number(d?.totals?.total_tax || 0), // Ambil Tax dari API
           total_transactions: Number(d?.totals?.total_transactions || 0),
           total_visitors: Number(d?.totals?.total_visitors || 0),
           avg_daily: Number(d?.totals?.avg_daily || 0),
@@ -146,6 +148,9 @@ const Laporan = () => {
     };
     fetchAll();
   }, [dateRange]);
+
+  // === PERHITUNGAN BERSIH ===
+  const totalPendapatanBersih = totals.total_sales - totals.total_tax;
 
   // === Chart builders ===
   const lineLabels = useMemo(
@@ -194,17 +199,15 @@ const Laporan = () => {
     ],
   };
 
-  // buat label dan daftar jam sebenarnya (8 s/d 22)
+  // jam operasional (8 s/d 22)
   const hourLabels = Array.from({ length: 15 }, (_, i) => `${8 + i}:00`);
-  const hours = Array.from({ length: 15 }, (_, i) => 8 + i); // [8,9,10,...,22]
+  const hours = Array.from({ length: 15 }, (_, i) => 8 + i);
 
-  // map visitors_by_hour -> gabungan FNB+WS
   const visitorsMap = new Map(
     visitorsByHour.map((r) => [Number(r.hour), Number(r.count)])
   );
   const visitorsData = hours.map((H) => visitorsMap.get(H) || 0);
 
-  // Peak hours visiting (Top 3 dari visitorsData)
   const topPeakIdx = useMemo(
     () => getTopNIndices(visitorsData, 3),
     [visitorsData]
@@ -332,239 +335,120 @@ const Laporan = () => {
     }
   };
 
-  // === Export to Excel Handler ===
+  // === Export to Excel Handler (PERBAIKAN FULL) ===
   const handleExportExcel = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
 
-      const defaultFont = { name: "Times New Roman", size: 12 };
-      const boldFont = { name: "Times New Roman", size: 12, bold: true };
-
-      const setBorder = (cell) => {
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
+      const borderStyle = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
       };
 
-      const formatRp = (val) =>
-        `Rp ${new Intl.NumberFormat("id-ID").format(Number(val || 0))}`;
-
-      const addTitle = (sheet, row, text, width = 5) => {
-        // merge sampai kolom E
-        sheet.mergeCells(row, 1, row, width);
-        const cell = sheet.getCell(row, 1);
-        cell.value = text;
-        cell.font = { name: "Times New Roman", size: 14, bold: true };
-        cell.alignment = { horizontal: "center" };
-        cell.border = { bottom: { style: "medium" } };
-        return row + 2;
+      const headerFill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFF4A460" },
       };
 
-      const addPeriod = (sheet, row) => {
-        sheet.getCell(row, 1).value = `Periode: ${dateRange[0].format(
-          "D MMM YYYY"
-        )} – ${dateRange[1].format("D MMM YYYY")}`;
-        sheet.getCell(row, 1).font = defaultFont;
-        return row + 2;
-      };
+      const Rp = (v) => `Rp ${Number(v || 0).toLocaleString("id-ID", { minimumFractionDigits: 0 })}`;
 
-      const addTable = (sheet, row, title, headers, rows) => {
-        // Judul tabel tidak di border
-        sheet.getCell(row, 1).value = title;
-        sheet.getCell(row, 1).font = boldFont;
-        row++;
+      // --- SHEET 1: RINGKASAN ---
+      const sheetSummary = workbook.addWorksheet("Ringkasan");
+      
+      sheetSummary.mergeCells("A1:E1");
+      sheetSummary.getCell("A1").value = "RINGKASAN LAPORAN OWNER";
+      sheetSummary.getCell("A1").font = { bold: true, size: 14 };
+      sheetSummary.getCell("A1").alignment = { horizontal: "center" };
+      sheetSummary.getCell("A1").fill = headerFill;
 
-        // Header tabel (border)
-        headers.forEach((h, i) => {
-          const cell = sheet.getCell(row, i + 1);
-          cell.value = h;
-          cell.font = boldFont;
-          setBorder(cell);
-          cell.alignment = { horizontal: "center", vertical: "middle" };
-        });
+      sheetSummary.mergeCells("A2:E2");
+      sheetSummary.getCell("A2").value = `Periode: ${dateRange[0].format("DD/MM/YYYY")} s/d ${dateRange[1].format("DD/MM/YYYY")}`;
+      sheetSummary.getCell("A2").alignment = { horizontal: "center" };
 
-        // Isi tabel (border)
-        rows.forEach((r, ridx) => {
-          r.forEach((v, cidx) => {
-            const cell = sheet.getCell(row + 1 + ridx, cidx + 1);
-            cell.value = v;
-            cell.font = defaultFont;
-            cell.alignment = {
-              vertical: "middle",
-              wrapText: true,
-              horizontal: "center",
-            };
-            setBorder(cell);
-          });
-        });
-
-        return row + 1 + rows.length + 2;
-      };
-
-      // ========== SHEET 1 ===========
-      const sheet1 = workbook.addWorksheet("Laporan", {
-        views: [{ state: "frozen", ySplit: 6 }],
-      });
-
-      let r = 1;
-      r = addTitle(sheet1, r, "LAPORAN DAGO CREATIVE HUB & COFFEE LAB");
-      r = addPeriod(sheet1, r);
-
-      // DAILY SELLING
-      const dailyRows = dailySales.map((d) => [
-        dayjs(d.tanggal).format("D-MMM"),
-        formatRp(d.fnb),
-        formatRp(d.ws),
-        formatRp(d.all),
-      ]);
-
-      const totalFnb = dailySales.reduce((s, x) => s + Number(x.fnb || 0), 0);
-      const totalWs = dailySales.reduce((s, x) => s + Number(x.ws || 0), 0);
-      const totalAll = dailySales.reduce((s, x) => s + Number(x.all || 0), 0);
-
-      dailyRows.push([
-        "TOTAL",
-        formatRp(totalFnb),
-        formatRp(totalWs),
-        formatRp(totalAll),
-      ]);
-
-      r = addTable(
-        sheet1,
-        r,
-        "DAILY SELLING",
-        ["Tanggal", "FNB", "WS", "Total"],
-        dailyRows
-      );
-
-      // PAYMENT
-      const paymentRows = paymentBreakdown.map((p) => [
-        p.method,
-        formatRp(p.total),
-      ]);
-      r = addTable(sheet1, r, "PAYMENT", ["Metode", "Total"], paymentRows);
-
-      // VISITOR PER JAM
-      const visitRows = visitorsData
-        .map((v, i) => [hourLabels[i], v])
-        .filter((v) => v[1] > 0);
-
-      r = addTable(
-        sheet1,
-        r,
-        "VISITOR PER JAM",
-        ["Jam", "Kunjungan"],
-        visitRows
-      );
-
-      // HIGHLIGHT peak hours
-      const peaksIndex = [...topPeakIdx];
-      visitRows.forEach((rowVal, idx) => {
-        const hIndex = hourLabels.indexOf(rowVal[0]);
-        if (peaksIndex.includes(hIndex)) {
-          const cell = sheet1.getCell(r - visitRows.length - 1 + idx, 2);
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFFFF000" },
-          };
-        }
-      });
-
-      // SUMMARY
-      const summaryRows = [
-        ["Total FNB", formatRp(totals.total_fnb)],
-        ["Total WS", formatRp(totals.total_ws)],
-        ["Total Sales", formatRp(totals.total_sales)],
+      sheetSummary.addRow([]);
+      
+      const kpiData = [
+        ["Total Penjualan (Net)", Rp(totalPendapatanBersih)],
+        ["Total Pajak", Rp(totals.total_tax)],
         ["Total Transaksi", totals.total_transactions],
         ["Total Pengunjung", totals.total_visitors],
-        ["Total Hari", totals.total_days],
-        [
-          "Periode",
-          `${dateRange[0].format("D MMM YYYY")} - ${dateRange[1].format(
-            "D MMM YYYY"
-          )}`,
-        ],
+        ["Rata-rata Harian", Rp(totals.avg_daily)],
       ];
 
-      r = addTable(sheet1, r, "SUMMARY", ["Deskripsi", "Nilai"], summaryRows);
-
-      // SET WIDTH COLUMN SHEET 1
-      sheet1.columns.forEach((col, i) => {
-        let maxLength = 10;
-        col.eachCell({ includeEmpty: true }, (cell) => {
-          const len = cell.value ? cell.value.toString().length : 0;
-          if (len > maxLength) maxLength = Math.min(len, 20);
-        });
-        col.width = maxLength + 2;
+      kpiData.forEach(row => {
+        const r = sheetSummary.addRow(row);
+        r.getCell(1).font = { bold: true };
       });
 
-      // ========== SHEET 2 ===========
-      const sheet2 = workbook.addWorksheet("Top Selling");
-      let r2 = 1;
-      r2 = addTitle(sheet2, r2, "TOP SELLING DAGO CREATIVE HUB & COFFEE LAB");
-      r2 = addPeriod(sheet2, r2);
-
-      // TOP FNB
-      const topFnbRows = topFnb.map((x) => [
-        x.item,
-        x.tenant,
-        x.qty,
-        formatRp(x.total),
-      ]);
-      r2 = addTable(
-        sheet2,
-        r2,
-        "TOP FNB",
-        ["Menu", "Tenant", "Qty", "Total"],
-        topFnbRows
-      );
-
-      // TOP WORKING SPACE
-      const topWsRows = topWs.map((x) => [x.item, x.qty, formatRp(x.total)]);
-      r2 = addTable(
-        sheet2,
-        r2,
-        "TOP WORKING SPACE",
-        ["Kategori", "Qty", "Total"],
-        topWsRows
-      );
-
-      // Auto width Sheet 2
-      sheet2.columns.forEach((col) => {
-        let maxLength = 10;
-        col.eachCell({ includeEmpty: true }, (cell) => {
-          const len = cell.value ? cell.value.toString().length : 0;
-          if (len > maxLength) maxLength = Math.min(len, 20);
-        });
-        col.width = maxLength + 2;
+      sheetSummary.addRow([]);
+      sheetSummary.addRow(["Metode Pembayaran"]).font = { bold: true };
+      paymentBreakdown.forEach(p => {
+        sheetSummary.addRow([p.method, Rp(p.total)]);
       });
 
-      // CENTER semua tabel di Sheet 2
-      sheet2.eachRow({ includeEmpty: true }, (row) => {
-        row.eachCell((cell) => {
-          cell.alignment = {
-            horizontal: "center",
-            vertical: "middle",
-            wrapText: true,
-          };
-        });
+      sheetSummary.getColumn(1).width = 25;
+      sheetSummary.getColumn(2).width = 25;
+
+      // --- SHEET 2: PENJUALAN HARIAN ---
+      const sheetDaily = workbook.addWorksheet("Penjualan Harian");
+      const dailyHeader = ["Tanggal", "FNB", "Working Space", "Total Harian"];
+      const dhRow = sheetDaily.addRow(dailyHeader);
+      dhRow.font = { bold: true };
+      dhRow.eachCell(c => { c.border = borderStyle; c.fill = headerFill; });
+
+      dailySales.forEach(d => {
+        const row = sheetDaily.addRow([
+          dayjs(d.tanggal).format("DD/MM/YYYY"),
+          Rp(d.fnb),
+          Rp(d.ws),
+          Rp(d.all)
+        ]);
+        row.eachCell(c => c.border = borderStyle);
+      });
+      sheetDaily.columns = [{width: 15}, {width: 20}, {width: 20}, {width: 20}];
+
+      // --- SHEET 3: TOP PERFORMERS ---
+      const sheetTop = workbook.addWorksheet("Top Menu & WS");
+      
+      sheetTop.addRow(["TOP 10 F&B"]).font = { bold: true, size: 12 };
+      const fnbHeader = ["Menu", "Tenant", "Qty", "Total Penjualan"];
+      const fhRow = sheetTop.addRow(fnbHeader);
+      fhRow.font = { bold: true };
+      fhRow.eachCell(c => c.border = borderStyle);
+
+      topFnb.forEach(f => {
+        const r = sheetTop.addRow([f.item, f.tenant, f.qty, Rp(f.total)]);
+        r.eachCell(c => c.border = borderStyle);
       });
 
-      // SAVE
+      sheetTop.addRow([]);
+      sheetTop.addRow(["TOP 5 WORKING SPACE"]).font = { bold: true, size: 12 };
+      const wsHeader = ["Kategori", "Qty", "Total Penjualan"];
+      const whRow = sheetTop.addRow(wsHeader);
+      whRow.font = { bold: true };
+      whRow.eachCell((c, i) => { if (i <= 3) c.border = borderStyle; });
+
+      topWs.forEach(w => {
+        const r = sheetTop.addRow([w.item, w.qty, Rp(w.total)]);
+        r.eachCell((c, i) => { if (i <= 3) c.border = borderStyle; });
+      });
+
+      sheetTop.columns = [{width: 30}, {width: 20}, {width: 10}, {width: 20}];
+
+      // --- GENERATE FILE ---
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(
         new Blob([buffer]),
-        `laporan-${dateRange[0].format("YYYYMMDD")}_to_${dateRange[1].format(
-          "YYYYMMDD"
-        )}.xlsx`
+        `Laporan_Summary_${dateRange[0].format("YYYYMMDD")}_${dateRange[1].format("YYYYMMDD")}.xlsx`
       );
+
+      message.success("Laporan berhasil diunduh!");
     } catch (e) {
       console.error(e);
-      message.error("Gagal membuat Excel.");
+      message.error("Gagal membuat Excel: " + e.message);
     }
   };
 
@@ -625,7 +509,7 @@ const Laporan = () => {
       if (name.toLowerCase().includes("working space")) {
         return WS_COLOR;
       }
-      return BLUE_TONES[i % BLUE_TONES.length]; // rotate blue tones
+      return BLUE_TONES[i % BLUE_TONES.length];
     });
 
     return {
@@ -721,8 +605,8 @@ const Laporan = () => {
           <Col xs={24} sm={12} md={6}>
             <Card loading={loading}>
               <Statistic
-                title="Total Penjualan"
-                value={`Rp ${formatRupiah(totals.total_sales)}`}
+                title="Total Penjualan (Net)"
+                value={`Rp ${formatRupiah(totalPendapatanBersih)}`}
                 prefix={<ShopOutlined />}
               />
             </Card>
@@ -1025,7 +909,9 @@ const Laporan = () => {
                   },
                 ]}
                 dataSource={topWs}
-                rowKey={(r) => `${r.item}-${String(r.qty)}-${String(r.total)}`}
+                rowKey={(r) =>
+                  `${r.item}-${String(r.qty)}-${String(r.total)}`
+                }
                 pagination={false}
                 size="small"
                 locale={{ emptyText: <Empty description="Tidak ada data" /> }}
@@ -1054,8 +940,8 @@ const Laporan = () => {
           <Col xs={24} sm={12} md={6}>
             <Card>
               <Statistic
-                title="Total Penjualan"
-                value={`Rp ${formatRupiah(totals.total_sales)}`}
+                title="Total Penjualan (Net)"
+                value={`Rp ${formatRupiah(totalPendapatanBersih)}`}
                 prefix={<ShopOutlined />}
               />
             </Card>
@@ -1124,7 +1010,10 @@ const Laporan = () => {
               {paymentBreakdown.map((p, i) => (
                 <div
                   key={i}
-                  style={{ display: "flex", justifyContent: "space-between" }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
                 >
                   <Text>{p.method}</Text>
                   <Text strong>Rp {formatRupiah(p.total)}</Text>
@@ -1241,7 +1130,9 @@ const Laporan = () => {
                   },
                 ]}
                 dataSource={topWs}
-                rowKey={(r) => `${r.item}-${String(r.qty)}-${String(r.total)}`}
+                rowKey={(r) =>
+                  `${r.item}-${String(r.qty)}-${String(r.total)}`
+                }
                 pagination={false}
                 size="small"
                 locale={{ emptyText: <Empty description="Tidak ada data" /> }}

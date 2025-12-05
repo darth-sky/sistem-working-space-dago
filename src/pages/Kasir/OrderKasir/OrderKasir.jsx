@@ -574,6 +574,8 @@ const OrderKasir = () => {
             taxPercentage: taxRateFnbPercentFromAPI,
             taxNominal: totalTaxNominal,
             totalAmount: totalAmount,
+            // TAMBAHKAN BARIS INI:
+            booking_source: 'KasirWalkIn'
         };
     };
 

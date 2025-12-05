@@ -482,9 +482,6 @@ const App = () => {
             <Route path="/about-us" element={<AboutUs />} />
             <Route path="/faq" element={<FAQPage />} />
 
-
-            {/* Perhatikan path event-spaces: sebelumnya ada '/event-spaces' & '/event-spaces-pelanggan'.
-                Saya asumsikan yang benar adalah '/event-spaces' sesuai menu. Sesuaikan jika perlu. */}
             <Route path="/event-spaces" element={<EventSpacesPelanggan />} />
 
             <Route path="/promo-pelanggan" element={<PromoPelanggan />} />

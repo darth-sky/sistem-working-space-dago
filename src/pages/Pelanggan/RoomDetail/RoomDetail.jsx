@@ -196,11 +196,19 @@ const RoomDetail = () => {
     }, [currentUser, isLoadingUser, selectedRange?.from]);
 
     // 4. Ambil data promo
-    useEffect(() => {
+useEffect(() => {
         const fetchPromo = async () => {
             try {
                 const response = await getPromo();
-                setPromo(response.datas || []);
+                const allPromos = response.datas || [];
+
+                // Opsi Tambahan: Filter lagi di client-side untuk keamanan ganda
+                // (Meskipun backend sudah memfilter, ini memastikan tidak ada promo 'fnb' yang lolos)
+                const roomPromos = allPromos.filter(p => 
+                    p.kategori_promo === 'room' || p.kategori_promo === 'all'
+                );
+
+                setPromo(roomPromos);
             } catch (error) {
                 console.error("Error fetching promo:", error);
             }

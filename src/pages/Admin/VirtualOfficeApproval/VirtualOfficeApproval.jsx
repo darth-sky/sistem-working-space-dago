@@ -1,5 +1,3 @@
-// Ganti file VirtualOfficeApproval.js Anda dengan ini
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Tabs, Button, Spin, message, Modal, Row, Col, Typography, Tag, Empty, Space } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, ClockCircleOutlined } from '@ant-design/icons'; // Import ClockCircleOutlined

@@ -678,7 +678,12 @@ const WorkingSpace = () => {
       y: {
         beginAtZero: true,
         title: { display: true, text: "Jumlah Booking" },
-        ticks: { callback: (v) => `${Math.trunc(v)}` },
+        ticks: {
+          precision: 0,
+          autoSkip: true,
+          autoSkipPadding: 10,
+          callback: (v) => Math.trunc(v),
+        },
       },
       x: { title: { display: true, text: "Jam Operasional" } },
     },
@@ -715,266 +720,266 @@ const WorkingSpace = () => {
     }
   };
 
-  // ===== Export to Excel =====
-  const handleExportExcel = async () => {
-    if (!dateRange || dateRange.length < 2) {
-      message.error("Harap pilih rentang tanggal terlebih dahulu!");
-      return;
-    }
+        // // ===== Export to Excel =====
+        // const handleExportExcel = async () => {
+        //   if (!dateRange || dateRange.length < 2) {
+        //     message.error("Harap pilih rentang tanggal terlebih dahulu!");
+        //     return;
+        //   }
 
-    try {
-      const startStr = dateRange[0].format("YYYY-MM-DD");
-      const endStr = dateRange[1].format("YYYY-MM-DD");
+        //   try {
+        //     const startStr = dateRange[0].format("YYYY-MM-DD");
+        //     const endStr = dateRange[1].format("YYYY-MM-DD");
 
-      const workbook = new ExcelJS.Workbook();
+        //     const workbook = new ExcelJS.Workbook();
 
-      // ========================== GLOBAL STYLE ==========================
-      const defaultFont = { name: "Times New Roman", size: 12 };
-      const boldFont = { name: "Times New Roman", size: 12, bold: true };
+        //     // ========================== GLOBAL STYLE ==========================
+        //     const defaultFont = { name: "Times New Roman", size: 12 };
+        //     const boldFont = { name: "Times New Roman", size: 12, bold: true };
 
-      const setBorder = (cell) => {
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-      };
+        //     const setBorder = (cell) => {
+        //       cell.border = {
+        //         top: { style: "thin" },
+        //         left: { style: "thin" },
+        //         bottom: { style: "thin" },
+        //         right: { style: "thin" },
+        //       };
+        //     };
 
-      const formatRp = (v) =>
-        `Rp ${new Intl.NumberFormat("id-ID").format(Number(v || 0))}`;
+        //     const formatRp = (v) =>
+        //       `Rp ${new Intl.NumberFormat("id-ID").format(Number(v || 0))}`;
 
-      const autoFitColumns = (sheet, minWidth = 8, maxWidth = 25) => {
-        sheet.columns.forEach((col) => {
-          let maxLength = 0;
-          col.eachCell({ includeEmpty: true }, (cell) => {
-            let value = cell.value;
-            let text =
-              value && typeof value === "object" && value.richText
-                ? value.richText.map((t) => t.text).join("")
-                : value !== null && value !== undefined
-                ? String(value)
-                : "";
+        //     const autoFitColumns = (sheet, minWidth = 8, maxWidth = 25) => {
+        //       sheet.columns.forEach((col) => {
+        //         let maxLength = 0;
+        //         col.eachCell({ includeEmpty: true }, (cell) => {
+        //           let value = cell.value;
+        //           let text =
+        //             value && typeof value === "object" && value.richText
+        //               ? value.richText.map((t) => t.text).join("")
+        //               : value !== null && value !== undefined
+        //               ? String(value)
+        //               : "";
 
-            if (text.startsWith("Rp")) text = text.replace(/Rp\s?/g, "");
+        //           if (text.startsWith("Rp")) text = text.replace(/Rp\s?/g, "");
 
-            const length =
-              text.length * 0.9 +
-              (text.match(/[A-Z]/g)?.length || 0) * 0.2 +
-              (text.match(/[0-9]/g)?.length || 0) * 0.05;
+        //           const length =
+        //             text.length * 0.9 +
+        //             (text.match(/[A-Z]/g)?.length || 0) * 0.2 +
+        //             (text.match(/[0-9]/g)?.length || 0) * 0.05;
 
-            maxLength = Math.max(maxLength, length);
-          });
+        //           maxLength = Math.max(maxLength, length);
+        //         });
 
-          col.width = Math.min(Math.max(maxLength + 2, minWidth), maxWidth);
-        });
-      };
+        //         col.width = Math.min(Math.max(maxLength + 2, minWidth), maxWidth);
+        //       });
+        //     };
 
-      const addSheetTitle = (sheet, title) => {
-        sheet.mergeCells("A1:F1");
-        const c = sheet.getCell("A1");
-        c.value = title;
-        c.font = { name: "Times New Roman", size: 16, bold: true };
-        c.alignment = { horizontal: "center" };
-        sheet.addRow([]);
-      };
+        //     const addSheetTitle = (sheet, title) => {
+        //       sheet.mergeCells("A1:F1");
+        //       const c = sheet.getCell("A1");
+        //       c.value = title;
+        //       c.font = { name: "Times New Roman", size: 16, bold: true };
+        //       c.alignment = { horizontal: "center" };
+        //       sheet.addRow([]);
+        //     };
 
-      const addPeriod = (sheet) => {
-        const r = sheet.addRow([
-          `Periode: ${dateRange[0].format(
-            "D MMM YYYY"
-          )} – ${dateRange[1].format("D MMM YYYY")}`,
-        ]);
-        r.getCell(1).font = defaultFont;
-        sheet.addRow([]);
-      };
+        //     const addPeriod = (sheet) => {
+        //       const r = sheet.addRow([
+        //         `Periode: ${dateRange[0].format(
+        //           "D MMM YYYY"
+        //         )} – ${dateRange[1].format("D MMM YYYY")}`,
+        //       ]);
+        //       r.getCell(1).font = defaultFont;
+        //       sheet.addRow([]);
+        //     };
 
-      const addTable = (sheet, title, headers, rows) => {
-        // Judul Section
-        const titleRow = sheet.addRow([title]);
-        titleRow.getCell(1).font = boldFont;
-        sheet.addRow([]);
+        //     const addTable = (sheet, title, headers, rows) => {
+        //       // Judul Section
+        //       const titleRow = sheet.addRow([title]);
+        //       titleRow.getCell(1).font = boldFont;
+        //       sheet.addRow([]);
 
-        // Header
-        const headerRow = sheet.addRow(headers);
-        headerRow.eachCell((cell) => {
-          cell.font = boldFont;
-          cell.alignment = { horizontal: "center", vertical: "middle" };
-          setBorder(cell);
-        });
+        //       // Header
+        //       const headerRow = sheet.addRow(headers);
+        //       headerRow.eachCell((cell) => {
+        //         cell.font = boldFont;
+        //         cell.alignment = { horizontal: "center", vertical: "middle" };
+        //         setBorder(cell);
+        //       });
 
-        // Data Rows
-        rows.forEach((r) => {
-          const row = sheet.addRow(r);
-          row.eachCell((cell) => {
-            cell.font = defaultFont;
-            cell.alignment = { vertical: "middle", wrapText: true };
-            setBorder(cell);
-          });
-        });
+        //       // Data Rows
+        //       rows.forEach((r) => {
+        //         const row = sheet.addRow(r);
+        //         row.eachCell((cell) => {
+        //           cell.font = defaultFont;
+        //           cell.alignment = { vertical: "middle", wrapText: true };
+        //           setBorder(cell);
+        //         });
+        //       });
 
-        sheet.addRow([]);
-      };
+        //       sheet.addRow([]);
+        //     };
 
-      // ========================== SHEET 1 ==========================
-      const sheet1 = workbook.addWorksheet("Daily Booking");
+        //     // ========================== SHEET 1 ==========================
+        //     const sheet1 = workbook.addWorksheet("Daily Booking");
 
-      addSheetTitle(
-        sheet1,
-        "LAPORAN WORKING SPACE — DAGO CREATIVE HUB & COFFEE LAB"
-      );
-      addPeriod(sheet1);
+        //     addSheetTitle(
+        //       sheet1,
+        //       "LAPORAN WORKING SPACE — DAGO CREATIVE HUB & COFFEE LAB"
+        //     );
+        //     addPeriod(sheet1);
 
-      // Generate date list
-      const s = dateRange[0].clone().startOf("day");
-      const e = dateRange[1].clone().startOf("day");
-      const dates = [];
-      let d = s.clone();
-      while (d.isSame(e, "day") || d.isBefore(e)) {
-        dates.push(d.clone());
-        d = d.add(1, "day");
-      }
+        //     // Generate date list
+        //     const s = dateRange[0].clone().startOf("day");
+        //     const e = dateRange[1].clone().startOf("day");
+        //     const dates = [];
+        //     let d = s.clone();
+        //     while (d.isSame(e, "day") || d.isBefore(e)) {
+        //       dates.push(d.clone());
+        //       d = d.add(1, "day");
+        //     }
 
-      const daily = dashboardData?.dailyRevenue || { datasets: {} };
+        //     const daily = dashboardData?.dailyRevenue || { datasets: {} };
 
-      // DAILY TABLE
-      addTable(
-        sheet1,
-        "DAILY BOOKING",
-        ["Tanggal", "Open Space", "Space Monitor", "Meeting Room", "Total"],
-        dates.map((dt, i) => {
-          const open = daily.datasets["Open Space"]?.[i] ?? 0;
-          const mon = daily.datasets["Space Monitor"]?.[i] ?? 0;
-          const meet =
-            (daily.datasets["Room Meeting Besar"]?.[i] ?? 0) +
-            (daily.datasets["Room Meeting Kecil"]?.[i] ?? 0);
+        //     // DAILY TABLE
+        //     addTable(
+        //       sheet1,
+        //       "DAILY BOOKING",
+        //       ["Tanggal", "Open Space", "Space Monitor", "Meeting Room", "Total"],
+        //       dates.map((dt, i) => {
+        //         const open = daily.datasets["Open Space"]?.[i] ?? 0;
+        //         const mon = daily.datasets["Space Monitor"]?.[i] ?? 0;
+        //         const meet =
+        //           (daily.datasets["Room Meeting Besar"]?.[i] ?? 0) +
+        //           (daily.datasets["Room Meeting Kecil"]?.[i] ?? 0);
 
-          const total = open + mon + meet;
+        //         const total = open + mon + meet;
 
-          return [
-            dt.format("D-MMM"),
-            formatRp(open),
-            formatRp(mon),
-            formatRp(meet),
-            formatRp(total),
-          ];
-        })
-      );
+        //         return [
+        //           dt.format("D-MMM"),
+        //           formatRp(open),
+        //           formatRp(mon),
+        //           formatRp(meet),
+        //           formatRp(total),
+        //         ];
+        //       })
+        //     );
 
-      // SUMMARY
-      addTable(
-        sheet1,
-        "SUMMARY",
-        ["Keterangan", "Nilai"],
-        [
-          ["Total Pendapatan", formatRp(stats.totalRevenue)],
-          ["Total Booking", stats.totalBookings],
-          ["Total Pengunjung", stats.totalVisitors],
-          ["Total Hari", dates.length],
-          ["Periode", `${startStr} s.d. ${endStr}`],
-        ]
-      );
+        //     // SUMMARY
+        //     addTable(
+        //       sheet1,
+        //       "SUMMARY",
+        //       ["Keterangan", "Nilai"],
+        //       [
+        //         ["Total Pendapatan", formatRp(stats.totalRevenue)],
+        //         ["Total Booking", stats.totalBookings],
+        //         ["Total Pengunjung", stats.totalVisitors],
+        //         ["Total Hari", dates.length],
+        //         ["Periode", `${startStr} s.d. ${endStr}`],
+        //       ]
+        //     );
 
-      autoFitColumns(sheet1);
+        //     autoFitColumns(sheet1);
 
-      // ========================== SHEET 2 ==========================
-      const sheet2 = workbook.addWorksheet("Space Report");
+        //     // ========================== SHEET 2 ==========================
+        //     const sheet2 = workbook.addWorksheet("Space Report");
 
-      addSheetTitle(
-        sheet2,
-        "LAPORAN WORKING SPACE — DAGO CREATIVE HUB & COFFEE LAB"
-      );
-      addPeriod(sheet2);
+        //     addSheetTitle(
+        //       sheet2,
+        //       "LAPORAN WORKING SPACE — DAGO CREATIVE HUB & COFFEE LAB"
+        //     );
+        //     addPeriod(sheet2);
 
-      // Popular Space
-      addTable(
-        sheet2,
-        "POPULAR SPACE",
-        ["Kategori (Durasi)", "Qty", "Total (Rp)"],
-        topWs.map((t) => [t.item, t.qty, formatRp(t.total)])
-      );
+        //     // Popular Space
+        //     addTable(
+        //       sheet2,
+        //       "POPULAR SPACE",
+        //       ["Kategori (Durasi)", "Qty", "Total (Rp)"],
+        //       topWs.map((t) => [t.item, t.qty, formatRp(t.total)])
+        //     );
 
-      // Trafik Booking Per Durasi
-      addTable(
-        sheet2,
-        "TRAFIK BOOKING PER DURASI",
-        ["Durasi", "Jumlah Booking", "Total Revenue (Rp)"],
-        (dashboardData?.packageByDuration || []).map((p) => [
-          `${p.durasi_jam} Jam`,
-          p.total_booking,
-          formatRp(p.total_revenue),
-        ])
-      );
+        //     // Trafik Booking Per Durasi
+        //     addTable(
+        //       sheet2,
+        //       "TRAFIK BOOKING PER DURASI",
+        //       ["Durasi", "Jumlah Booking", "Total Revenue (Rp)"],
+        //       (dashboardData?.packageByDuration || []).map((p) => [
+        //         `${p.durasi_jam} Jam`,
+        //         p.total_booking,
+        //         formatRp(p.total_revenue),
+        //       ])
+        //     );
 
-      // Peak Hours
-      addTable(
-        sheet2,
-        "PEAK HOURS",
-        ["Jam", "Jumlah Booking"],
-        Object.entries(dashboardData?.hourlyBookings || {}).map(
-          ([jam, total]) => [`${jam}:00`, total]
-        )
-      );
+        //     // Peak Hours
+        //     addTable(
+        //       sheet2,
+        //       "PEAK HOURS",
+        //       ["Jam", "Jumlah Booking"],
+        //       Object.entries(dashboardData?.hourlyBookings || {}).map(
+        //         ([jam, total]) => [`${jam}:00`, total]
+        //       )
+        //     );
 
-      // Pattern by Day
-      const detailed = dashboardData?.bookingsByDateDetailed || {};
+        //     // Pattern by Day
+        //     const detailed = dashboardData?.bookingsByDateDetailed || {};
 
-      let cur = dateRange[0].clone().startOf("week");
-      const wEnd = dateRange[1].clone().startOf("day");
+        //     let cur = dateRange[0].clone().startOf("week");
+        //     const wEnd = dateRange[1].clone().startOf("day");
 
-      const weeks = [];
-      while (cur.isSame(wEnd, "day") || cur.isBefore(wEnd)) {
-        const ws = cur.clone();
-        const we = cur.clone().add(6, "day");
-        weeks.push({
-          start: ws,
-          end: we,
-          label: `Minggu Ke-${weeks.length + 1} [${ws.format(
-            "D MMM"
-          )} – ${we.format("D MMM")}]`,
-        });
-        cur = cur.add(1, "week");
-      }
+        //     const weeks = [];
+        //     while (cur.isSame(wEnd, "day") || cur.isBefore(wEnd)) {
+        //       const ws = cur.clone();
+        //       const we = cur.clone().add(6, "day");
+        //       weeks.push({
+        //         start: ws,
+        //         end: we,
+        //         label: `Minggu Ke-${weeks.length + 1} [${ws.format(
+        //           "D MMM"
+        //         )} – ${we.format("D MMM")}]`,
+        //       });
+        //       cur = cur.add(1, "week");
+        //     }
 
-      addTable(
-        sheet2,
-        "PATTERN BY DAY",
-        ["Week", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
-        weeks.map((w) => {
-          const count = [0, 0, 0, 0, 0, 0, 0];
-          for (let i = 0; i < 7; i++) {
-            const dt = w.start.clone().add(i, "day");
-            if (dt.isBefore(s) || dt.isAfter(e)) continue;
+        //     addTable(
+        //       sheet2,
+        //       "PATTERN BY DAY",
+        //       ["Week", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
+        //       weeks.map((w) => {
+        //         const count = [0, 0, 0, 0, 0, 0, 0];
+        //         for (let i = 0; i < 7; i++) {
+        //           const dt = w.start.clone().add(i, "day");
+        //           if (dt.isBefore(s) || dt.isAfter(e)) continue;
 
-            const key = dt.format("YYYY-MM-DD");
-            const total = detailed[key]?.total ?? 0;
+        //           const key = dt.format("YYYY-MM-DD");
+        //           const total = detailed[key]?.total ?? 0;
 
-            const wd = dt.day();
-            const idx = wd === 0 ? 6 : wd - 1;
+        //           const wd = dt.day();
+        //           const idx = wd === 0 ? 6 : wd - 1;
 
-            count[idx] += total;
-          }
-          return [w.label, ...count];
-        })
-      );
+        //           count[idx] += total;
+        //         }
+        //         return [w.label, ...count];
+        //       })
+        //     );
 
-      autoFitColumns(sheet2);
+        //     autoFitColumns(sheet2);
 
-      // ========================== SAVE ==========================
-      const buffer = await workbook.xlsx.writeBuffer();
-      saveAs(
-        new Blob([buffer], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        }),
-        `WorkingSpace_${startStr}_to_${endStr}.xlsx`
-      );
+        //     // ========================== SAVE ==========================
+        //     const buffer = await workbook.xlsx.writeBuffer();
+        //     saveAs(
+        //       new Blob([buffer], {
+        //         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        //       }),
+        //       `WorkingSpace_${startStr}_to_${endStr}.xlsx`
+        //     );
 
-      message.success("Excel berhasil dibuat!");
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal membuat file Excel.");
-    }
-  };
+        //     message.success("Excel berhasil dibuat!");
+        //   } catch (err) {
+        //     console.error(err);
+        //     message.error("Gagal membuat file Excel.");
+        //   }
+        // };
 
   return (
     <>
@@ -1250,9 +1255,7 @@ const WorkingSpace = () => {
 
               {/* KONTRIBUSI PRODUCT */}
               <Card style={{ marginBottom: 16 }}>
-                <Divider orientation="left" plain>
-                  Kontribusi Product
-                </Divider>
+                <Title level={5}>Kontribusi Product</Title>
 
                 <div style={{ height: 220, marginBottom: 16 }}>
                   {loading ? (
@@ -1341,7 +1344,7 @@ const WorkingSpace = () => {
               </Card>
             </Col>
 
-            <Col Col xs={24} lg={8}>
+            <Col xs={24} lg={8}>
               <Card>
                 <Title level={5}>Quick Actions</Title>
                 <Space direction="vertical" style={{ width: "100%" }}>
@@ -1359,7 +1362,7 @@ const WorkingSpace = () => {
                       📄 Cetak Gambar
                     </button>
                   </Tooltip>
-                  <Tooltip title="Unduh seluruh data yang tampil ke Excel (multi-sheet)">
+                  {/* <Tooltip title="Unduh seluruh data yang tampil ke Excel (multi-sheet)">
                     <button
                       onClick={handleExportExcel}
                       style={{
@@ -1372,7 +1375,7 @@ const WorkingSpace = () => {
                     >
                       ⬇ Cetak Laporan (Excel)
                     </button>
-                  </Tooltip>
+                  </Tooltip> */}
                 </Space>
               </Card>
             </Col>

@@ -70,6 +70,7 @@ const ProductTab = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [data, setData] = useState([]);
   const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1); // <--- TAMBAHKAN IN
   const [kategoriList, setKategoriList] = useState([]);
   const [tenantList, setTenantList] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
@@ -506,8 +507,14 @@ const ProductTab = () => {
               enterButton={<SearchOutlined />}
               size="large"
               value={searchText}
-              onSearch={value => setSearchText(value)}
-              onChange={(e) => setSearchText(e.target.value)}
+              onSearch={value => {
+                setSearchText(value);
+                setCurrentPage(1); // <--- Reset ke halaman 1 saat search
+              }}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setCurrentPage(1); // <--- Reset ke halaman 1 saat mengetik
+              }}
             />
           </Col>
           <Col>
@@ -537,16 +544,21 @@ const ProductTab = () => {
             columns={columns}
             dataSource={filteredData}
             pagination={{
-              current: Math.floor(data.findIndex(item => item.key === filteredData[0]?.key) / pageSize) + 1 || 1,
-              pageSize,
+              current: currentPage, // <--- Gunakan state
+              pageSize: pageSize,
               showSizeChanger: true,
               pageSizeOptions: ['10', '20', '50', '100'],
               showQuickJumper: true,
               total: filteredData.length,
               showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} produk`,
               onChange: (page, newSize) => {
+                // Update state halaman saat tombol diklik
+                setCurrentPage(page);
+
+                // Update pageSize jika user mengubah jumlah baris per halaman
                 if (newSize !== pageSize) {
                   setPageSize(newSize);
+                  setCurrentPage(1); // Opsional: reset ke hal 1 jika ukuran page berubah
                 }
               },
               position: ["bottomRight"],

@@ -116,7 +116,6 @@ const SettingsKasir = () => {
         cashier: namaKasirLogin || "Tes Kasir",
         customer: "Test Printer",
         location: "Settings Menu",
-
         // Masukkan Voucher sebagai Item
         items: [
           {

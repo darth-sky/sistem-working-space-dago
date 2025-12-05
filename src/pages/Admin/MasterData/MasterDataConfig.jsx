@@ -2,7 +2,9 @@ import {
     UserOutlined,
     ShopOutlined,
 } from "@ant-design/icons";
-
+import {
+    MessageCircleQuestion
+} from "lucide-react"
 // Import tab pages
 import UserTab from "./tabs/UserTab";
 import TenantTab from "./tabs/TenantTab";
@@ -15,11 +17,12 @@ import VirtualOfficePackageTab from "./tabs/VirtualOfficePackageTab";
 import PromoTab from "./tabs/PromoTab";
 import EventSpacesTab from "./tabs/EventSpacesTab";
 import { AiOutlineProduct } from "react-icons/ai";
-import { MdOutlineProductionQuantityLimits, MdChair, MdCardMembership, MdDiscount, MdEvent, MdEventAvailable } from "react-icons/md";
+import { MdOutlineProductionQuantityLimits, MdChair, MdCardMembership, MdDiscount, MdEvent, MdEventAvailable, MdSettings, MdBook } from "react-icons/md";
 import { GiPostOffice } from "react-icons/gi";
 import AcaraTab from "./tabs/AcaraTab";
 import CoaadminTab from "./tabs/CoaadminTab";
 import FAQTab from "./tabs/FAQtab";
+import SettingsTab from "./tabs/SettingsTab";
 
 
 
@@ -107,15 +110,22 @@ export const tabsConfig = [
         key: "COA",
         path: "COA",
         label: "COA",
-        icon: MdEvent,
+        icon: MdBook,
         component: <CoaadminTab />,
     },
     {
         key: "FAQtab",
         path: "FAQtab",
         label: "FAQ",
-        icon: MdEvent,
+        icon: MessageCircleQuestion,
         component: <FAQTab />,
+    },
+    {
+        key: "settings",
+        path: "settings",
+        label: "settings",
+        icon: MdSettings,
+        component: <SettingsTab />,
     },
 ];
 

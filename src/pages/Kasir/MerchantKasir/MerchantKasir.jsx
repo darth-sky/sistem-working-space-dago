@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Button, Tag, Spin, Alert, Input } from "antd";
-import { getMerchantOrders } from "../../../services/service"; // sesuaikan path
+import { getMerchantOrders } from "../../../services/service"; 
 
 const MerchantKasir = () => {
   const [filter, setFilter] = useState("All");
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState(""); // Perubahan: State untuk menyimpan input pencarian
+  const [searchTerm, setSearchTerm] = useState(""); 
 
-  // Ambil data dari backend
-// Ganti useEffect Anda dengan kode ini
 
   // Ambil data dari backend
   useEffect(() => {

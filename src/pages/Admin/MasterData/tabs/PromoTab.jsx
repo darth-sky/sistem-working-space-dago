@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react"; 
+import React, { useState, useEffect } from "react";
 import {
     Table, Button, Modal, Input, Typography, Row, Col, Card, Space, notification,
-    Popconfirm, Tooltip, InputNumber, DatePicker, TimePicker, Tag, Switch
+    Popconfirm, Tooltip, InputNumber, DatePicker, TimePicker, Tag, Switch, Alert, Select
 } from "antd";
 import {
-    PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined
+    PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, CheckCircleOutlined, InfoCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
@@ -15,12 +15,20 @@ const { Text } = Typography;
 const { Search } = Input;
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 const PromoTab = () => {
     const [open, setOpen] = useState(false);
     const [editingPromo, setEditingPromo] = useState(null);
     const [searchText, setSearchText] = useState("");
-    const [formData, setFormData] = useState({ status_aktif: "inaktif" });
+    
+    // ✅ Tambahkan default kategori_promo: "all"
+    const [formData, setFormData] = useState({ 
+        status_aktif: "inaktif", 
+        syarat: "", 
+        kategori_promo: "all" 
+    });
+    
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState([]);
     const [pageSize, setPageSize] = useState(5);
@@ -114,19 +122,33 @@ const PromoTab = () => {
     });
 
     const columns = [
-        { title: "ID", dataIndex: "id_promo", key: "id_promo", width: 60, sorter: (a, b) => a.id_promo - b.id_promo },
+        { title: "ID", dataIndex: "id_promo", key: "id_promo", width: 65, sorter: (a, b) => a.id_promo - b.id_promo },
         {
             title: "Kode Promo",
             dataIndex: "kode_promo",
             key: "kode_promo",
+            width: 150,
             render: (text) => <Text strong>{text}</Text>,
             ...getColumnSearchProps("kode_promo", "Cari kode promo..."),
         },
+        // ✅ KOLOM BARU: KATEGORI
         {
-            title: "Deskripsi",
-            dataIndex: "deskripsi_promo",
-            key: "deskripsi_promo",
-            ...getColumnSearchProps("deskripsi_promo", "Cari deskripsi..."),
+            title: "Kategori",
+            dataIndex: "kategori_promo",
+            key: "kategori_promo",
+            filters: [
+                { text: "Ruangan", value: "room" },
+                { text: "F&B", value: "fnb" },
+                { text: "Semua", value: "all" },
+            ],
+            onFilter: (value, record) => record.kategori_promo === value,
+            render: (cat) => {
+                let color = "geekblue";
+                let label = "SEMUA";
+                if (cat === "room") { color = "blue"; label = "RUANGAN"; }
+                if (cat === "fnb") { color = "orange"; label = "F&B"; }
+                return <Tag color={color}>{label}</Tag>;
+            }
         },
         {
             title: "Nilai Diskon",
@@ -139,6 +161,21 @@ const PromoTab = () => {
                     currency: "IDR",
                     minimumFractionDigits: 0,
                 }),
+        },
+        {
+            title: "Syarat (JSON)",
+            dataIndex: "syarat",
+            key: "syarat",
+            ellipsis: true,
+            render: (syarat) => {
+                if (!syarat) return "-";
+                try {
+                    const parsed = typeof syarat === 'string' ? JSON.parse(syarat) : syarat;
+                    return <Text code style={{ fontSize: 11 }}>{JSON.stringify(parsed)}</Text>;
+                } catch (e) {
+                    return syarat;
+                }
+            }
         },
         {
             title: "Tanggal Berlaku",
@@ -226,22 +263,45 @@ const PromoTab = () => {
         });
     };
 
+    // === Helper: Validate JSON String ===
+    const isValidJson = (str) => {
+        if (!str) return true; // Kosong boleh (NULL)
+        try {
+            JSON.parse(str);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    };
+
     // === CRUD ===
     const handleSave = async () => {
         const errors = {};
         if (!formData.kode_promo || formData.kode_promo.trim() === "") errors.kode_promo = true;
         if (!formData.nilai_diskon || formData.nilai_diskon <= 0) errors.nilai_diskon = true;
         if (!formData.tanggal_mulai) errors.tanggal_mulai = true;
+        // ✅ Validasi Kategori
+        if (!formData.kategori_promo) errors.kategori_promo = true;
+        
+        // Validasi JSON Syarat
+        if (formData.syarat && !isValidJson(formData.syarat)) {
+            errors.syarat = true;
+            showNotif("error", "Format Salah", "Field Syarat harus dalam format JSON yang valid (contoh: {\"min_belanja\": 50000})");
+        }
 
         if (Object.keys(errors).length > 0) {
             setValidationErrors(errors);
-            showNotif("warning", "Validasi Gagal", "Harap isi semua bidang yang wajib diisi.");
+            if(!errors.syarat) showNotif("warning", "Validasi Gagal", "Harap isi semua bidang yang wajib diisi.");
             return;
         }
 
         setLoading(true);
         try {
-            const payload = { ...formData };
+            const payload = { 
+                ...formData,
+                syarat: formData.syarat ? formData.syarat : null
+            };
+
             if (editingPromo) {
                 const res = await updatePromo(editingPromo.id_promo, payload);
                 if (res.status === 200) showNotif("success", "Promo Diperbarui", "Data promo berhasil diperbarui!");
@@ -279,21 +339,40 @@ const PromoTab = () => {
 
     const handleEdit = (promo) => {
         setEditingPromo(promo);
-        setFormData(promo);
+        
+        let syaratString = "";
+        if (promo.syarat) {
+            try {
+                syaratString = typeof promo.syarat === 'object' 
+                    ? JSON.stringify(promo.syarat, null, 2) 
+                    : promo.syarat;
+            } catch (e) {
+                syaratString = promo.syarat;
+            }
+        }
+
+        // ✅ Pastikan kategori_promo terisi, fallback ke 'all' jika null
+        setFormData({ 
+            ...promo, 
+            syarat: syaratString,
+            kategori_promo: promo.kategori_promo || 'all' 
+        });
         setValidationErrors({});
         setOpen(true);
     };
 
     const handleCancel = () => {
         setOpen(false);
-        setFormData({ status_aktif: "inaktif" });
+        // ✅ Reset ke default value saat cancel
+        setFormData({ status_aktif: "inaktif", syarat: "", kategori_promo: "all" });
         setEditingPromo(null);
         setValidationErrors({});
     };
 
     const handleAddClick = () => {
         setEditingPromo(null);
-        setFormData({ status_aktif: "inaktif" });
+        // ✅ Reset ke default value saat add new
+        setFormData({ status_aktif: "inaktif", syarat: "", kategori_promo: "all" });
         setValidationErrors({});
         setOpen(true);
     };
@@ -359,7 +438,7 @@ const PromoTab = () => {
                 onOk={handleSave}
                 confirmLoading={loading}
                 okText={editingPromo ? "Update" : "Simpan"}
-                width={600}
+                width={700}
                 destroyOnClose
             >
                 <div style={{ marginTop: "24px" }}>
@@ -381,6 +460,31 @@ const PromoTab = () => {
                                 )}
                             </div>
                         </Col>
+                        
+                        {/* ✅ INPUT KATEGORI PROMO BARU */}
+                        <Col span={12}>
+                            <div style={{ marginBottom: 16 }}>
+                                <Text strong>
+                                    Kategori Promo <span style={{ color: "red" }}>*</span>
+                                </Text>
+                                <Select
+                                    value={formData.kategori_promo}
+                                    onChange={(val) => handleChange("kategori_promo", val)}
+                                    style={{ marginTop: "8px", width: "100%" }}
+                                    status={validationErrors.kategori_promo ? 'error' : ''}
+                                >
+                                    <Option value="all">Semua Transaksi</Option>
+                                    <Option value="room">Khusus Ruangan</Option>
+                                    <Option value="fnb">Khusus F&B</Option>
+                                </Select>
+                                {validationErrors.kategori_promo && (
+                                    <Text type="danger" style={{ fontSize: 12 }}>Kategori wajib dipilih.</Text>
+                                )}
+                            </div>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={16}>
                         <Col span={12}>
                             <div style={{ marginBottom: 16 }}>
                                 <Text strong>
@@ -397,45 +501,83 @@ const PromoTab = () => {
                                     status={validationErrors.nilai_diskon ? 'error' : ''}
                                 />
                                 {validationErrors.nilai_diskon && (
-                                    <Text type="danger" style={{ fontSize: 12 }}>Nilai diskon wajib diisi (minimal 1).</Text>
+                                    <Text type="danger" style={{ fontSize: 12 }}>Nilai diskon wajib diisi.</Text>
+                                )}
+                            </div>
+                        </Col>
+                        <Col span={12}>
+                            <div style={{ marginBottom: 16 }}>
+                                <Text strong>
+                                    Tanggal Berlaku <span style={{ color: "red" }}>*</span>
+                                </Text>
+                                <RangePicker
+                                    style={{ marginTop: "8px", width: "100%" }}
+                                    onChange={handleDateChange}
+                                    value={dateRangeValue}
+                                    format="YYYY-MM-DD"
+                                    status={validationErrors.tanggal_mulai ? 'error' : ''}
+                                />
+                                {validationErrors.tanggal_mulai && (
+                                    <Text type="danger" style={{ fontSize: 12 }}>Tanggal berlaku wajib diisi.</Text>
                                 )}
                             </div>
                         </Col>
                     </Row>
-                    <div style={{ marginTop: "0px" }}>
+                    
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <div style={{ marginBottom: 16 }}>
+                                <Text strong>Waktu Berlaku (Opsional)</Text>
+                                <TimePicker.RangePicker
+                                    style={{ marginTop: "8px", width: "100%" }}
+                                    onChange={handleTimeChange}
+                                    value={timeRangeValue}
+                                    format="HH:mm:ss"
+                                />
+                            </div>
+                        </Col>
+                        {/* Space kosong agar rapi jika diperlukan, atau biarkan kosong */}
+                    </Row>
+
+                    <div style={{ marginBottom: 16 }}>
                         <Text strong>Deskripsi</Text>
                         <TextArea
-                            rows={3}
+                            rows={2}
                             placeholder="Masukkan deskripsi singkat promo"
                             value={formData.deskripsi_promo || ""}
                             onChange={(e) => handleChange("deskripsi_promo", e.target.value)}
                             style={{ marginTop: "8px" }}
                         />
                     </div>
-                    <div style={{ marginTop: "16px" }}>
-                        <Text strong>
-                            Tanggal Berlaku <span style={{ color: "red" }}>*</span>
-                        </Text>
-                        <RangePicker
-                            style={{ marginTop: "8px", width: "100%" }}
-                            onChange={handleDateChange}
-                            value={dateRangeValue}
-                            format="YYYY-MM-DD"
-                            status={validationErrors.tanggal_mulai ? 'error' : ''}
+
+                    <div style={{ marginBottom: 16 }}>
+                        <Space align="center" style={{ marginBottom: 8 }}>
+                            <Text strong>Syarat & Ketentuan (Format JSON)</Text>
+                            <Tooltip title='Contoh: {"min_transaction": 50000} atau {"min_durasi_jam": 3}. Kosongkan jika tidak ada.'>
+                                <InfoCircleOutlined style={{ color: '#1890ff' }} />
+                            </Tooltip>
+                        </Space>
+                        <TextArea
+                            rows={4}
+                            placeholder='Contoh: {"min_durasi_jam": 3}'
+                            value={formData.syarat || ""}
+                            onChange={(e) => handleChange("syarat", e.target.value)}
+                            style={{ fontFamily: 'monospace' }}
+                            status={validationErrors.syarat ? 'error' : ''}
                         />
-                        {validationErrors.tanggal_mulai && (
-                            <Text type="danger" style={{ fontSize: 12 }}>Tanggal berlaku wajib diisi.</Text>
+                        {validationErrors.syarat && (
+                            <div style={{ marginTop: 4 }}>
+                                <Text type="danger" style={{ fontSize: 12 }}>Format JSON tidak valid.</Text>
+                            </div>
                         )}
-                    </div>
-                    <div style={{ marginTop: "16px" }}>
-                        <Text strong>Waktu Berlaku (Opsional)</Text>
-                        <TimePicker.RangePicker
-                            style={{ marginTop: "8px", width: "100%" }}
-                            onChange={handleTimeChange}
-                            value={timeRangeValue}
-                            format="HH:mm:ss"
+                        <Alert 
+                            message="Gunakan format JSON standar. Pastikan menggunakan tanda kutip dua." 
+                            type="info" 
+                            showIcon 
+                            style={{ marginTop: 8, fontSize: 12 }} 
                         />
                     </div>
+
                     <div style={{ marginTop: "16px" }}>
                         <Text strong>Status <span style={{ color: "red" }}>*</span></Text>
                         <Switch
