@@ -293,26 +293,41 @@ const BagiHasil = () => {
   };
 
   // Kolom Tabel (Data Mapping)
+  // Kolom Tabel (Data Mapping)
   const columns = [
     {
       title: "Nama Tenant",
       dataIndex: "tenant",
       key: "tenant",
       render: (text, record) => (
-        <span className={record.isInternal ? "font-semibold text-purple-600" : "font-medium"}>
+        <span
+          className={
+            record.isInternal ? "font-semibold text-purple-600" : "font-medium"
+          }
+        >
           {text}
         </span>
       ),
     },
     {
-      title: "Total Pendapatan", // Ini Total Kotor (Grand Total)
-      dataIndex: "grandTotal", // Ubah mapping ke grandTotal
-      key: "grandTotal",
-      render: (amount) => (
-        <span className="font-semibold text-gray-800">
-          {formatRupiah(amount)}
-        </span>
-      ),
+      // JUDUL DIPERJELAS: Menandakan ini bukan Total Kotor (Gross)
+      title: "Pendapatan Bersih (Excl. Tax)",
+      
+      // Gunakan key custom karena kita melakukan perhitungan manual, bukan langsung ambil dataIndex
+      key: "netRevenue",
+      
+      render: (_, record) => {
+        // LOGIKA UTAMA: Grand Total (Uang Masuk) dikurangi Pajak
+        const grandTotal = parseFloat(record.grandTotal) || 0;
+        const tax = parseFloat(record.tax) || 0;
+        const netRevenue = grandTotal - tax;
+
+        return (
+          <span className="font-semibold text-gray-800">
+            {formatRupiah(netRevenue)}
+          </span>
+        );
+      },
       align: "right",
     },
     {
@@ -338,6 +353,7 @@ const BagiHasil = () => {
       align: "right",
     },
   ];
+
 
   // RENDER UI (TIDAK ADA PERUBAHAN STRUKTUR VISUAL)
   return (
@@ -509,7 +525,7 @@ const BagiHasil = () => {
                 Rincian Pendapatan per Tenant
               </h2>
               <Button icon={<DownloadOutlined />} onClick={exportAll}>
-                Export Semua
+                Export
               </Button>
             </div>
             <Table

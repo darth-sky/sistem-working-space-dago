@@ -15,7 +15,7 @@ import {
   Tooltip,
   Empty,
   Tag,
-  Button, 
+  Button,
 } from "antd";
 import { message } from "antd";
 import locale from "antd/locale/id_ID";
@@ -122,12 +122,12 @@ const FnBDashboard = () => {
     total_days: 0,
   });
 
-  const [tenantInfo, setTenantInfo] = useState([]); 
-  const [dailyTenant, setDailyTenant] = useState({}); 
+  const [tenantInfo, setTenantInfo] = useState([]);
+  const [dailyTenant, setDailyTenant] = useState({});
   const [visitorsByHour, setVisitorsByHour] = useState([]);
   const [peakByHour, setPeakByHour] = useState([]);
-  const [topItems, setTopItems] = useState({}); 
-  const [unpopItems, setUnpopItems] = useState({}); 
+  const [topItems, setTopItems] = useState({});
+  const [unpopItems, setUnpopItems] = useState({});
 
   const [dailyTarget] = useState(1000000);
   const [paymentBreakdown, setPaymentBreakdown] = useState([]);
@@ -167,7 +167,7 @@ const FnBDashboard = () => {
         setLoading(true);
         const start = dateRange[0].format("YYYY-MM-DD");
         const end = dateRange[1].format("YYYY-MM-DD");
-        
+
         const resp = await getOwnerFnB(start, end);
         const d = resp?.datas || {};
         const t = d?.totals || {};
@@ -213,7 +213,7 @@ const FnBDashboard = () => {
   // =====================================================================
   // --- LOGIKA UTAMA PERBAIKAN (CALCULATION ENGINE) ---
   // =====================================================================
-  
+
   // 1. Hitung Global Net (Total Penjualan Bersih) = Total Sales (Grand Total) - Total Pajak
   const globalGrandTotal = totals.total_sales || 0;
   const globalNetSales = Math.max(0, globalGrandTotal - totalPajak);
@@ -253,7 +253,7 @@ const FnBDashboard = () => {
       // [FIX 1 & 3] Konversi ke Net menggunakan rasio
       const newTotalNet = newTotalGross * grossToNetRatio;
 
-      base.total_fnb = newTotalNet; 
+      base.total_fnb = newTotalNet;
       base.total_sales = newTotalNet;
       base.avg_daily = Math.round(newTotalNet / totalDays);
     } else {
@@ -348,17 +348,17 @@ const FnBDashboard = () => {
       const wb = new ExcelJS.Workbook();
       const borderStyle = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
 
-      const tenantsToExport = selectedTenantIds.length > 0 
+      const tenantsToExport = selectedTenantIds.length > 0
         ? tenantTotals.filter(t => selectedTenantIds.includes(t.id))
         : tenantTotals;
 
       for (const tenant of tenantsToExport) {
         const tenantName = tenant.name;
-        const sheetName = tenantName.substring(0, 30).replace(/[:\/?*\[\]\\]/g, ""); 
+        const sheetName = tenantName.substring(0, 30).replace(/[:\/?*\[\]\\]/g, "");
         const ws = wb.addWorksheet(sheetName);
-        const tenantDetails = exportData[tenantName]; 
+        const tenantDetails = exportData[tenantName];
 
-        const totalSales = tenant.total; 
+        const totalSales = tenant.total;
         const ownerShare = totalSales * 0.3;
         const tenantShare = totalSales * 0.7;
 
@@ -465,7 +465,34 @@ const FnBDashboard = () => {
   const vMaxVisitors = Math.max(0, ...visitorsData);
   const yMaxVisitors = Math.max(2, Math.ceil(vMaxVisitors));
   const trafficBarOptions = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { filter: (ctx) => Number.isFinite(ctx.parsed?.y), callbacks: { label: (ctx) => `Pengunjung: ${formatRupiah(ctx.parsed?.y ?? 0)}` } } }, scales: { y: { beginAtZero: true, suggestedMax: yMaxVisitors, title: { display: true, text: "Jumlah Pengunjung" }, ticks: { callback: (v) => `${Math.trunc(v)}`, precision: 0, autoSkip: true } }, x: { title: { display: true, text: "Jam Operasional" } } } };
-  const peakBarOptions = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { filter: (ctx) => ctx.raw != null, callbacks: { label: (ctx) => `Menu dipesan: ${formatRupiah(ctx.parsed?.y ?? 0)}` } } }, scales: { y: { beginAtZero: true, title: { display: true, text: "Jumlah Menu" } }, x: { title: { display: true, text: "Jam Operasional" } } } };
+  const peakBarOptions = {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      datalabels: { display: false },
+      tooltip: {
+        filter: (ctx) => ctx.raw != null,
+        callbacks: {
+          label: (ctx) => `Menu dipesan: ${formatRupiah(ctx.parsed?.y ?? 0)}`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: { display: true, text: "Jumlah Menu" },
+        // --- TAMBAHKAN BAGIAN INI ---
+        ticks: {
+          stepSize: 1,   // Memaksa garis grid naik setiap 1 angka (1, 2, 3...)
+          precision: 0,  // Menghilangkan desimal (misal 2.0 jadi 2)
+        },
+        // ----------------------------
+      },
+      x: {
+        title: { display: true, text: "Jam Operasional" },
+      },
+    },
+  };
 
   const withTenant = (rows, tenant) => (Array.isArray(rows) ? rows : []).map((r, i) => ({ ...r, tenant: tenant.name, tenantId: tenant.id, key: `${tenant.id}-${i}-${r.item}`, qty: Number(r.qty || 0), total: Number(r.total || 0) }));
   const allTopItems = useMemo(() => tenantInfo.flatMap((tenant) => { const items = topItems[tenant.id] || []; return withTenant(items, tenant); }), [topItems, tenantInfo]);
@@ -489,14 +516,29 @@ const FnBDashboard = () => {
   const getDynamicTitle = () => { if (selectedTenantIds.length === 0) return { kpi: "Total Penjualan", line: "Daily Selling (per tenant)" }; if (selectedTenantIds.length === 1) { const tenantName = tenantInfo.find((t) => t.id === selectedTenantIds[0])?.name || ""; return { kpi: `Penjualan ${tenantName}`, line: `Daily Selling (${tenantName})` }; } return { kpi: "Penjualan (Filter)", line: "Daily Selling (Filter)" }; };
   const dynamicTitle = getDynamicTitle();
   const isAllTenantsView = selectedTenantIds.length === 0;
-  
+
   const paymentDoughnut = useMemo(() => {
-    if (!paymentBreakdown || paymentBreakdown.length === 0) return { labels: [], datasets: [{ data: [], backgroundColor: [] }] };
+    if (!paymentBreakdown || paymentBreakdown.length === 0)
+      return { labels: [], datasets: [{ data: [], backgroundColor: [] }] };
+
     const labels = paymentBreakdown.map((x) => x.method);
-    // [FIX 2] Metode Pembayaran dikonversi ke Net agar match dengan Total Penjualan
+
+    // [SOLUSI] Kalikan total pembayaran dengan rasio (Net / GrandTotal)
+    // Ini akan membuang porsi Pajak dari setiap metode pembayaran secara proporsional
     const values = paymentBreakdown.map((x) => Math.round(x.total * grandToNetRatio));
+
     const COLORS = ["#2563eb", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
-    return { labels, datasets: [{ data: values, backgroundColor: COLORS.slice(0, values.length), hoverOffset: 8 }] };
+
+    return {
+      labels,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: COLORS.slice(0, values.length),
+          hoverOffset: 8,
+        },
+      ],
+    };
   }, [paymentBreakdown, grandToNetRatio]);
 
   const top5PerTenant = useMemo(() => {
@@ -531,7 +573,7 @@ const FnBDashboard = () => {
             </Space>
           </Col>
         </Row>
-        
+
         {/* Nav Buttons */}
         <div className="flex justify-start gap-3 mb-6 no-print">
           <a href="/laporan" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100">Laporan</a>
@@ -547,10 +589,10 @@ const FnBDashboard = () => {
               <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
                 <Card loading={loading}>
                   {/* [FIX 1] Menampilkan Total Penjualan Bersih (Net) */}
-                  <Statistic 
-                    title={<Tooltip title="Total Transaksi (Grand Total) - Pajak">{dynamicTitle.kpi} (Bersih)</Tooltip>} 
-                    value={`Rp ${formatRupiah(totalSales)}`} 
-                    prefix={<ShopOutlined />} 
+                  <Statistic
+                    title={<Tooltip title="Total Transaksi (Grand Total) - Pajak">{dynamicTitle.kpi} (Bersih)</Tooltip>}
+                    value={`Rp ${formatRupiah(totalSales)}`}
+                    prefix={<ShopOutlined />}
                   />
                   <div style={{ marginTop: 12 }}>
                     <Text type="secondary">Target ({totalDays} hari): Rp {formatRupiah(dailyTarget * totalDays)}</Text>
@@ -636,7 +678,7 @@ const FnBDashboard = () => {
             <Col xs={24} lg={8}>
               <div style={{ display: isAllTenantsView ? "block" : "none" }}>
                 <Card style={{ marginBottom: 16 }} loading={loading}>
-                  <Title level={5}>Metode Pembayaran (F&B)</Title>
+                  <Title level={5}>Metode Pembayaran (F&B) nett</Title>
                   <Text type="secondary">Proporsi berdasarkan nilai penjualan bersih.</Text>
                   <div style={{ height: 240, marginTop: 12 }}>
                     {paymentBreakdown.length === 0 ? <Empty description="Tidak ada transaksi lunas" /> : <Doughnut data={paymentDoughnut} options={{ maintainAspectRatio: false, animation: false, plugins: { legend: { position: "bottom" }, datalabels: { color: "#fff", font: { weight: "bold" }, formatter: (value, ctx) => { const total = ctx.dataset.data.reduce((s, v) => s + v, 0); if (!total) return "0%"; return ((value / total) * 100).toFixed(1) + "%"; } } } }} />}
@@ -683,10 +725,10 @@ const FnBDashboard = () => {
                 <Title level={5}>Quick Actions</Title>
                 <Space direction="vertical" style={{ width: "100%" }}>
                   <Button icon={<DownloadOutlined />} onClick={handleDownloadImage} style={{ width: "100%" }}>Cetak Gambar</Button>
-                  <Button 
-                    icon={<FileExcelOutlined />} 
-                    onClick={handleExportExcel} 
-                    loading={exportLoading} 
+                  <Button
+                    icon={<FileExcelOutlined />}
+                    onClick={handleExportExcel}
+                    loading={exportLoading}
                     style={{ width: "100%" }}
                   >
                     Cetak Laporan (Excel)

@@ -4,6 +4,48 @@ const baseUrl = import.meta.env.VITE_BASE_URL
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+
+// ... service lainnya
+
+// === SERVICE KHUSUS EXPORT EXCEL OWNER ===
+
+// 1. Ambil List Transaksi (Sheet 1)
+export const getTransactionReport = async (startDate, endDate) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(
+      `${baseUrl}/api/v1/owner/transaction?start_date=${startDate}&end_date=${endDate}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    if (!response.ok) throw new Error("Gagal mengambil data laporan transaksi");
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+// 2. Ambil Detail Transaksi per ID (Sheet 2)
+export const getTransactionDetailReport = async (idTransaksi) => {
+  try {
+    const token = await jwtStorage.retrieveToken();
+    const response = await fetch(
+      `${baseUrl}/api/v1/owner/transaction/detail?id_transaksi=${idTransaksi}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    if (!response.ok) throw new Error("Gagal mengambil detail transaksi");
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+};
+
+
 export const getSettings = async () => {
   try {
     const token = await jwtStorage.retrieveToken();
