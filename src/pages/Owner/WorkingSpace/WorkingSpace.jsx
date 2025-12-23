@@ -74,8 +74,9 @@ const { Title, Text } = Typography;
 
 const formatRupiah = (num) => {
   if (num === null || num === undefined || Number.isNaN(Number(num)))
-    return "0";
-  return new Intl.NumberFormat("id-ID").format(Math.round(Number(num)));
+    return "Rp 0";
+
+  return "Rp " + new Intl.NumberFormat("id-ID").format(Math.round(Number(num)));
 };
 
 const getTopNIndices = (arr, n = 3) =>
@@ -569,7 +570,7 @@ const WorkingSpace = () => {
         y: {
           ticks: {
             callback: (v) => formatRupiah(v),
-            precision: 0,
+            stepSize: 1,
             autoSkip: true,
           },
         },
@@ -609,18 +610,30 @@ const WorkingSpace = () => {
 
   const trafficClusterOptions = {
     maintainAspectRatio: false,
-    plugins: { legend: { display: true }, datalabels: { display: false } },
+    plugins: {
+      legend: { display: true },
+      datalabels: { display: false },
+    },
+    datasets: {
+      bar: {
+        categoryPercentage: 1.0,
+        barPercentage: 1.0,
+      },
+    },
     scales: {
+      x: {
+        stacked: false,
+        title: { display: true, text: "Paket Durasi" },
+      },
       y: {
         beginAtZero: true,
+        stacked: false,
         title: { display: true, text: "Jumlah Booking" },
         ticks: {
-          callback: (v) => `${Math.trunc(v)}`,
           precision: 0,
-          autoSkip: true,
+          callback: (v) => Math.trunc(v),
         },
       },
-      x: { title: { display: true, text: "Paket Durasi" }, stacked: false },
     },
   };
 
@@ -720,267 +733,6 @@ const WorkingSpace = () => {
     }
   };
 
-        // // ===== Export to Excel =====
-        // const handleExportExcel = async () => {
-        //   if (!dateRange || dateRange.length < 2) {
-        //     message.error("Harap pilih rentang tanggal terlebih dahulu!");
-        //     return;
-        //   }
-
-        //   try {
-        //     const startStr = dateRange[0].format("YYYY-MM-DD");
-        //     const endStr = dateRange[1].format("YYYY-MM-DD");
-
-        //     const workbook = new ExcelJS.Workbook();
-
-        //     // ========================== GLOBAL STYLE ==========================
-        //     const defaultFont = { name: "Times New Roman", size: 12 };
-        //     const boldFont = { name: "Times New Roman", size: 12, bold: true };
-
-        //     const setBorder = (cell) => {
-        //       cell.border = {
-        //         top: { style: "thin" },
-        //         left: { style: "thin" },
-        //         bottom: { style: "thin" },
-        //         right: { style: "thin" },
-        //       };
-        //     };
-
-        //     const formatRp = (v) =>
-        //       `Rp ${new Intl.NumberFormat("id-ID").format(Number(v || 0))}`;
-
-        //     const autoFitColumns = (sheet, minWidth = 8, maxWidth = 25) => {
-        //       sheet.columns.forEach((col) => {
-        //         let maxLength = 0;
-        //         col.eachCell({ includeEmpty: true }, (cell) => {
-        //           let value = cell.value;
-        //           let text =
-        //             value && typeof value === "object" && value.richText
-        //               ? value.richText.map((t) => t.text).join("")
-        //               : value !== null && value !== undefined
-        //               ? String(value)
-        //               : "";
-
-        //           if (text.startsWith("Rp")) text = text.replace(/Rp\s?/g, "");
-
-        //           const length =
-        //             text.length * 0.9 +
-        //             (text.match(/[A-Z]/g)?.length || 0) * 0.2 +
-        //             (text.match(/[0-9]/g)?.length || 0) * 0.05;
-
-        //           maxLength = Math.max(maxLength, length);
-        //         });
-
-        //         col.width = Math.min(Math.max(maxLength + 2, minWidth), maxWidth);
-        //       });
-        //     };
-
-        //     const addSheetTitle = (sheet, title) => {
-        //       sheet.mergeCells("A1:F1");
-        //       const c = sheet.getCell("A1");
-        //       c.value = title;
-        //       c.font = { name: "Times New Roman", size: 16, bold: true };
-        //       c.alignment = { horizontal: "center" };
-        //       sheet.addRow([]);
-        //     };
-
-        //     const addPeriod = (sheet) => {
-        //       const r = sheet.addRow([
-        //         `Periode: ${dateRange[0].format(
-        //           "D MMM YYYY"
-        //         )} – ${dateRange[1].format("D MMM YYYY")}`,
-        //       ]);
-        //       r.getCell(1).font = defaultFont;
-        //       sheet.addRow([]);
-        //     };
-
-        //     const addTable = (sheet, title, headers, rows) => {
-        //       // Judul Section
-        //       const titleRow = sheet.addRow([title]);
-        //       titleRow.getCell(1).font = boldFont;
-        //       sheet.addRow([]);
-
-        //       // Header
-        //       const headerRow = sheet.addRow(headers);
-        //       headerRow.eachCell((cell) => {
-        //         cell.font = boldFont;
-        //         cell.alignment = { horizontal: "center", vertical: "middle" };
-        //         setBorder(cell);
-        //       });
-
-        //       // Data Rows
-        //       rows.forEach((r) => {
-        //         const row = sheet.addRow(r);
-        //         row.eachCell((cell) => {
-        //           cell.font = defaultFont;
-        //           cell.alignment = { vertical: "middle", wrapText: true };
-        //           setBorder(cell);
-        //         });
-        //       });
-
-        //       sheet.addRow([]);
-        //     };
-
-        //     // ========================== SHEET 1 ==========================
-        //     const sheet1 = workbook.addWorksheet("Daily Booking");
-
-        //     addSheetTitle(
-        //       sheet1,
-        //       "LAPORAN WORKING SPACE — DAGO CREATIVE HUB & COFFEE LAB"
-        //     );
-        //     addPeriod(sheet1);
-
-        //     // Generate date list
-        //     const s = dateRange[0].clone().startOf("day");
-        //     const e = dateRange[1].clone().startOf("day");
-        //     const dates = [];
-        //     let d = s.clone();
-        //     while (d.isSame(e, "day") || d.isBefore(e)) {
-        //       dates.push(d.clone());
-        //       d = d.add(1, "day");
-        //     }
-
-        //     const daily = dashboardData?.dailyRevenue || { datasets: {} };
-
-        //     // DAILY TABLE
-        //     addTable(
-        //       sheet1,
-        //       "DAILY BOOKING",
-        //       ["Tanggal", "Open Space", "Space Monitor", "Meeting Room", "Total"],
-        //       dates.map((dt, i) => {
-        //         const open = daily.datasets["Open Space"]?.[i] ?? 0;
-        //         const mon = daily.datasets["Space Monitor"]?.[i] ?? 0;
-        //         const meet =
-        //           (daily.datasets["Room Meeting Besar"]?.[i] ?? 0) +
-        //           (daily.datasets["Room Meeting Kecil"]?.[i] ?? 0);
-
-        //         const total = open + mon + meet;
-
-        //         return [
-        //           dt.format("D-MMM"),
-        //           formatRp(open),
-        //           formatRp(mon),
-        //           formatRp(meet),
-        //           formatRp(total),
-        //         ];
-        //       })
-        //     );
-
-        //     // SUMMARY
-        //     addTable(
-        //       sheet1,
-        //       "SUMMARY",
-        //       ["Keterangan", "Nilai"],
-        //       [
-        //         ["Total Pendapatan", formatRp(stats.totalRevenue)],
-        //         ["Total Booking", stats.totalBookings],
-        //         ["Total Pengunjung", stats.totalVisitors],
-        //         ["Total Hari", dates.length],
-        //         ["Periode", `${startStr} s.d. ${endStr}`],
-        //       ]
-        //     );
-
-        //     autoFitColumns(sheet1);
-
-        //     // ========================== SHEET 2 ==========================
-        //     const sheet2 = workbook.addWorksheet("Space Report");
-
-        //     addSheetTitle(
-        //       sheet2,
-        //       "LAPORAN WORKING SPACE — DAGO CREATIVE HUB & COFFEE LAB"
-        //     );
-        //     addPeriod(sheet2);
-
-        //     // Popular Space
-        //     addTable(
-        //       sheet2,
-        //       "POPULAR SPACE",
-        //       ["Kategori (Durasi)", "Qty", "Total (Rp)"],
-        //       topWs.map((t) => [t.item, t.qty, formatRp(t.total)])
-        //     );
-
-        //     // Trafik Booking Per Durasi
-        //     addTable(
-        //       sheet2,
-        //       "TRAFIK BOOKING PER DURASI",
-        //       ["Durasi", "Jumlah Booking", "Total Revenue (Rp)"],
-        //       (dashboardData?.packageByDuration || []).map((p) => [
-        //         `${p.durasi_jam} Jam`,
-        //         p.total_booking,
-        //         formatRp(p.total_revenue),
-        //       ])
-        //     );
-
-        //     // Peak Hours
-        //     addTable(
-        //       sheet2,
-        //       "PEAK HOURS",
-        //       ["Jam", "Jumlah Booking"],
-        //       Object.entries(dashboardData?.hourlyBookings || {}).map(
-        //         ([jam, total]) => [`${jam}:00`, total]
-        //       )
-        //     );
-
-        //     // Pattern by Day
-        //     const detailed = dashboardData?.bookingsByDateDetailed || {};
-
-        //     let cur = dateRange[0].clone().startOf("week");
-        //     const wEnd = dateRange[1].clone().startOf("day");
-
-        //     const weeks = [];
-        //     while (cur.isSame(wEnd, "day") || cur.isBefore(wEnd)) {
-        //       const ws = cur.clone();
-        //       const we = cur.clone().add(6, "day");
-        //       weeks.push({
-        //         start: ws,
-        //         end: we,
-        //         label: `Minggu Ke-${weeks.length + 1} [${ws.format(
-        //           "D MMM"
-        //         )} – ${we.format("D MMM")}]`,
-        //       });
-        //       cur = cur.add(1, "week");
-        //     }
-
-        //     addTable(
-        //       sheet2,
-        //       "PATTERN BY DAY",
-        //       ["Week", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
-        //       weeks.map((w) => {
-        //         const count = [0, 0, 0, 0, 0, 0, 0];
-        //         for (let i = 0; i < 7; i++) {
-        //           const dt = w.start.clone().add(i, "day");
-        //           if (dt.isBefore(s) || dt.isAfter(e)) continue;
-
-        //           const key = dt.format("YYYY-MM-DD");
-        //           const total = detailed[key]?.total ?? 0;
-
-        //           const wd = dt.day();
-        //           const idx = wd === 0 ? 6 : wd - 1;
-
-        //           count[idx] += total;
-        //         }
-        //         return [w.label, ...count];
-        //       })
-        //     );
-
-        //     autoFitColumns(sheet2);
-
-        //     // ========================== SAVE ==========================
-        //     const buffer = await workbook.xlsx.writeBuffer();
-        //     saveAs(
-        //       new Blob([buffer], {
-        //         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        //       }),
-        //       `WorkingSpace_${startStr}_to_${endStr}.xlsx`
-        //     );
-
-        //     message.success("Excel berhasil dibuat!");
-        //   } catch (err) {
-        //     console.error(err);
-        //     message.error("Gagal membuat file Excel.");
-        //   }
-        // };
-
   return (
     <>
       <ConfigProvider locale={locale}>
@@ -1058,12 +810,6 @@ const WorkingSpace = () => {
             >
               Working Space
             </a>
-            <a
-              href="/laporanpajak"
-              className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-            >
-              Pajak
-            </a>
           </div>
 
           {error && (
@@ -1089,7 +835,7 @@ const WorkingSpace = () => {
                   <Spin spinning={loading}>
                     <Statistic
                       title="Total Pendapatan"
-                      value={`Rp ${formatRupiah(stats.totalRevenue)}`}
+                      value={`${formatRupiah(stats.totalRevenue)}`}
                       prefix={<DollarCircleOutlined />}
                     />
                   </Spin>
@@ -1108,7 +854,7 @@ const WorkingSpace = () => {
                   <Spin spinning={loading}>
                     <Statistic
                       title="Total Diskon"
-                      value={`Rp ${formatRupiah(stats.totalDiscount)}`}
+                      value={`${formatRupiah(stats.totalDiscount)}`}
                       prefix={<ArrowUpOutlined />}
                     />
                   </Spin>
@@ -1171,7 +917,7 @@ const WorkingSpace = () => {
               {/* TRAFIK BOOKING PER DURASI */}
               <Card style={{ marginBottom: 8 }}>
                 <Spin spinning={loading}>
-                  <Title level={5}>Trafik Booking per Durasi</Title>
+                  <Title level={5}>Booking Traffic by Duration</Title>
                   <Text type="secondary">
                     Menampilkan jumlah booking per paket durasi dan kategori
                     space pada periode {totalDays} hari.
@@ -1188,7 +934,7 @@ const WorkingSpace = () => {
               {/* PEAK HOURS */}
               <Card style={{ marginBottom: 8 }}>
                 <Spin spinning={loading}>
-                  <Title level={5}>Peak Hours</Title>
+                  <Title level={5}>Peak Booking Hours</Title>
                   <Text type="secondary">
                     Menampilkan jam berdasarkan mulai booking. Bar merah
                     merupakan top 3 jumlah booking tertinggi.
@@ -1223,7 +969,7 @@ const WorkingSpace = () => {
                       <Text>
                         <Tag color="#2563eb" /> Open Space
                       </Text>
-                      <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
+                      <Text strong>{formatRupiah(totalOpenSpace)}</Text>
                     </div>
 
                     <div
@@ -1235,7 +981,7 @@ const WorkingSpace = () => {
                       <Text>
                         <Tag color="#10B981" /> Space Monitor
                       </Text>
-                      <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
+                      <Text strong>{formatRupiah(totalSpaceMonitor)}</Text>
                     </div>
 
                     <div
@@ -1247,7 +993,7 @@ const WorkingSpace = () => {
                       <Text>
                         <Tag color="#F59E0B" /> Meeting Room
                       </Text>
-                      <Text strong>Rp {formatRupiah(totalMeetingRoom)}</Text>
+                      <Text strong>{formatRupiah(totalMeetingRoom)}</Text>
                     </div>
                   </Space>
                 </Spin>
@@ -1290,7 +1036,7 @@ const WorkingSpace = () => {
                     >
                       <Text>{label}</Text>
                       <Text strong>
-                        Rp {formatRupiah(productContribution[label] || 0)}
+                        {formatRupiah(productContribution[label] || 0)}
                       </Text>
                     </div>
                   ))}
@@ -1317,7 +1063,7 @@ const WorkingSpace = () => {
                       dataIndex: "total",
                       align: "right",
                       width: 140,
-                      render: (t) => `Rp ${formatRupiah(t)}`,
+                      render: (t) => ` ${formatRupiah(t)}`,
                     },
                   ]}
                   dataSource={topWs}
@@ -1402,7 +1148,7 @@ const WorkingSpace = () => {
               <Card>
                 <Statistic
                   title="Total Pendapatan"
-                  value={`Rp ${formatRupiah(stats.totalRevenue)}`}
+                  value={` ${formatRupiah(stats.totalRevenue)}`}
                 />
               </Card>
             </Col>
@@ -1411,7 +1157,7 @@ const WorkingSpace = () => {
               <Card>
                 <Statistic
                   title="Total Diskon"
-                  value={`Rp ${formatRupiah(stats.totalDiscount)}`}
+                  value={` ${formatRupiah(stats.totalDiscount)}`}
                 />
               </Card>
             </Col>
@@ -1460,7 +1206,7 @@ const WorkingSpace = () => {
                     <Text>
                       <Tag color="#2563eb" /> Open Space
                     </Text>
-                    <Text strong>Rp {formatRupiah(totalOpenSpace)}</Text>
+                    <Text strong> {formatRupiah(totalOpenSpace)}</Text>
                   </div>
 
                   {/* Space Monitor */}
@@ -1473,7 +1219,7 @@ const WorkingSpace = () => {
                     <Text>
                       <Tag color="#10B981" /> Space Monitor
                     </Text>
-                    <Text strong>Rp {formatRupiah(totalSpaceMonitor)}</Text>
+                    <Text strong> {formatRupiah(totalSpaceMonitor)}</Text>
                   </div>
 
                   {/* Meeting Room */}
@@ -1486,7 +1232,7 @@ const WorkingSpace = () => {
                     <Text>
                       <Tag color="#F59E0B" /> Meeting Room
                     </Text>
-                    <Text strong>Rp {formatRupiah(totalMeetingRoom)}</Text>
+                    <Text strong> {formatRupiah(totalMeetingRoom)}</Text>
                   </div>
                 </Space>
               </Card>
@@ -1526,7 +1272,7 @@ const WorkingSpace = () => {
                     >
                       <Text>{label}</Text>
                       <Text strong>
-                        Rp {formatRupiah(productContribution[label] || 0)}
+                        {formatRupiah(productContribution[label] || 0)}
                       </Text>
                     </div>
                   ))}
@@ -1545,7 +1291,7 @@ const WorkingSpace = () => {
                   title: "Total Penjualan (Rp)",
                   dataIndex: "total",
                   align: "right",
-                  render: (t) => `Rp ${formatRupiah(t)}`,
+                  render: (t) => ` ${formatRupiah(t)}`,
                 },
               ]}
               dataSource={topWs}
@@ -1561,4 +1307,3 @@ const WorkingSpace = () => {
 };
 
 export default WorkingSpace;
-

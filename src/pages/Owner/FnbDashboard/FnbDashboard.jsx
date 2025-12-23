@@ -188,14 +188,20 @@ const FnBDashboard = () => {
         setTenantInfo(tenants);
 
         setDailyTenant(d?.daily_selling_per_tenant || {});
-        setVisitorsByHour(Array.isArray(d?.visitors_by_hour) ? d.visitors_by_hour : []);
+        setVisitorsByHour(
+          Array.isArray(d?.visitors_by_hour) ? d.visitors_by_hour : []
+        );
         setPeakByHour(Array.isArray(d?.peak_by_hour) ? d.peak_by_hour : []);
         setTopItems(d?.top_fnb || {});
         setUnpopItems(d?.unpopular_fnb || {});
-        setPaymentBreakdown(Array.isArray(d?.payment_breakdown) ? d.payment_breakdown : []);
+        setPaymentBreakdown(
+          Array.isArray(d?.payment_breakdown) ? d.payment_breakdown : []
+        );
 
         const tenantIds = new Set(tenants.map((t) => t.id));
-        const currentFilterIsValid = selectedTenantIds.every((id) => tenantIds.has(id));
+        const currentFilterIsValid = selectedTenantIds.every((id) =>
+          tenantIds.has(id)
+        );
 
         if (!currentFilterIsValid) {
           setSelectedTenantIds([]);
@@ -210,11 +216,7 @@ const FnBDashboard = () => {
     fetchAll();
   }, [dateRange]);
 
-  // =====================================================================
-  // --- LOGIKA UTAMA PERBAIKAN (CALCULATION ENGINE) ---
-  // =====================================================================
-
-  // 1. Hitung Global Net (Total Penjualan Bersih) = Total Sales (Grand Total) - Total Pajak
+  // 1. Total Penjualan Bersih
   const globalGrandTotal = totals.total_sales || 0;
   const globalNetSales = Math.max(0, globalGrandTotal - totalPajak);
 
@@ -225,11 +227,12 @@ const FnBDashboard = () => {
 
   // 3. Rasio Normalisasi (Gross -> Net)
   // Digunakan untuk mengubah data tenant (Gross) menjadi Net agar match dengan Total Penjualan Bersih
-  const grossToNetRatio = globalGross > 0 ? (globalNetSales / globalGross) : 1;
+  const grossToNetRatio = globalGross > 0 ? globalNetSales / globalGross : 1;
 
   // 4. Rasio Pembayaran (Grand Total -> Net)
   // Digunakan untuk payment breakdown agar totalnya sama dengan Total Penjualan Bersih
-  const grandToNetRatio = globalGrandTotal > 0 ? (globalNetSales / globalGrandTotal) : 1;
+  const grandToNetRatio =
+    globalGrandTotal > 0 ? globalNetSales / globalGrandTotal : 1;
 
   // =====================================================================
 
@@ -250,14 +253,12 @@ const FnBDashboard = () => {
         }
       }
 
-      // [FIX 1 & 3] Konversi ke Net menggunakan rasio
       const newTotalNet = newTotalGross * grossToNetRatio;
 
       base.total_fnb = newTotalNet;
       base.total_sales = newTotalNet;
       base.avg_daily = Math.round(newTotalNet / totalDays);
     } else {
-      // [FIX 1] Jika tidak difilter, gunakan Global Net Sales
       base.total_sales = globalNetSales;
       base.avg_daily = Math.round(globalNetSales / totalDays);
     }
@@ -287,7 +288,6 @@ const FnBDashboard = () => {
 
     const datasets = tenantsToRender.map((tenant) => {
       const data = days.map((dayKey) => {
-        // [FIX 3] Data grafik juga dikonversi ke Net
         const rawGross = Number(dailyTenant[dayKey]?.[tenant.id] || 0);
         return Math.round(rawGross * grossToNetRatio);
       });
@@ -317,7 +317,6 @@ const FnBDashboard = () => {
       const totalGross = Object.values(dailyTenant).reduce((sum, dayData) => {
         return sum + (dayData[tenant.id] || 0);
       }, 0);
-      // [FIX 3] Kontribusi Tenant menjadi Net
       return { ...tenant, total: Math.round(totalGross * grossToNetRatio) };
     });
 
@@ -341,20 +340,28 @@ const FnBDashboard = () => {
   const handleExportExcel = async () => {
     setExportLoading(true);
     try {
-      const startDate = dateRange[0].format('YYYY-MM-DD');
-      const endDate = dateRange[1].format('YYYY-MM-DD');
+      const startDate = dateRange[0].format("YYYY-MM-DD");
+      const endDate = dateRange[1].format("YYYY-MM-DD");
 
       const exportData = await getBagiHasilDetail(startDate, endDate);
       const wb = new ExcelJS.Workbook();
-      const borderStyle = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      const borderStyle = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
 
-      const tenantsToExport = selectedTenantIds.length > 0
-        ? tenantTotals.filter(t => selectedTenantIds.includes(t.id))
-        : tenantTotals;
+      const tenantsToExport =
+        selectedTenantIds.length > 0
+          ? tenantTotals.filter((t) => selectedTenantIds.includes(t.id))
+          : tenantTotals;
 
       for (const tenant of tenantsToExport) {
         const tenantName = tenant.name;
-        const sheetName = tenantName.substring(0, 30).replace(/[:\/?*\[\]\\]/g, "");
+        const sheetName = tenantName
+          .substring(0, 30)
+          .replace(/[:\/?*\[\]\\]/g, "");
         const ws = wb.addWorksheet(sheetName);
         const tenantDetails = exportData[tenantName];
 
@@ -362,11 +369,16 @@ const FnBDashboard = () => {
         const ownerShare = totalSales * 0.3;
         const tenantShare = totalSales * 0.7;
 
-        ws.addRow(["LAPORAN PENJUALAN F&B", tenantName]).font = { bold: true, size: 14 };
-        ws.addRow(["Periode", `${startDate} s/d ${endDate}`]).font = { bold: true };
+        ws.addRow(["LAPORAN PENJUALAN F&B", tenantName]).font = {
+          bold: true,
+          size: 14,
+        };
+        ws.addRow(["Periode", `${startDate} s/d ${endDate}`]).font = {
+          bold: true,
+        };
         ws.addRow([]);
 
-        ws.addRow(["Total Penjualan Bersih (Net)", totalSales]).font = { bold: true };
+        ws.addRow(["Total Penjualan (Net)", totalSales]).font = { bold: true };
         ws.addRow(["Hak Tenant (70%)", tenantShare]);
         ws.addRow(["Hak Owner (30%)", ownerShare]);
         ws.addRow([]);
@@ -380,16 +392,32 @@ const FnBDashboard = () => {
         ws.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
         currentRow++;
 
-        const salesHeader = ["Tanggal", "Produk", "Jumlah Qty", "Total Gross", "Discount", "Tax (Pajak)", "Net"];
-        ws.addRow(salesHeader).eachCell(cell => {
-          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1890FF' } };
+        const salesHeader = [
+          "Tanggal",
+          "Produk",
+          "Jumlah Qty",
+          "Total Gross",
+          "Discount",
+          "Tax (Pajak)",
+          "Net",
+        ];
+        ws.addRow(salesHeader).eachCell((cell) => {
+          cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF1890FF" },
+          };
           cell.border = borderStyle;
-          cell.alignment = { horizontal: 'center' };
+          cell.alignment = { horizontal: "center" };
         });
 
-        if (tenantDetails && tenantDetails.sales && tenantDetails.sales.length > 0) {
-          tenantDetails.sales.forEach(sale => {
+        if (
+          tenantDetails &&
+          tenantDetails.sales &&
+          tenantDetails.sales.length > 0
+        ) {
+          tenantDetails.sales.forEach((sale) => {
             const gross = Number(sale.total_penjualan_gross) || 0;
             const discount = Number(sale.total_discount) || 0;
             const tax = Number(sale.total_pajak) || 0;
@@ -402,18 +430,36 @@ const FnBDashboard = () => {
               gross,
               discount,
               tax,
-              nett
+              nett,
             ]).eachCell((cell, col) => {
               cell.border = borderStyle;
-              if (col === 1) { cell.numFmt = 'DD/MM/YYYY'; cell.alignment = { horizontal: 'center' }; }
-              if (col === 3) { cell.alignment = { horizontal: 'center' }; }
-              if (col >= 4) { cell.numFmt = '#,##0'; cell.alignment = { horizontal: 'right' }; }
+              if (col === 1) {
+                cell.numFmt = "DD/MM/YYYY";
+                cell.alignment = { horizontal: "center" };
+              }
+              if (col === 3) {
+                cell.alignment = { horizontal: "center" };
+              }
+              if (col >= 4) {
+                cell.numFmt = "#,##0";
+                cell.alignment = { horizontal: "right" };
+              }
             });
           });
         } else {
-          ws.addRow(["Tidak ada rincian transaksi."]).getCell(1).font = { italic: true };
+          ws.addRow(["Tidak ada rincian transaksi."]).getCell(1).font = {
+            italic: true,
+          };
         }
-        ws.columns = [{ width: 15 }, { width: 30 }, { width: 12 }, { width: 20 }, { width: 15 }, { width: 15 }, { width: 25 }];
+        ws.columns = [
+          { width: 15 },
+          { width: 30 },
+          { width: 12 },
+          { width: 20 },
+          { width: 15 },
+          { width: 15 },
+          { width: 25 },
+        ];
       }
 
       const buffer = await wb.xlsx.writeBuffer();
@@ -428,11 +474,20 @@ const FnBDashboard = () => {
     }
   };
 
-  const visitorsMap = new Map(visitorsByHour.map((r) => [Number(r.hour), Number(r.count)]));
-  const peakMap = new Map(peakByHour.map((r) => [Number(r.hour), Number(r.count)]));
-  const visitorsDataRaw = HOUR_LABELS_15.map((_, idx) => visitorsMap.get(8 + idx) || 0);
+  const visitorsMap = new Map(
+    visitorsByHour.map((r) => [Number(r.hour), Number(r.count)])
+  );
+  const peakMap = new Map(
+    peakByHour.map((r) => [Number(r.hour), Number(r.count)])
+  );
+  const visitorsDataRaw = HOUR_LABELS_15.map(
+    (_, idx) => visitorsMap.get(8 + idx) || 0
+  );
   const peakDataRaw = HOUR_LABELS_15.map((_, idx) => peakMap.get(8 + idx) || 0);
-  const topPeakIdx = useMemo(() => getTopNIndices(peakDataRaw, 3), [peakDataRaw]);
+  const topPeakIdx = useMemo(
+    () => getTopNIndices(peakDataRaw, 3),
+    [peakDataRaw]
+  );
   const visitorsData = visitorsDataRaw;
   const peakData = useMemo(() => {
     if (!topPeakIdx.length) return peakDataRaw.map(() => null);
@@ -441,30 +496,87 @@ const FnBDashboard = () => {
 
   const trafficBarData = {
     labels: HOUR_LABELS_15,
-    datasets: [{ label: "Total Pengunjung", data: visitorsData, backgroundColor: "#EF4444" }],
+    datasets: [
+      {
+        label: "Total Pengunjung",
+        data: visitorsData,
+        backgroundColor: "#EF4444",
+      },
+    ],
   };
   const peakBarData = {
     labels: HOUR_LABELS_15,
-    datasets: [{ label: "Jumlah Menu Dipesan (Top 3)", data: peakData, backgroundColor: "#F59E0B" }],
+    datasets: [
+      {
+        label: "Jumlah Menu Dipesan (Top 3)",
+        data: peakData,
+        backgroundColor: "#F59E0B",
+      },
+    ],
   };
 
   const commonOptions = {
-    responsive: true, maintainAspectRatio: false,
+    responsive: true,
+    maintainAspectRatio: false,
     plugins: {
-      legend: { display: true }, datalabels: { display: false },
-      tooltip: { filter: (ctx) => Number.isFinite(ctx.parsed?.y), callbacks: { label: (ctx) => `${ctx.dataset?.label ? ctx.dataset.label + ": " : ""}${formatRupiah(ctx.parsed?.y ?? 0)}` } },
+      legend: { display: true },
+      datalabels: { display: false },
+      tooltip: {
+        filter: (ctx) => Number.isFinite(ctx.parsed?.y),
+        callbacks: {
+          label: (ctx) =>
+            `${
+              ctx.dataset?.label ? ctx.dataset.label + ": " : ""
+            }${formatRupiah(ctx.parsed?.y ?? 0)}`,
+        },
+      },
     },
   };
   const doughnutOptions = {
     maintainAspectRatio: false,
     plugins: {
       legend: { position: "bottom" },
-      datalabels: { color: "#fff", font: { weight: "bold" }, formatter: (value, ctx) => { const total = ctx.dataset.data.reduce((s, v) => s + (v || 0), 0); if (!total) return "0%"; const isDummy = ctx.dataset.data.every((v) => v === 1); if (isDummy) return "0%"; return `${((value / total) * 100).toFixed(1)}%`; } },
+      datalabels: {
+        color: "#fff",
+        font: { weight: "bold" },
+        formatter: (value, ctx) => {
+          const total = ctx.dataset.data.reduce((s, v) => s + (v || 0), 0);
+          if (!total) return "0%";
+          const isDummy = ctx.dataset.data.every((v) => v === 1);
+          if (isDummy) return "0%";
+          return `${((value / total) * 100).toFixed(1)}%`;
+        },
+      },
     },
   };
   const vMaxVisitors = Math.max(0, ...visitorsData);
   const yMaxVisitors = Math.max(2, Math.ceil(vMaxVisitors));
-  const trafficBarOptions = { maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { filter: (ctx) => Number.isFinite(ctx.parsed?.y), callbacks: { label: (ctx) => `Pengunjung: ${formatRupiah(ctx.parsed?.y ?? 0)}` } } }, scales: { y: { beginAtZero: true, suggestedMax: yMaxVisitors, title: { display: true, text: "Jumlah Pengunjung" }, ticks: { callback: (v) => `${Math.trunc(v)}`, precision: 0, autoSkip: true } }, x: { title: { display: true, text: "Jam Operasional" } } } };
+  const trafficBarOptions = {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      datalabels: { display: false },
+      tooltip: {
+        filter: (ctx) => Number.isFinite(ctx.parsed?.y),
+        callbacks: {
+          label: (ctx) => `Pengunjung: ${formatRupiah(ctx.parsed?.y ?? 0)}`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        suggestedMax: yMaxVisitors,
+        title: { display: true, text: "Jumlah Pengunjung" },
+        ticks: {
+          callback: (v) => `${Math.trunc(v)}`,
+          precision: 0,
+          autoSkip: true,
+        },
+      },
+      x: { title: { display: true, text: "Jam Operasional" } },
+    },
+  };
   const peakBarOptions = {
     maintainAspectRatio: false,
     plugins: {
@@ -483,8 +595,8 @@ const FnBDashboard = () => {
         title: { display: true, text: "Jumlah Menu" },
         // --- TAMBAHKAN BAGIAN INI ---
         ticks: {
-          stepSize: 1,   // Memaksa garis grid naik setiap 1 angka (1, 2, 3...)
-          precision: 0,  // Menghilangkan desimal (misal 2.0 jadi 2)
+          stepSize: 1, // Memaksa garis grid naik setiap 1 angka (1, 2, 3...)
+          precision: 0, // Menghilangkan desimal (misal 2.0 jadi 2)
         },
         // ----------------------------
       },
@@ -494,26 +606,112 @@ const FnBDashboard = () => {
     },
   };
 
-  const withTenant = (rows, tenant) => (Array.isArray(rows) ? rows : []).map((r, i) => ({ ...r, tenant: tenant.name, tenantId: tenant.id, key: `${tenant.id}-${i}-${r.item}`, qty: Number(r.qty || 0), total: Number(r.total || 0) }));
-  const allTopItems = useMemo(() => tenantInfo.flatMap((tenant) => { const items = topItems[tenant.id] || []; return withTenant(items, tenant); }), [topItems, tenantInfo]);
-  const allUnpopularItems = useMemo(() => tenantInfo.flatMap((tenant) => { const items = unpopItems[tenant.id] || []; return withTenant(items, tenant); }), [unpopItems, tenantInfo]);
-  const filteredTopItems = useMemo(() => { if (selectedTenantIds.length === 0) return allTopItems; const selectedSet = new Set(selectedTenantIds); return allTopItems.filter((r) => selectedSet.has(r.tenantId)); }, [allTopItems, selectedTenantIds]);
-  const filteredUnpopItems = useMemo(() => { if (selectedTenantIds.length === 0) return allUnpopularItems; const selectedSet = new Set(selectedTenantIds); return allUnpopularItems.filter((r) => selectedSet.has(r.tenantId)); }, [allUnpopularItems, selectedTenantIds]);
-  const top5 = useMemo(() => [...filteredTopItems].filter((r) => (r.total ?? 0) > 0 || (r.qty ?? 0) > 0).sort((a, b) => b.total - a.total || b.qty - a.qty).slice(0, 5), [filteredTopItems]);
-  const unpopular5 = useMemo(() => [...filteredUnpopItems].sort((a, b) => a.qty - b.qty || a.total - b.total).slice(0, 5), [filteredUnpopItems]);
+  const withTenant = (rows, tenant) =>
+    (Array.isArray(rows) ? rows : []).map((r, i) => ({
+      ...r,
+      tenant: tenant.name,
+      tenantId: tenant.id,
+      key: `${tenant.id}-${i}-${r.item}`,
+      qty: Number(r.qty || 0),
+      total: Number(r.total || 0),
+    }));
+  const allTopItems = useMemo(
+    () =>
+      tenantInfo.flatMap((tenant) => {
+        const items = topItems[tenant.id] || [];
+        return withTenant(items, tenant);
+      }),
+    [topItems, tenantInfo]
+  );
+  const allUnpopularItems = useMemo(
+    () =>
+      tenantInfo.flatMap((tenant) => {
+        const items = unpopItems[tenant.id] || [];
+        return withTenant(items, tenant);
+      }),
+    [unpopItems, tenantInfo]
+  );
+  const filteredTopItems = useMemo(() => {
+    if (selectedTenantIds.length === 0) return allTopItems;
+    const selectedSet = new Set(selectedTenantIds);
+    return allTopItems.filter((r) => selectedSet.has(r.tenantId));
+  }, [allTopItems, selectedTenantIds]);
+  const filteredUnpopItems = useMemo(() => {
+    if (selectedTenantIds.length === 0) return allUnpopularItems;
+    const selectedSet = new Set(selectedTenantIds);
+    return allUnpopularItems.filter((r) => selectedSet.has(r.tenantId));
+  }, [allUnpopularItems, selectedTenantIds]);
+  const top5 = useMemo(
+    () =>
+      [...filteredTopItems]
+        .filter((r) => (r.total ?? 0) > 0 || (r.qty ?? 0) > 0)
+        .sort((a, b) => b.total - a.total || b.qty - a.qty)
+        .slice(0, 5),
+    [filteredTopItems]
+  );
+  const unpopular5 = useMemo(
+    () =>
+      [...filteredUnpopItems]
+        .sort((a, b) => a.qty - b.qty || a.total - b.total)
+        .slice(0, 5),
+    [filteredUnpopItems]
+  );
 
   const topColumns = [
-    { title: "Tenant", dataIndex: "tenant", key: "tenant", width: 120, hidden: selectedTenantIds.length > 0, render: (tenantName) => { const tenant = tenantInfo.find((t) => t.name === tenantName); return (<Tag color={tenant ? tenant.color : "gray"} style={{ marginRight: 0 }}>{tenantName}</Tag>); } },
+    {
+      title: "Tenant",
+      dataIndex: "tenant",
+      key: "tenant",
+      width: 120,
+      hidden: selectedTenantIds.length > 0,
+      render: (tenantName) => {
+        const tenant = tenantInfo.find((t) => t.name === tenantName);
+        return (
+          <Tag
+            color={tenant ? tenant.color : "gray"}
+            style={{ marginRight: 0 }}
+          >
+            {tenantName}
+          </Tag>
+        );
+      },
+    },
     { title: "Item", dataIndex: "item", key: "item" },
-    { title: "Qty", dataIndex: "qty", key: "qty", align: "center", width: 80, render: (v) => formatRupiah(v) },
-    { title: "Total (Rp)", dataIndex: "total", key: "total", align: "right", width: 140, render: (t) => <b>Rp {formatRupiah(t)}</b> },
+    {
+      title: "Qty",
+      dataIndex: "qty",
+      key: "qty",
+      align: "center",
+      width: 80,
+      render: (v) => formatRupiah(v),
+    },
+    {
+      title: "Total (Rp)",
+      dataIndex: "total",
+      key: "total",
+      align: "right",
+      width: 140,
+      render: (t) => <b>Rp {formatRupiah(t)}</b>,
+    },
   ].filter((col) => !col.hidden);
 
   const totalSales = displayTotals.total_sales || 0;
   const avgDaily = displayTotals.avg_daily || 0;
   const totalVisitors = totals.total_transactions || 0;
   const totalTransactions = totals.total_transactions || 0;
-  const getDynamicTitle = () => { if (selectedTenantIds.length === 0) return { kpi: "Total Penjualan", line: "Daily Selling (per tenant)" }; if (selectedTenantIds.length === 1) { const tenantName = tenantInfo.find((t) => t.id === selectedTenantIds[0])?.name || ""; return { kpi: `Penjualan ${tenantName}`, line: `Daily Selling (${tenantName})` }; } return { kpi: "Penjualan (Filter)", line: "Daily Selling (Filter)" }; };
+  const getDynamicTitle = () => {
+    if (selectedTenantIds.length === 0)
+      return { kpi: "Total Penjualan", line: "Daily Selling (per tenant)" };
+    if (selectedTenantIds.length === 1) {
+      const tenantName =
+        tenantInfo.find((t) => t.id === selectedTenantIds[0])?.name || "";
+      return {
+        kpi: `Penjualan ${tenantName}`,
+        line: `Daily Selling (${tenantName})`,
+      };
+    }
+    return { kpi: "Penjualan (Filter)", line: "Daily Selling (Filter)" };
+  };
   const dynamicTitle = getDynamicTitle();
   const isAllTenantsView = selectedTenantIds.length === 0;
 
@@ -525,7 +723,9 @@ const FnBDashboard = () => {
 
     // [SOLUSI] Kalikan total pembayaran dengan rasio (Net / GrandTotal)
     // Ini akan membuang porsi Pajak dari setiap metode pembayaran secara proporsional
-    const values = paymentBreakdown.map((x) => Math.round(x.total * grandToNetRatio));
+    const values = paymentBreakdown.map((x) =>
+      Math.round(x.total * grandToNetRatio)
+    );
 
     const COLORS = ["#2563eb", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
 
@@ -542,9 +742,21 @@ const FnBDashboard = () => {
   }, [paymentBreakdown, grandToNetRatio]);
 
   const top5PerTenant = useMemo(() => {
-    const sourceTenants = selectedTenantIds.length > 0 ? tenantInfo.filter((t) => selectedTenantIds.includes(t.id)) : tenantInfo;
+    const sourceTenants =
+      selectedTenantIds.length > 0
+        ? tenantInfo.filter((t) => selectedTenantIds.includes(t.id))
+        : tenantInfo;
     return sourceTenants.map((tenant) => {
-      const items = (topItems[tenant.id] || []).map((r, i) => ({ ...r, qty: Number(r.qty || 0), total: Number(r.total || 0), tenantName: tenant.name })).filter((r) => r.total > 0 || r.qty > 0).sort((a, b) => b.total - a.total || b.qty - a.qty).slice(0, 5);
+      const items = (topItems[tenant.id] || [])
+        .map((r, i) => ({
+          ...r,
+          qty: Number(r.qty || 0),
+          total: Number(r.total || 0),
+          tenantName: tenant.name,
+        }))
+        .filter((r) => r.total > 0 || r.qty > 0)
+        .sort((a, b) => b.total - a.total || b.qty - a.qty)
+        .slice(0, 5);
       return { tenant, items };
     });
   }, [topItems, tenantInfo, selectedTenantIds]);
@@ -553,20 +765,64 @@ const FnBDashboard = () => {
     <ConfigProvider locale={locale}>
       <div style={{ padding: 20 }}>
         {/* Header & controls */}
-        <Row gutter={[16, 16]} justify="space-between" align="middle" style={{ marginBottom: 14 }} className="no-print">
+        <Row
+          gutter={[16, 16]}
+          justify="space-between"
+          align="middle"
+          style={{ marginBottom: 14 }}
+          className="no-print"
+        >
           <Col>
-            <Title level={4} style={{ margin: 0 }}>F&B Dashboard</Title>
-            <Text type="secondary">Dago Creative Hub &amp; Coffee Lab — Food &amp; Beverage</Text>
+            <Title level={4} style={{ margin: 0 }}>
+              F&B Dashboard
+            </Title>
+            <Text type="secondary">
+              Dago Creative Hub &amp; Coffee Lab — Food &amp; Beverage
+            </Text>
           </Col>
           <Col>
             <Space align="center" wrap>
               <Text type="secondary">Tenant:</Text>
-              <Select mode="multiple" allowClear value={selectedTenantIds} onChange={setSelectedTenantIds} placeholder="Filter Tenant (Default: Semua)" style={{ minWidth: 200, width: "auto" }} loading={loading}>
-                {tenantInfo.map((t) => (<Option key={t.id} value={t.id}>{t.name}</Option>))}
+              <Select
+                mode="multiple"
+                allowClear
+                value={selectedTenantIds}
+                onChange={setSelectedTenantIds}
+                placeholder="Filter Tenant (Default: Semua)"
+                style={{ minWidth: 200, width: "auto" }}
+                loading={loading}
+              >
+                {tenantInfo.map((t) => (
+                  <Option key={t.id} value={t.id}>
+                    {t.name}
+                  </Option>
+                ))}
               </Select>
               <Text type="secondary">Rentang:</Text>
-              <RangePicker value={dateRange} onChange={(vals) => { if (!vals) return; setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]); }} format="DD-MM-YYYY" />
-              <Select defaultValue="mtm" style={{ width: 120 }} onChange={(val) => { if (val === "lw") setDateRange([dayjs().subtract(7, "day").startOf("day"), dayjs().endOf("day")]); else setDateRange([dayjs().startOf("month").startOf("day"), dayjs().endOf("day")]); }}>
+              <RangePicker
+                value={dateRange}
+                onChange={(vals) => {
+                  if (!vals) return;
+                  setDateRange([vals[0].startOf("day"), vals[1].endOf("day")]);
+                }}
+                format="DD-MM-YYYY"
+              />
+              <Select
+                defaultValue="mtm"
+                style={{ width: 120 }}
+                onChange={(val) => {
+                  if (val === "lw")
+                    setDateRange([
+                      dayjs().subtract(7, "day").startOf("day"),
+                      dayjs().endOf("day"),
+                    ]);
+                  else
+                    setDateRange([
+                      dayjs().startOf("month").startOf("day"),
+                      dayjs().endOf("day"),
+                    ]);
+                }}
+              >
                 <Option value="mtm">Month to date</Option>
                 <Option value="lw">Last 7d</Option>
               </Select>
@@ -576,57 +832,112 @@ const FnBDashboard = () => {
 
         {/* Nav Buttons */}
         <div className="flex justify-start gap-3 mb-6 no-print">
-          <a href="/laporan" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100">Laporan</a>
-          <a href="/fnbdashboard" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100">FNB</a>
-          <a href="/workingspace" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100">Working Space</a>
-          <a href="/laporanpajak" className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100">Pajak</a>
+          <a
+            href="/laporan"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+          >
+            Laporan
+          </a>
+          <a
+            href="/fnbdashboard"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 bg-blue-50 text-blue-600 hover:bg-blue-100"
+          >
+            FNB
+          </a>
+          <a
+            href="/workingspace"
+            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
+          >
+            Working Space
+          </a>{" "}
         </div>
 
         <div ref={printRef} style={{ backgroundColor: "#ffffff", padding: 1 }}>
           {/* KPI Cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
-              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
                 <Card loading={loading}>
-                  {/* [FIX 1] Menampilkan Total Penjualan Bersih (Net) */}
+                  {/*Menampilkan Total Penjualan (Net) */}
                   <Statistic
-                    title={<Tooltip title="Total Transaksi (Grand Total) - Pajak">{dynamicTitle.kpi} (Bersih)</Tooltip>}
+                    title={
+                      <Tooltip title="Total Transaksi (Grand Total) - Pajak">
+                        {dynamicTitle.kpi} (Net)
+                      </Tooltip>
+                    }
                     value={`Rp ${formatRupiah(totalSales)}`}
                     prefix={<ShopOutlined />}
                   />
                   <div style={{ marginTop: 12 }}>
-                    <Text type="secondary">Target ({totalDays} hari): Rp {formatRupiah(dailyTarget * totalDays)}</Text>
-                    <Progress percent={Number(pctAchieved)} status={pctAchieved >= 100 ? "success" : "active"} />
+                    <Text type="secondary">
+                      Target ({totalDays} hari): Rp{" "}
+                      {formatRupiah(dailyTarget * totalDays)}
+                    </Text>
+                    <Progress
+                      percent={Number(pctAchieved)}
+                      status={pctAchieved >= 100 ? "success" : "active"}
+                    />
                   </div>
                 </Card>
               </motion.div>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
                 <Card loading={loading}>
                   <div style={{ marginBottom: 4 }}>
                     <Text type="secondary">Total Diskon</Text>
-                    <div style={{ fontSize: 20, fontWeight: 600, marginTop: 2 }}>Rp {formatRupiah(totalDiscount)}</div>
+                    <div
+                      style={{ fontSize: 20, fontWeight: 600, marginTop: 2 }}
+                    >
+                      Rp {formatRupiah(totalDiscount)}
+                    </div>
                   </div>
                   <Divider style={{ margin: "6px 0" }} />
                   <div style={{ marginTop: 4 }}>
                     <Text type="secondary">Total Pajak</Text>
-                    <div style={{ fontSize: 20, fontWeight: 600, marginTop: 2 }}>Rp {formatRupiah(totalPajak)}</div>
+                    <div
+                      style={{ fontSize: 20, fontWeight: 600, marginTop: 2 }}
+                    >
+                      Rp {formatRupiah(totalPajak)}
+                    </div>
                   </div>
                 </Card>
               </motion.div>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
                 <Card loading={loading}>
-                  <Statistic title="Total Pengunjung (F&B)" value={formatRupiah(totalVisitors)} prefix={<UsergroupAddOutlined />} />
+                  <Statistic
+                    title="Total Pengunjung"
+                    value={formatRupiah(totalVisitors)}
+                    prefix={<UsergroupAddOutlined />}
+                  />
                 </Card>
               </motion.div>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
                 <Card loading={loading}>
-                  <Statistic title="Jumlah Transaksi (F&B)" value={totalTransactions} prefix={<FieldTimeOutlined />} />
+                  <Statistic
+                    title="Jumlah Transaksi"
+                    value={totalTransactions}
+                    prefix={<FieldTimeOutlined />}
+                  />
                 </Card>
               </motion.div>
             </Col>
@@ -637,13 +948,50 @@ const FnBDashboard = () => {
             <Col xs={24} lg={!isAllTenantsView ? 24 : 16}>
               <Card style={{ marginBottom: 16 }} loading={loading}>
                 <Row gutter={[12, 12]}>
-                  <Col span={24} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Title level={5} style={{ margin: 0 }}>{dynamicTitle.line} (Net)</Title>
-                    <Text type="secondary">{dateRange[0].format("D MMM")} - {dateRange[1].format("D MMM YYYY")}</Text>
+                  <Col
+                    span={24}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Title level={5} style={{ margin: 0 }}>
+                      {dynamicTitle.line}{" "}
+                    </Title>
+                    <Text type="secondary">
+                      {dateRange[0].format("D MMM")} -{" "}
+                      {dateRange[1].format("D MMM YYYY")}
+                    </Text>
                   </Col>
                   <Col span={24}>
                     <div style={{ height: 300 }}>
-                      <Line ref={lineChartRef} data={lineData} options={{ ...commonOptions, animation: false, plugins: { ...commonOptions.plugins, legend: { display: lineData.datasets.length > 1 } }, scales: { x: { ticks: { autoSkip: true }, title: { display: true, text: "Tanggal" } }, y: { beginAtZero: true, ticks: { callback: (v) => `Rp ${formatRupiah(v)}` } } } }} />
+                      <Line
+                        ref={lineChartRef}
+                        data={lineData}
+                        options={{
+                          ...commonOptions,
+                          animation: false,
+                          plugins: {
+                            ...commonOptions.plugins,
+                            legend: { display: lineData.datasets.length > 1 },
+                          },
+                          scales: {
+                            x: {
+                              ticks: { autoSkip: true },
+                              title: { display: true, text: "Tanggal" },
+                            },
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                stepSize: 1,
+                                precision: 0,
+                                callback: (v) => `Rp ${formatRupiah(v)}`,
+                              },
+                            },
+                          },
+                        }}
+                      />
                     </div>
                   </Col>
                 </Row>
@@ -652,10 +1000,18 @@ const FnBDashboard = () => {
                 <Card style={{ marginBottom: 16 }} loading={loading}>
                   <Row gutter={[12, 12]}>
                     <Col span={24}>
-                      <Title level={5} style={{ marginTop: 0 }}>Trafik Pengunjung (Total F&B)</Title>
-                      <Text type="secondary">Akumulasi pengunjung selama periode {totalDays} hari.</Text>
+                      <Title level={5} style={{ marginTop: 0 }}>
+                        F&B Visitor Traffic
+                      </Title>
+                      <Text type="secondary">
+                        Akumulasi pengunjung selama periode {totalDays} hari.
+                      </Text>
                       <div style={{ height: 300, marginTop: 10 }}>
-                        <Bar ref={trafficBarRef} data={trafficBarData} options={{ ...trafficBarOptions, animation: false }} />
+                        <Bar
+                          ref={trafficBarRef}
+                          data={trafficBarData}
+                          options={{ ...trafficBarOptions, animation: false }}
+                        />
                       </div>
                     </Col>
                   </Row>
@@ -663,11 +1019,18 @@ const FnBDashboard = () => {
                 <Card style={{ marginBottom: 16 }} loading={loading}>
                   <Row gutter={[12, 12]}>
                     <Col xs={24}>
-                      <Title level={5} style={{ marginTop: 0 }}>Peak Hours Menu (Total F&B)</Title>
-                      <Text type="secondary">Akumulasi pemesanan selama periode {totalDays} hari.</Text>
-                      {!topPeakIdx.length && <Text type="secondary">Belum ada jam dengan pesanan menu &gt; 0 pada rentang ini.</Text>}
+                      <Title level={5} style={{ marginTop: 0 }}>
+                        F&B Peak Ordering Hours
+                      </Title>
+                      <Text type="secondary">
+                        Akumulasi pemesanan selama periode {totalDays} hari.
+                      </Text>
                       <div style={{ height: 220 }}>
-                        <Bar ref={peakBarRef} data={peakBarData} options={{ ...peakBarOptions, animation: false }} />
+                        <Bar
+                          ref={peakBarRef}
+                          data={peakBarData}
+                          options={{ ...peakBarOptions, animation: false }}
+                        />
                       </div>
                     </Col>
                   </Row>
@@ -678,30 +1041,92 @@ const FnBDashboard = () => {
             <Col xs={24} lg={8}>
               <div style={{ display: isAllTenantsView ? "block" : "none" }}>
                 <Card style={{ marginBottom: 16 }} loading={loading}>
-                  <Title level={5}>Metode Pembayaran (F&B) nett</Title>
-                  <Text type="secondary">Proporsi berdasarkan nilai penjualan bersih.</Text>
+                  <Title level={5}>Metode Pembayaran (F&B)</Title>
+                  <Text type="secondary">
+                    Proporsi berdasarkan nilai penjualan bersih.
+                  </Text>
                   <div style={{ height: 240, marginTop: 12 }}>
-                    {paymentBreakdown.length === 0 ? <Empty description="Tidak ada transaksi lunas" /> : <Doughnut data={paymentDoughnut} options={{ maintainAspectRatio: false, animation: false, plugins: { legend: { position: "bottom" }, datalabels: { color: "#fff", font: { weight: "bold" }, formatter: (value, ctx) => { const total = ctx.dataset.data.reduce((s, v) => s + v, 0); if (!total) return "0%"; return ((value / total) * 100).toFixed(1) + "%"; } } } }} />}
+                    {paymentBreakdown.length === 0 ? (
+                      <Empty description="Tidak ada transaksi lunas" />
+                    ) : (
+                      <Doughnut
+                        data={paymentDoughnut}
+                        options={{
+                          maintainAspectRatio: false,
+                          animation: false,
+                          plugins: {
+                            legend: { position: "bottom" },
+                            datalabels: {
+                              color: "#fff",
+                              font: { weight: "bold" },
+                              formatter: (value, ctx) => {
+                                const total = ctx.dataset.data.reduce(
+                                  (s, v) => s + v,
+                                  0
+                                );
+                                if (!total) return "0%";
+                                return ((value / total) * 100).toFixed(1) + "%";
+                              },
+                            },
+                          },
+                        }}
+                      />
+                    )}
                   </div>
                   <Divider />
                   {paymentBreakdown.map((p, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <Text>{p.method}</Text>
                       {/* [FIX 2] Tampilkan nilai metode pembayaran yang sudah di-adjust ke Net */}
-                      <Text strong>Rp {formatRupiah(p.total * grandToNetRatio)}</Text>
+                      <Text strong>
+                        Rp {formatRupiah(p.total * grandToNetRatio)}
+                      </Text>
                     </div>
                   ))}
                 </Card>
                 <Card style={{ marginBottom: 16 }} loading={loading}>
-                  <Title level={5}>Kontribusi Tenant (Net)</Title>
+                  <Title level={5}>Kontribusi Tenant</Title>
                   <div style={{ height: 220 }}>
-                    <Doughnut ref={doughnutChartRef} data={doughnutData} options={{ ...doughnutOptions, animation: false }} />
+                    <Doughnut
+                      ref={doughnutChartRef}
+                      data={doughnutData}
+                      options={{ ...doughnutOptions, animation: false }}
+                    />
                   </div>
                   <Divider />
-                  <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                  <Space
+                    direction="vertical"
+                    size="small"
+                    style={{ width: "100%" }}
+                  >
                     {tenantTotals.map((tenant) => (
-                      <div key={tenant.id} style={{ display: "flex", justifyContent: "space-between" }}>
-                        <Text><span style={{ display: "inline-block", width: 10, height: 10, background: tenant.color, borderRadius: 2, marginRight: 6 }} />{tenant.name}</Text>
+                      <div
+                        key={tenant.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Text>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              width: 10,
+                              height: 10,
+                              background: tenant.color,
+                              borderRadius: 2,
+                              marginRight: 6,
+                            }}
+                          />
+                          {tenant.name}
+                        </Text>
                         <Text strong>Rp {formatRupiah(tenant.total)}</Text>
                       </div>
                     ))}
@@ -709,12 +1134,28 @@ const FnBDashboard = () => {
                 </Card>
                 <Card style={{ marginBottom: 16 }}>
                   <Title level={5}>Target Progress</Title>
-                  <Text type="secondary">Total target: Rp {formatRupiah(totalTarget)}</Text>
+                  <Text type="secondary">
+                    Total target: Rp {formatRupiah(totalTarget)}
+                  </Text>
                   <div style={{ marginTop: 12 }}>
-                    <Progress percent={Number(pctAchieved)} status={pctAchieved >= 100 ? "success" : "active"} />
-                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-                      <Text type="secondary">Tercapai: Rp {formatRupiah(totalSales)}</Text>
-                      <Text type="secondary">Sisa: Rp {formatRupiah(Math.max(0, totalTarget - totalSales))}</Text>
+                    <Progress
+                      percent={Number(pctAchieved)}
+                      status={pctAchieved >= 100 ? "success" : "active"}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: 8,
+                      }}
+                    >
+                      <Text type="secondary">
+                        Tercapai: Rp {formatRupiah(totalSales)}
+                      </Text>
+                      <Text type="secondary">
+                        Sisa: Rp{" "}
+                        {formatRupiah(Math.max(0, totalTarget - totalSales))}
+                      </Text>
                     </div>
                   </div>
                 </Card>
@@ -724,7 +1165,13 @@ const FnBDashboard = () => {
               <Card className="no-print">
                 <Title level={5}>Quick Actions</Title>
                 <Space direction="vertical" style={{ width: "100%" }}>
-                  <Button icon={<DownloadOutlined />} onClick={handleDownloadImage} style={{ width: "100%" }}>Cetak Gambar</Button>
+                  <Button
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownloadImage}
+                    style={{ width: "100%" }}
+                  >
+                    Cetak Gambar
+                  </Button>
                   <Button
                     icon={<FileExcelOutlined />}
                     onClick={handleExportExcel}
@@ -742,12 +1189,27 @@ const FnBDashboard = () => {
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
               <Card title="Top 5 Menu" loading={loading}>
-                <Table columns={topColumns} dataSource={top5} pagination={false} size="small" locale={{ emptyText: <Empty description="Tidak ada data" /> }} />
+                <Table
+                  columns={topColumns}
+                  dataSource={top5}
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                />
               </Card>
             </Col>
             <Col xs={24} lg={12}>
-              <Card title="Unpopular Menu (Paling Jarang Dibeli)" loading={loading}>
-                <Table columns={topColumns} dataSource={unpopular5} pagination={false} size="small" locale={{ emptyText: <Empty description="Tidak ada data" /> }} />
+              <Card
+                title="Unpopular Menu (Paling Jarang Dibeli)"
+                loading={loading}
+              >
+                <Table
+                  columns={topColumns}
+                  dataSource={unpopular5}
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                />
               </Card>
             </Col>
           </Row>
@@ -755,43 +1217,175 @@ const FnBDashboard = () => {
       </div>
 
       {/* Hidden Capture Area (Also updated to use Net) */}
-      <div id="capture-area-fnb" style={{ position: "absolute", left: "-99999px", top: 0, width: "1200px", padding: "20px", background: "#fff" }}>
+      <div
+        id="capture-area-fnb"
+        style={{
+          position: "absolute",
+          left: "-99999px",
+          top: 0,
+          width: "1200px",
+          padding: "20px",
+          background: "#fff",
+        }}
+      >
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col span={6}><Card><Statistic title="Total Penjualan (Net)" value={`Rp ${formatRupiah(totalSales)}`} /></Card></Col>
-          <Col span={6}><Card><Statistic title="Total Pengunjung" value={totalVisitors} /></Card></Col>
-          <Col span={6}><Card><Statistic title="Jumlah Transaksi" value={totalTransactions} /></Card></Col>
-          <Col span={6}><Card><Statistic title="Rata-rata Harian" value={`Rp ${formatRupiah(avgDaily)}`} /></Card></Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="Total Penjualan (Net)"
+                value={`Rp ${formatRupiah(totalSales)}`}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic title="Total Pengunjung" value={totalVisitors} />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic title="Jumlah Transaksi" value={totalTransactions} />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="Rata-rata Harian"
+                value={`Rp ${formatRupiah(avgDaily)}`}
+              />
+            </Card>
+          </Col>
         </Row>
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={12}>
             <Card style={{ marginBottom: 16 }} loading={loading}>
               <Title level={5}>Metode Pembayaran (F&B)</Title>
               <div style={{ height: 240, marginTop: 12 }}>
-                {paymentBreakdown.length === 0 ? <Empty description="Tidak ada transaksi lunas" /> : <Doughnut data={paymentDoughnut} options={{ maintainAspectRatio: false, animation: false }} />}
+                {paymentBreakdown.length === 0 ? (
+                  <Empty description="Tidak ada transaksi lunas" />
+                ) : (
+                  <Doughnut
+                    data={paymentDoughnut}
+                    options={{ maintainAspectRatio: false, animation: false }}
+                  />
+                )}
               </div>
               <Divider />
-              {paymentBreakdown.map((p, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><Text>{p.method}</Text><Text strong>Rp {formatRupiah(p.total * grandToNetRatio)}</Text></div>))}
+              {paymentBreakdown.map((p, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text>{p.method}</Text>
+                  <Text strong>
+                    Rp {formatRupiah(p.total * grandToNetRatio)}
+                  </Text>
+                </div>
+              ))}
             </Card>
           </Col>
           <Col xs={24} lg={12}>
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Kontribusi Tenant (Net)</Title>
-              <div style={{ height: 240 }}><Doughnut ref={doughnutChartRef} data={doughnutData} options={{ ...doughnutOptions, animation: false }} /></div>
+              <Title level={5}>Kontribusi Tenant</Title>
+              <div style={{ height: 240 }}>
+                <Doughnut
+                  ref={doughnutChartRef}
+                  data={doughnutData}
+                  options={{ ...doughnutOptions, animation: false }}
+                />
+              </div>
               <Divider />
-              <Space direction="vertical" size="small" style={{ width: "100%" }}>
-                {tenantTotals.map((tenant) => (<div key={tenant.id} style={{ display: "flex", justifyContent: "space-between" }}><Text><span style={{ display: "inline-block", width: 10, height: 10, background: tenant.color, borderRadius: 2, marginRight: 6 }} />{tenant.name}</Text><Text strong>Rp {formatRupiah(tenant.total)}</Text></div>))}
+              <Space
+                direction="vertical"
+                size="small"
+                style={{ width: "100%" }}
+              >
+                {tenantTotals.map((tenant) => (
+                  <div
+                    key={tenant.id}
+                    style={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Text>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 10,
+                          height: 10,
+                          background: tenant.color,
+                          borderRadius: 2,
+                          marginRight: 6,
+                        }}
+                      />
+                      {tenant.name}
+                    </Text>
+                    <Text strong>Rp {formatRupiah(tenant.total)}</Text>
+                  </div>
+                ))}
               </Space>
             </Card>
           </Col>
         </Row>
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col span={24}>
-            <Card><Title level={5}>Peak Hours Menu</Title><div style={{ height: 260 }}><Bar data={peakBarData} options={{ maintainAspectRatio: false, plugins: { legend: { display: true, position: "bottom" }, datalabels: { anchor: "end", align: "end", offset: 4, color: "#000", font: { weight: "bold", size: 12 }, formatter: (v) => (v !== null ? v : "") } }, scales: { y: { beginAtZero: true } } }} /></div></Card>
+            <Card>
+              <Title level={5}>F&B Peak Ordering Hours</Title>
+              <div style={{ height: 260 }}>
+                <Bar
+                  data={peakBarData}
+                  options={{
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: true, position: "bottom" },
+                      datalabels: {
+                        anchor: "end",
+                        align: "end",
+                        offset: 4,
+                        color: "#000",
+                        font: { weight: "bold", size: 12 },
+                        formatter: (v) => (v !== null ? v : ""),
+                      },
+                    },
+                    scales: { y: { beginAtZero: true } },
+                  }}
+                />
+              </div>
+            </Card>
           </Col>
         </Row>
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col xs={24} lg={12}><Card title="Top 5 Menu" loading={loading}><Table columns={topColumns} dataSource={top5} pagination={false} size="small" locale={{ emptyText: <Empty description="Tidak ada data" /> }} /></Card></Col>
-          {top5PerTenant.map(({ tenant, items }) => (<Col xs={24} lg={12} key={tenant.id}><Card title={`Top 5 - ${tenant.name}`}><Table columns={topColumns.filter((col) => col.dataIndex !== "tenant")} dataSource={items.map((item, i) => ({ ...item, key: `${tenant.id}-${i}` }))} pagination={false} size="small" locale={{ emptyText: <Empty description="Tidak ada data" /> }} /></Card></Col>))}
+          <Col xs={24} lg={12}>
+            <Card title="Top 5 Menu" loading={loading}>
+              <Table
+                columns={topColumns}
+                dataSource={top5}
+                pagination={false}
+                size="small"
+                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+              />
+            </Card>
+          </Col>
+          {top5PerTenant.map(({ tenant, items }) => (
+            <Col xs={24} lg={12} key={tenant.id}>
+              <Card title={`Top 5 - ${tenant.name}`}>
+                <Table
+                  columns={topColumns.filter(
+                    (col) => col.dataIndex !== "tenant"
+                  )}
+                  dataSource={items.map((item, i) => ({
+                    ...item,
+                    key: `${tenant.id}-${i}`,
+                  }))}
+                  pagination={false}
+                  size="small"
+                  locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+                />
+              </Card>
+            </Col>
+          ))}
         </Row>
       </div>
     </ConfigProvider>

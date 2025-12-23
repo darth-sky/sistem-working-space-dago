@@ -40,10 +40,10 @@ import {
   Legend,
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-import { 
+import {
   getDashboardSummary,
-  getTransactionReport,        
-  getTransactionDetailReport
+  getTransactionReport,
+  getTransactionDetailReport,
 } from "../../../services/service";
 
 dayjs.locale("id");
@@ -85,7 +85,7 @@ const Laporan = () => {
     dayjs(),
   ]);
   const [loading, setLoading] = useState(false);
-  
+
   // state dari API
   const [totals, setTotals] = useState({
     total_fnb: 0,
@@ -122,7 +122,7 @@ const Laporan = () => {
           total_transactions: Number(d?.totals?.total_transactions || 0),
           total_visitors: Number(d?.totals?.total_visitors || 0),
           // [FIX 1] Ambil data unik dari backend
-          total_visitors_unique: Number(d?.totals?.total_visitors_unique || 0), 
+          total_visitors_unique: Number(d?.totals?.total_visitors_unique || 0),
           avg_daily: Number(d?.totals?.avg_daily || 0),
           total_days: Number(d?.totals?.total_days || 0),
         });
@@ -160,16 +160,15 @@ const Laporan = () => {
 
   // [FIX 2] Hitung Rasio Bersih (Net Ratio)
   // Digunakan untuk membersihkan Pajak dari angka Kontribusi Tenant/WS
-  const netRatio = totals.total_sales > 0 
-    ? totalPendapatanBersih / totals.total_sales 
-    : 1;
+  const netRatio =
+    totals.total_sales > 0 ? totalPendapatanBersih / totals.total_sales : 1;
 
   // [FIX 2] Buat dataset kontribusi tenant yang sudah dikonversi ke Net (Excl. Tax)
   const netTenantContribution = useMemo(() => {
-    return tenantContribution.map(t => ({
+    return tenantContribution.map((t) => ({
       ...t,
       // Aplikasikan rasio ke setiap nilai
-      nett: t.nett * netRatio 
+      nett: t.nett * netRatio,
     }));
   }, [tenantContribution, netRatio]);
 
@@ -178,7 +177,7 @@ const Laporan = () => {
     () => dailySales.map((d) => dayjs(d.tanggal).format("D")),
     [dailySales]
   );
-  
+
   // [FIX 2] Update grafik harian agar menggunakan angka Net juga (opsional, untuk konsistensi)
   const fnbSeries = useMemo(
     () => dailySales.map((d) => Number(d.fnb || 0) * netRatio),
@@ -193,7 +192,7 @@ const Laporan = () => {
     labels: lineLabels,
     datasets: [
       {
-        label: "FNB (Net)",
+        label: "FNB",
         data: fnbSeries,
         fill: false,
         borderColor: "#2563eb",
@@ -201,7 +200,7 @@ const Laporan = () => {
         pointRadius: 3,
       },
       {
-        label: "Working Space (Net)",
+        label: "Working Space",
         data: wsSeries,
         fill: false,
         borderColor: "#10B981",
@@ -215,7 +214,6 @@ const Laporan = () => {
     labels: ["FNB", "Working Space"],
     datasets: [
       {
-        // [FIX 2] Tampilkan total yang sudah bersih pajak
         data: [totals.total_fnb * netRatio, totals.total_ws * netRatio],
         backgroundColor: ["#2563eb", "#10B981"],
         hoverOffset: 8,
@@ -223,7 +221,6 @@ const Laporan = () => {
     ],
   };
 
-  // jam operasional (8 s/d 22)
   const hourLabels = Array.from({ length: 15 }, (_, i) => `${8 + i}:00`);
   const hours = Array.from({ length: 15 }, (_, i) => 8 + i);
 
@@ -262,7 +259,10 @@ const Laporan = () => {
     scales: {
       y: {
         beginAtZero: true,
-        ticks: { callback: (v) => `Rp ${formatRupiah(v)}` },
+        ticks: {  
+          stepSize: 1,
+          precision: 0,
+          callback: (v) => `Rp ${formatRupiah(v)}` },
       },
       x: { title: { display: true, text: "Tanggal" } },
     },
@@ -289,8 +289,12 @@ const Laporan = () => {
     scales: {
       y: {
         beginAtZero: true,
-        ticks: { callback: (v) => formatRupiah(v) },
         title: { display: true, text: "Jumlah Kunjungan" },
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+          callback: (v) => v,
+        },
       },
       x: { title: { display: true, text: "Jam" } },
     },
@@ -317,7 +321,11 @@ const Laporan = () => {
     scales: {
       y: {
         beginAtZero: true,
-        ticks: { callback: (v) => formatRupiah(v) },
+        ticks: {
+          stepSize: 1,
+          precision: 0,
+          callback: (v) => v,
+        },
         title: { display: true, text: "Jumlah Kunjungan" },
       },
       x: { title: { display: true, text: "Jam" } },
@@ -364,7 +372,10 @@ const Laporan = () => {
   const handleExportExcel = async () => {
     try {
       setLoading(true); // Tampilkan loading
-      message.loading({ content: "Sedang mengambil data transaksi...", key: "export" });
+      message.loading({
+        content: "Sedang mengambil data transaksi...",
+        key: "export",
+      });
 
       const startDateStr = dateRange[0].format("YYYY-MM-DD");
       const endDateStr = dateRange[1].format("YYYY-MM-DD");
@@ -374,26 +385,35 @@ const Laporan = () => {
       const transactionList = listResp.datas || [];
 
       if (transactionList.length === 0) {
-        message.warning({ content: "Tidak ada data transaksi pada periode ini.", key: "export" });
+        message.warning({
+          content: "Tidak ada data transaksi pada periode ini.",
+          key: "export",
+        });
         setLoading(false);
         return;
       }
 
       // 2. Ambil Detail untuk SETIAP Transaksi (Sheet 2)
       // Kita menggunakan Promise.all untuk mengambil detail secara paralel
-      message.loading({ content: `Memproses detail ${transactionList.length} transaksi...`, key: "export" });
-      
-      const detailPromises = transactionList.map((trx) => 
-        getTransactionDetailReport(trx.id_transaksi)
-          .then(res => ({ id: trx.id_transaksi, data: res.datas }))
-          .catch(() => ({ id: trx.id_transaksi, data: { fnb: [], ws: [] } })) // Fallback jika error
+      message.loading({
+        content: `Memproses detail ${transactionList.length} transaksi...`,
+        key: "export",
+      });
+
+      const detailPromises = transactionList.map(
+        (trx) =>
+          getTransactionDetailReport(trx.id_transaksi)
+            .then((res) => ({ id: trx.id_transaksi, data: res.datas }))
+            .catch(() => ({ id: trx.id_transaksi, data: { fnb: [], ws: [] } })) // Fallback jika error
       );
-      
+
       const detailsResults = await Promise.all(detailPromises);
-      
+
       // Buat Map untuk akses cepat detail berdasarkan ID
       const detailsMap = {};
-      detailsResults.forEach(r => { detailsMap[r.id] = r.data; });
+      detailsResults.forEach((r) => {
+        detailsMap[r.id] = r.data;
+      });
 
       // ==========================================
       // MULAI MEMBUAT EXCEL
@@ -406,7 +426,10 @@ const Laporan = () => {
       const defaultFont = { name: FONT_NAME, size: FONT_SIZE };
       const boldFont = { name: FONT_NAME, size: FONT_SIZE, bold: true };
       const borderAll = {
-        top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" },
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
       };
       const numFmtRp = '"Rp" #,##0';
       const numFmtPct = '0.00"%"';
@@ -427,18 +450,28 @@ const Laporan = () => {
 
         sheet.mergeCells(2, 1, 2, colCount);
         const p = sheet.getCell(2, 1);
-        p.value = `Periode: ${dateRange[0].format("DD/MM/YYYY")} s/d ${dateRange[1].format("DD/MM/YYYY")}`;
+        p.value = `Periode: ${dateRange[0].format(
+          "DD/MM/YYYY"
+        )} s/d ${dateRange[1].format("DD/MM/YYYY")}`;
         p.font = boldFont;
         p.alignment = { horizontal: "center", vertical: "middle" };
-        sheet.addRow([]); 
+        sheet.addRow([]);
       };
 
       const styleHeaderRow = (row) => {
         row.eachCell((cell) => {
           cell.font = boldFont;
           cell.border = borderAll;
-          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4A460' } };
+          cell.alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF4A460" },
+          };
         });
         row.height = 22;
       };
@@ -451,10 +484,23 @@ const Laporan = () => {
         });
       };
 
-      const setRowHeightByText = (row, text, colWidth, { base = 18, perLine = 14, maxLines = 10 } = {}) => {
+      const setRowHeightByText = (
+        row,
+        text,
+        colWidth,
+        { base = 18, perLine = 14, maxLines = 10 } = {}
+      ) => {
         const safeText = String(text || "");
         const approxCharsPerLine = Math.max(10, Math.floor(colWidth * 1.2));
-        const lineCount = Math.max(1, safeText.split("\n").reduce((acc, part) => acc + Math.ceil(part.length / approxCharsPerLine), 0));
+        const lineCount = Math.max(
+          1,
+          safeText
+            .split("\n")
+            .reduce(
+              (acc, part) => acc + Math.ceil(part.length / approxCharsPerLine),
+              0
+            )
+        );
         const capped = Math.min(lineCount, maxLines);
         row.height = base + (capped - 1) * perLine;
       };
@@ -466,35 +512,60 @@ const Laporan = () => {
       applySheetDefaults(sheet1);
 
       const transHeaders = [
-        "ID", "Datetime", "Tax (%)", "Discount (%)", "Tax Total", 
-        "Discount Total", "Sub Total", "Total (Final)", "Customer Name", 
-        "Note / Type", "Payment Status", "Payment Method"
+        "ID",
+        "Datetime",
+        "Tax (%)",
+        "Discount (%)",
+        "Tax Total",
+        "Discount Total",
+        "Sub Total",
+        "Total (Final)",
+        "Customer Name",
+        "Note / Type",
+        "Payment Status",
+        "Payment Method",
       ];
 
       addTitle(sheet1, "Transaction List", transHeaders.length);
       const headerRow1 = sheet1.addRow(transHeaders);
       styleHeaderRow(headerRow1);
-      sheet1.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: transHeaders.length } };
+      sheet1.autoFilter = {
+        from: { row: 4, column: 1 },
+        to: { row: 4, column: transHeaders.length },
+      };
 
-      const SHEET1_WIDTHS = { 1: 10, 2: 22, 3: 10, 4: 12, 5: 15, 6: 15, 7: 18, 8: 18, 9: 20, 10: 25, 11: 15, 12: 15 };
-      Object.entries(SHEET1_WIDTHS).forEach(([c, w]) => { sheet1.getColumn(Number(c)).width = w; });
+      const SHEET1_WIDTHS = {
+        1: 10,
+        2: 22,
+        3: 10,
+        4: 12,
+        5: 15,
+        6: 15,
+        7: 18,
+        8: 18,
+        9: 20,
+        10: 25,
+        11: 15,
+        12: 15,
+      };
+      Object.entries(SHEET1_WIDTHS).forEach(([c, w]) => {
+        sheet1.getColumn(Number(c)).width = w;
+      });
 
-      // Mapping Data Real ke Sheet 1
+      // Mapping Sheet 1
       transactionList.forEach((t) => {
         const subtotal = asNumber(t.subtotal);
         const taxTotal = asNumber(t.pajak_nominal);
         const grandTotal = asNumber(t.total_harga_final);
-        
-        // Hitung Discount Total: (Subtotal + Pajak) - GrandTotal
-        // Jika negatif berarti tidak ada diskon (atau data error, kita set 0)
-        let discountTotal = (subtotal + taxTotal) - grandTotal;
+
+        // Hitung Discount Total
+        let discountTotal = subtotal + taxTotal - grandTotal;
         if (discountTotal < 0) discountTotal = 0;
 
-        // Hitung Persentase (untuk display saja)
-        const taxPct = subtotal > 0 ? (taxTotal / subtotal) : 0;
-        // Basis diskon biasanya dari Gross (Subtotal + Tax)
+        const taxPct = subtotal > 0 ? taxTotal / subtotal : 0;
+        // Basis diskon 
         const gross = subtotal + taxTotal;
-        const discPct = gross > 0 ? (discountTotal / gross) : 0;
+        const discPct = gross > 0 ? discountTotal / gross : 0;
 
         const row = sheet1.addRow([
           t.id_transaksi,
@@ -506,18 +577,24 @@ const Laporan = () => {
           subtotal,
           grandTotal,
           t.nama_guest || "Guest",
-          `${t.booking_source} (${t.fnb_type || '-'})`,
+          `${t.booking_source} (${t.fnb_type || "-"})`,
           t.status_pembayaran,
-          t.metode_pembayaran
+          t.metode_pembayaran,
         ]);
 
         // Formatting
-        [3, 4].forEach(idx => row.getCell(idx).numFmt = numFmtPct);
-        [5, 6, 7, 8].forEach(idx => row.getCell(idx).numFmt = numFmtRp);
-        
+        [3, 4].forEach((idx) => (row.getCell(idx).numFmt = numFmtPct));
+        [5, 6, 7, 8].forEach((idx) => (row.getCell(idx).numFmt = numFmtRp));
+
         styleBodyRow(row);
         // Align numbers right
-        [1, 3, 4, 5, 6, 7, 8].forEach(c => row.getCell(c).alignment = { horizontal: "right", vertical: "middle" });
+        [1, 3, 4, 5, 6, 7, 8].forEach(
+          (c) =>
+            (row.getCell(c).alignment = {
+              horizontal: "right",
+              vertical: "middle",
+            })
+        );
       });
 
       // =====================================================================================
@@ -527,19 +604,41 @@ const Laporan = () => {
       applySheetDefaults(sheet2);
 
       const transDetailHeaders = [
-        "Trx ID", "Datetime", "Type", "Item / Product", "Qty", 
-        "Price (Unit)", "Total (Item)", "Share Tenant (70%)", "Share Owner (30%)"
+        "Trx ID",
+        "Datetime",
+        "Type",
+        "Item / Product",
+        "Qty",
+        "Price (Unit)",
+        "Total (Item)",
+        "Share Tenant (70%)",
+        "Share Owner (30%)",
       ];
 
       addTitle(sheet2, "Transaction Detail", transDetailHeaders.length);
       const headerRow2 = sheet2.addRow(transDetailHeaders);
       styleHeaderRow(headerRow2);
-      sheet2.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: transDetailHeaders.length } };
+      sheet2.autoFilter = {
+        from: { row: 4, column: 1 },
+        to: { row: 4, column: transDetailHeaders.length },
+      };
 
-      const SHEET2_WIDTHS = { 1: 10, 2: 22, 3: 15, 4: 40, 5: 10, 6: 18, 7: 18, 8: 18, 9: 18 };
-      Object.entries(SHEET2_WIDTHS).forEach(([c, w]) => { sheet2.getColumn(Number(c)).width = w; });
+      const SHEET2_WIDTHS = {
+        1: 10,
+        2: 22,
+        3: 15,
+        4: 40,
+        5: 10,
+        6: 18,
+        7: 18,
+        8: 18,
+        9: 18,
+      };
+      Object.entries(SHEET2_WIDTHS).forEach(([c, w]) => {
+        sheet2.getColumn(Number(c)).width = w;
+      });
 
-      // Mapping Data Real ke Sheet 2 (Flatten Data)
+      // Mapping Sheet 2 
       transactionList.forEach((t) => {
         const details = detailsMap[t.id_transaksi];
         if (!details) return;
@@ -547,8 +646,8 @@ const Laporan = () => {
         // 1. Process F&B Items
         if (details.fnb && details.fnb.length > 0) {
           details.fnb.forEach((item) => {
-            const itemTotal = asNumber(item.subtotal); // Harga x Qty
-            // Logika Bagi Hasil F&B (70:30 dari Gross Item)
+            const itemTotal = asNumber(item.subtotal); 
+            // Logika Bagi Hasil  
             const shareTenant = itemTotal * 0.7;
             const shareOwner = itemTotal * 0.3;
 
@@ -561,12 +660,18 @@ const Laporan = () => {
               asNumber(item.harga_saat_order),
               itemTotal,
               shareTenant,
-              shareOwner
+              shareOwner,
             ]);
-            
+
             styleBodyRow(row);
-            [6, 7, 8, 9].forEach(c => row.getCell(c).numFmt = numFmtRp);
-            [1, 5, 6, 7, 8, 9].forEach(c => row.getCell(c).alignment = { horizontal: "right", vertical: "middle" });
+            [6, 7, 8, 9].forEach((c) => (row.getCell(c).numFmt = numFmtRp));
+            [1, 5, 6, 7, 8, 9].forEach(
+              (c) =>
+                (row.getCell(c).alignment = {
+                  horizontal: "right",
+                  vertical: "middle",
+                })
+            );
             setRowHeightByText(row, item.nama_produk, SHEET2_WIDTHS[4]);
           });
         }
@@ -574,28 +679,27 @@ const Laporan = () => {
         // 2. Process Working Space Items
         if (details.ws && details.ws.length > 0) {
           details.ws.forEach((item) => {
-            // Backend endpoint detail WS saat ini belum mengirim harga per item
-            // Kita asumsikan untuk Working Space, total ada di Header Transaksi
-            // Atau jika backend mengirim harga, gunakan itu. 
-            // *Fallback*: Kosongkan harga jika data tidak tersedia di endpoint detail
-            
-            // Logika Bagi Hasil WS (0:100 ke Owner atau sesuai kebijakan)
-            // Di sini kita set "-" karena detail harga per booking WS mungkin belum ada di endpoint detail
+
             const row = sheet2.addRow([
               t.id_transaksi,
               `${t.tanggal} ${t.waktu}`,
               "Working Space",
               `${item.nama_ruangan} (${item.durasi_jam} Jam)`,
               1,
-              "-", // Harga satuan belum ada di endpoint detail saat ini
-              "-",
-              0,   // Tenant Share 0 untuk WS
-              "-"  // Owner Share Full (tapi ambil dr header)
+              "-", 
+              0, 
+              "-", 
             ]);
 
             styleBodyRow(row);
             row.getCell(4).alignment = { wrapText: true, vertical: "middle" };
-            [1, 5, 8].forEach(c => row.getCell(c).alignment = { horizontal: "right", vertical: "middle" });
+            [1, 5, 8].forEach(
+              (c) =>
+                (row.getCell(c).alignment = {
+                  horizontal: "right",
+                  vertical: "middle",
+                })
+            );
           });
         }
       });
@@ -604,18 +708,26 @@ const Laporan = () => {
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(
         new Blob([buffer]),
-        `Laporan-Transaksi-${dateRange[0].format("YYYYMMDD")}_to_${dateRange[1].format("YYYYMMDD")}.xlsx`
+        `Laporan-Transaksi-${dateRange[0].format(
+          "YYYYMMDD"
+        )}_to_${dateRange[1].format("YYYYMMDD")}.xlsx`
       );
 
-      message.success({ content: "Export Excel laporan berhasil!", key: "export" });
+      message.success({
+        content: "Export Excel laporan berhasil!",
+        key: "export",
+      });
     } catch (e) {
       console.error(e);
-      message.error({ content: "Gagal membuat Excel: " + e.message, key: "export" });
+      message.error({
+        content: "Gagal membuat Excel: " + e.message,
+        key: "export",
+      });
     } finally {
       setLoading(false);
     }
   };
-  
+
   const paymentDoughnut = useMemo(() => {
     if (!paymentBreakdown || paymentBreakdown.length === 0) {
       return {
@@ -630,7 +742,7 @@ const Laporan = () => {
     }
 
     const labels = paymentBreakdown.map((x) => x.method);
-    // [FIX 2] Chart Payment juga menggunakan Net
+
     const values = paymentBreakdown.map((x) => x.total * netRatio);
 
     const COLORS = ["#2563eb", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
@@ -647,15 +759,23 @@ const Laporan = () => {
     };
   }, [paymentBreakdown, netRatio]);
 
-  // [FIX 2] Menggunakan data yang sudah dibersihkan (Net)
+  // Menggunakan data yang sudah dibersihkan (Net)
   const tenantPieData = useMemo(() => {
     if (!netTenantContribution || netTenantContribution.length === 0) {
       return { labels: [], datasets: [{ data: [], backgroundColor: [] }] };
     }
 
     const BLUE_TONES = [
-      "#1E3A8A", "#1D4ED8", "#3B82F6", "#60A5FA", "#93C5FD",
-      "#0EA5E9", "#0284C7", "#2563EB", "#38BDF8", "#0EA5E9",
+      "#1E3A8A",
+      "#1D4ED8",
+      "#3B82F6",
+      "#60A5FA",
+      "#93C5FD",
+      "#0EA5E9",
+      "#0284C7",
+      "#2563EB",
+      "#38BDF8",
+      "#0EA5E9",
     ];
 
     const WS_COLOR = "#10B981";
@@ -750,12 +870,6 @@ const Laporan = () => {
           >
             Working Space
           </a>
-          <a
-            href="/laporanpajak"
-            className="px-3 py-1 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100"
-          >
-            Pajak
-          </a>
         </div>
 
         {/* KPI cards */}
@@ -763,7 +877,7 @@ const Laporan = () => {
           <Col xs={24} sm={12} md={6}>
             <Card loading={loading}>
               <Statistic
-                title="Total Penjualan (Net)"
+                title="Total Penjualan"
                 value={`Rp ${formatRupiah(totalPendapatanBersih)}`}
                 prefix={<ShopOutlined />}
               />
@@ -773,7 +887,6 @@ const Laporan = () => {
             <Card loading={loading}>
               <Statistic
                 title="Total Pengunjung"
-                // [FIX 1] Gunakan variable pengunjung unik
                 value={totals.total_visitors_unique}
                 prefix={<UsergroupAddOutlined />}
               />
@@ -791,8 +904,10 @@ const Laporan = () => {
           <Col xs={24} sm={12} md={6}>
             <Card loading={loading}>
               <Statistic
-                title="Rata-rata Harian (Net)"
-                value={`Rp ${formatRupiah(totalPendapatanBersih / Math.max(1, totals.total_days))}`}
+                title="Rata-rata Harian"
+                value={`Rp ${formatRupiah(
+                  totalPendapatanBersih / Math.max(1, totals.total_days)
+                )}`}
                 prefix={<ArrowUpOutlined />}
               />
             </Card>
@@ -813,7 +928,7 @@ const Laporan = () => {
                   }}
                 >
                   <Title level={5} style={{ margin: 0 }}>
-                    Daily Selling (Net)
+                    Daily Sellings
                   </Title>
                   <Text type="secondary">
                     {dateRange[0].format("D MMM")} -{" "}
@@ -829,7 +944,7 @@ const Laporan = () => {
             </Card>
 
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Trafik Pengunjung per Jam</Title>
+              <Title level={5}>Hourly Visit Traffic</Title>
               <Text type="secondary">
                 Akumulasi kunjungan selama periode {totalDays} hari.
               </Text>
@@ -839,7 +954,7 @@ const Laporan = () => {
                     labels: hourLabels,
                     datasets: [
                       {
-                        label: "Pengunjung (jumlah transaksi)",
+                        label: "Pengunjung",
                         data: visitorsData,
                         backgroundColor: "#2563eb",
                       },
@@ -851,9 +966,9 @@ const Laporan = () => {
             </Card>
 
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Peak Hours Visiting</Title>
+              <Title level={5}>Peak Visiting Hours</Title>
               <Text type="secondary">
-                Akumulasi tiga waktu puncak selama periode {totalDays} hari.
+                Total kunjungan tertinggi pada 3 jam teramai ({totalDays} hari).
               </Text>
               <div style={{ height: 220, marginTop: 10 }}>
                 <Bar
@@ -875,7 +990,7 @@ const Laporan = () => {
 
           <Col xs={24} lg={8}>
             <Card style={{ marginBottom: 16 }} loading={loading}>
-              <Title level={5}>Metode Pembayaran (Net)</Title>
+              <Title level={5}>Metode Pembayaran</Title>
               <Text type="secondary">
                 Distribusi metode pembayaran semua transaksi lunas.
               </Text>
@@ -1029,7 +1144,7 @@ const Laporan = () => {
                     render: (v) => formatRupiah(v),
                   },
                   {
-                    title: "Total Penjualan (Gross)",
+                    title: "Total Penjualan",
                     dataIndex: "total",
                     key: "total",
                     align: "right",
@@ -1069,9 +1184,7 @@ const Laporan = () => {
                   },
                 ]}
                 dataSource={topWs}
-                rowKey={(r) =>
-                  `${r.item}-${String(r.qty)}-${String(r.total)}`
-                }
+                rowKey={(r) => `${r.item}-${String(r.qty)}-${String(r.total)}`}
                 pagination={false}
                 size="small"
                 locale={{ emptyText: <Empty description="Tidak ada data" /> }}
@@ -1100,7 +1213,7 @@ const Laporan = () => {
           <Col xs={24} sm={12} md={6}>
             <Card>
               <Statistic
-                title="Total Penjualan (Net)"
+                title="Total Penjualan"
                 value={`Rp ${formatRupiah(totalPendapatanBersih)}`}
                 prefix={<ShopOutlined />}
               />
@@ -1110,7 +1223,6 @@ const Laporan = () => {
             <Card>
               <Statistic
                 title="Total Pengunjung"
-                // [FIX 1] Gunakan visitor unik untuk cetak
                 value={totals.total_visitors_unique}
                 prefix={<UsergroupAddOutlined />}
               />
@@ -1128,8 +1240,10 @@ const Laporan = () => {
           <Col xs={24} sm={12} md={6}>
             <Card>
               <Statistic
-                title="Rata-rata Harian (Net)"
-                value={`Rp ${formatRupiah(totalPendapatanBersih / Math.max(1, totals.total_days))}`}
+                title="Rata-rata Harian"
+                value={`Rp ${formatRupiah(
+                  totalPendapatanBersih / Math.max(1, totals.total_days)
+                )}`}
                 prefix={<ArrowUpOutlined />}
               />
             </Card>
@@ -1141,7 +1255,7 @@ const Laporan = () => {
           {/* PAYMENT */}
           <Col span={12}>
             <Card style={{ height: "100%" }}>
-              <Title level={5}>Metode Pembayaran (Net)</Title>
+              <Title level={5}>Metode Pembayaran</Title>
               <div style={{ height: 240 }}>
                 <Doughnut
                   data={paymentDoughnut}
@@ -1187,7 +1301,7 @@ const Laporan = () => {
           {/* TENANT CONTRIBUTION */}
           <Col span={12}>
             <Card style={{ height: "100%" }}>
-              <Title level={5}>Kontribusi Tenant & Working Space (Net)</Title>
+              <Title level={5}>Kontribusi Tenant & Working Space</Title>
 
               <div style={{ height: 260 }}>
                 <Doughnut
@@ -1227,6 +1341,74 @@ const Laporan = () => {
                   <Text strong>Rp {formatRupiah(t.nett)}</Text>
                 </div>
               ))}
+            </Card>
+          </Col>
+        </Row>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <Card title="Top 10 FNB" loading={loading}>
+              <Table
+                columns={[
+                  { title: "Menu", dataIndex: "item", key: "item" },
+                  {
+                    title: "Tenant",
+                    dataIndex: "tenant",
+                    key: "tenant",
+                    width: 140,
+                  },
+                  {
+                    title: "Jumlah Terjual",
+                    dataIndex: "qty",
+                    key: "qty",
+                    align: "right",
+                    render: (v) => formatRupiah(v),
+                  },
+                  {
+                    title: "Total Penjualan",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (t) => `Rp ${formatRupiah(t)}`,
+                  },
+                ]}
+                dataSource={topFnb}
+                rowKey={(r) => `${r.item}-${r.tenant || ""}`}
+                pagination={false}
+                size="small"
+                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card title="Top 5 Working Space" loading={loading}>
+              <Table
+                columns={[
+                  {
+                    title: "Kategori - Durasi",
+                    dataIndex: "item",
+                    key: "item",
+                  },
+                  {
+                    title: "Jumlah Terjual",
+                    dataIndex: "qty",
+                    key: "qty",
+                    align: "right",
+                    render: (v) => formatRupiah(v),
+                  },
+                  {
+                    title: "Total Penjualan (Gross)",
+                    dataIndex: "total",
+                    key: "total",
+                    align: "right",
+                    render: (t) => `Rp ${formatRupiah(t)}`,
+                  },
+                ]}
+                dataSource={topWs}
+                rowKey={(r) => `${r.item}-${String(r.qty)}-${String(r.total)}`}
+                pagination={false}
+                size="small"
+                locale={{ emptyText: <Empty description="Tidak ada data" /> }}
+              />
             </Card>
           </Col>
         </Row>

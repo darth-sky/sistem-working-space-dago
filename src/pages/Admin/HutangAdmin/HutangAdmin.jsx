@@ -354,10 +354,10 @@ const HutangAdmin = () => {
               dayjs(sale.tanggal).toDate(),
               sale.nama_produk,
               sale.jumlah_qty,
-              gross,
+              nett,
               discount,
               tax, // <--- DATA PAJAK DIMASUKKAN SINI
-              nett
+              gross
             ]).eachCell((cell, col) => {
               cell.border = borderStyle;
 

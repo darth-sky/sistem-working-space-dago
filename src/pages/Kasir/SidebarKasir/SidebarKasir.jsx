@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from "react"; // Hapus useContext
-import { Menu, X } from "lucide-react";
-import { Link, useNavigate, Outlet } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Menu, X, ArrowLeft } from "lucide-react"; // Tambah ArrowLeft
+import { Link, useNavigate, Outlet, useLocation } from "react-router-dom"; // Tambah useLocation
 
-// --- PERBAIKAN: Gunakan 'useAuth' hook ---
 import { useAuth } from "../../../providers/AuthProvider";
-// --- AKHIR PERBAIKAN ---
 
 import { BsBox2, BsBox2Fill, BsCart, BsCart3, BsCartFill, BsFileBarGraph, BsGraphUpArrow } from "react-icons/bs";
 import { MdChair, MdHistory, MdMoney, MdOutlineChair, MdOutlineHistory } from "react-icons/md";
@@ -12,52 +10,38 @@ import { FaDatabase } from "react-icons/fa";
 import { GrCart } from "react-icons/gr";
 import { FaHouse } from "react-icons/fa6";
 import { RiHomeOfficeLine } from "react-icons/ri";
-// --- TAMBAHAN: Impor Ikon Peringatan ---
 import { IoSettingsOutline, IoWarningOutline } from "react-icons/io5";
-// --- AKHIR TAMBAHAN ---
 import { SlLogout } from "react-icons/sl";
 import GlobalRentalMonitor from "../../../components/GlobalRentalMonitor";
 import { findPrinterDetails } from "../../../utils/PrinterFinder";
 
 const SidebarKasir = ({ children }) => {
     const [selectedMenu, setSelectedMenu] = useState("Transaksi");
-    const [showBilling, setShowBilling] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation(); // Hook untuk cek URL
 
-    // --- TAMBAHAN: State untuk modal konfirmasi ---
+    // State Modal Logout
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-    // --- AKHIR TAMBAHAN ---
 
-    // --- PERBAIKAN: Ambil 'userProfile' dan 'logout' dari useAuth ---
     const { userProfile, logout } = useAuth();
-    // --- AKHIR PERBAIKAN ---
 
-    // --- PERBAIKAN: handleLogout sekarang membuka modal ---
+    // Deteksi Mode History (Riwayat Sesi Detail)
+    const isHistoryMode = location.pathname.includes("/kasir/riwayat-sesi/");
+
     const handleLogout = () => {
         setIsLogoutModalOpen(true);
     };
-    // --- AKHIR PERBAIKAN ---
 
-    // --- TAMBAHAN: Fungsi untuk menjalankan logout ---
     const executeLogout = () => {
         logout();
-        setIsLogoutModalOpen(false); // Mungkin tidak perlu jika 'logout' unmount
+        setIsLogoutModalOpen(false);
     };
-    // --- AKHIR TAMBAHAN ---
 
-    // useEffect ini sudah tidak diperlukan karena PrivateRoute menanganinya
-    // useEffect(() => {
-    //     if (userProfile.roles !== "kasir") {
-    //         navigate("/");
-    //     }
-    // }, [userProfile]);
+    // --- DEFINISI MENU ---
 
-    const [orders, setOrders] = useState([
-        // ... (data order Anda) ...
-    ]);
-
-    const menuItems = [
+    // 1. Menu Standar (Normal Operation)
+    const standardMenuItems = [
         { name: "Transaksi", icon: <GrCart />, path: "/transaksikasir" },
         { name: "Merchant", icon: <RiHomeOfficeLine />, path: "/merchantkasir" },
         { name: "Product", icon: <BsBox2 />, path: "/productkasir" },
@@ -68,11 +52,39 @@ const SidebarKasir = ({ children }) => {
         {
             name: "Logout",
             icon: <SlLogout />,
-            action: handleLogout // Ini sekarang memanggil fungsi yang membuka modal
+            action: handleLogout
         }
     ];
 
-    // ... (sisa fungsi Anda: getStatusColor, handleStatusChange, formatPrice) ...
+    // 2. Menu Khusus Mode History (Review)
+    const historyMenuItems = [
+        { 
+            name: "Detail Sesi", 
+            icon: <MdHistory />, 
+            path: null, // Tidak navigasi kemana-mana (aktif saat ini)
+            isStatic: true // Penanda item ini statis/aktif
+        },
+        {
+            name: "Logout",
+            icon: <SlLogout />,
+            action: handleLogout
+        }
+    ];
+
+    // Tentukan menu mana yang dipakai
+    const currentMenuItems = isHistoryMode ? historyMenuItems : standardMenuItems;
+
+    // Update selected menu otomatis jika pindah halaman (opsional, untuk sinkronisasi UI)
+    useEffect(() => {
+        if (!isHistoryMode) {
+            // Cari menu yang path-nya cocok dengan URL saat ini
+            const activeItem = standardMenuItems.find(item => item.path && location.pathname.startsWith(item.path));
+            if (activeItem) {
+                setSelectedMenu(activeItem.name);
+            }
+        }
+    }, [location.pathname, isHistoryMode]);
+
 
     return (
         <div className="flex h-screen bg-gradient-to-br from-blue-50 via-gray-100 to-blue-100 overflow-hidden">
@@ -90,7 +102,7 @@ const SidebarKasir = ({ children }) => {
                 {/* Logo Section */}
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                     <img
-                        src="/img/logo_dago.png" // Path relatif dari folder public
+                        src="/img/logo_dago.png"
                         alt="Dago Logo"
                         className="h-10 mx-auto"
                     />
@@ -108,29 +120,47 @@ const SidebarKasir = ({ children }) => {
 
                 {/* Menu Section */}
                 <nav className="flex-1 py-4 space-y-1">
-                    {menuItems.map((item, index) => (
-                        <div
-                            key={index}
-                            onClick={() => {
-                                if (item.path) navigate(item.path);
-                                if (item.action) item.action();
-                                setSelectedMenu(item.name);
-                                if (window.innerWidth < 768) setIsSidebarOpen(false);
-                            }}
-                            className={`w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 ${selectedMenu === item.name
-                                ? "bg-blue-600 text-white"
-                                : "text-gray-800 hover:bg-blue-100"
-                                }`}
-                        >
-                            <span className={`text-xl ${selectedMenu === item.name ? "text-white" : "text-gray-700"}`}>
-                                {item.icon}
-                            </span>
-                            {/* --- PERBAIKAN: Tampilkan menu saat sidebar full (w-64) --- */}
-                            {isSidebarOpen && <span className="font-medium">{item.name}</span>}
-                        </div>
-                    ))}
+                    {currentMenuItems.map((item, index) => {
+                        // Logika Highlight: 
+                        // Jika mode history -> item "Detail Sesi" selalu aktif.
+                        // Jika mode standar -> cek state selectedMenu.
+                        const isActive = isHistoryMode 
+                            ? item.name === "Detail Sesi" 
+                            : selectedMenu === item.name;
+
+                        return (
+                            <div
+                                key={index}
+                                onClick={() => {
+                                    if (item.path) navigate(item.path);
+                                    if (item.action) item.action();
+                                    
+                                    // Hanya update state jika bukan mode history (karena mode history statis)
+                                    if (!isHistoryMode && !item.action) {
+                                        setSelectedMenu(item.name);
+                                    }
+                                    
+                                    if (window.innerWidth < 768) setIsSidebarOpen(false);
+                                }}
+                                className={`
+                                    w-full flex items-center px-4 py-3 space-x-3 text-left transition-all duration-200 cursor-pointer
+                                    ${isActive
+                                        ? "bg-blue-600 text-white"
+                                        : "text-gray-800 hover:bg-blue-100"
+                                    }
+                                `}
+                            >
+                                <span className={`text-xl ${isActive ? "text-white" : "text-gray-700"}`}>
+                                    {item.icon}
+                                </span>
+                                {/* Tampilkan teks jika sidebar terbuka */}
+                                {isSidebarOpen && <span className="font-medium">{item.name}</span>}
+                            </div>
+                        );
+                    })}
                 </nav>
             </div>
+            
             {/* Overlay (hanya tampil di mobile saat sidebar terbuka) */}
             {isSidebarOpen && (
                 <div
@@ -141,22 +171,22 @@ const SidebarKasir = ({ children }) => {
 
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col bg-white overflow-hidden"> {/* PERBAIKAN: Tambah flex-col */}
+            <div className="flex-1 flex flex-col bg-white overflow-hidden">
                 {/* Header */}
                 <div className="w-full bg-gray-100 border-b border-gray-300 px-4 lg:px-8 py-3 flex items-center justify-between sticky top-0 z-30">
                     {/* Left Section */}
                     <div className="flex items-center space-x-3">
-                        {/* Tombol menu (tampil di mobile & desktop) */}
                         <button
                             className="p-2 rounded-lg hover:bg-gray-200"
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                         >
-                            {/* --- PERBAIKAN: Logika tombol harus konsisten --- */}
                             <Menu className="h-6 w-6 text-gray-700" />
                         </button>
 
                         <div>
-                            <h1 className="text-lg lg:text-xl font-bold text-gray-800">POS KASIR</h1>
+                            <h1 className="text-lg lg:text-xl font-bold text-gray-800">
+                                {isHistoryMode ? "MODE RIWAYAT" : "POS KASIR"}
+                            </h1>
                             <p className="text-sm text-gray-600">Dago Creative Hub & Coffee Lab</p>
                         </div>
                     </div>
@@ -176,17 +206,15 @@ const SidebarKasir = ({ children }) => {
 
                 {/* Scrollable Content */}
                 <main className="flex-1 overflow-y-auto">
-                    {/* INI ADALAH TEMPAT HALAMAN /transaksikasir RENDER */}
                     <Outlet />
                 </main>
                 <GlobalRentalMonitor />
             </div>
 
-            {/* --- TAMBAHAN: Modal Konfirmasi Logout --- */}
+            {/* Modal Konfirmasi Logout */}
             {isLogoutModalOpen && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center  bg-opacity-60 transition-opacity duration-300 backdrop-blur-sm"
-                    aria-labelledby="modal-title"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-60 transition-opacity duration-300 backdrop-blur-sm"
                     role="dialog"
                     aria-modal="true"
                 >
@@ -196,7 +224,7 @@ const SidebarKasir = ({ children }) => {
                                 <IoWarningOutline className="h-6 w-6 text-red-600" aria-hidden="true" />
                             </div>
                             <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                                <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900">
                                     Konfirmasi Logout
                                 </h3>
                                 <div className="mt-2">
@@ -210,14 +238,14 @@ const SidebarKasir = ({ children }) => {
                             <button
                                 type="button"
                                 className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
-                                onClick={executeLogout} // Memanggil fungsi logout
+                                onClick={executeLogout}
                             >
                                 Logout
                             </button>
                             <button
                                 type="button"
                                 className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 sm:mt-0 sm:w-auto sm:text-sm"
-                                onClick={() => setIsLogoutModalOpen(false)} // Menutup modal
+                                onClick={() => setIsLogoutModalOpen(false)}
                             >
                                 Batal
                             </button>
@@ -225,7 +253,6 @@ const SidebarKasir = ({ children }) => {
                     </div>
                 </div>
             )}
-            {/* --- AKHIR TAMBAHAN --- */}
 
         </div>
     );
